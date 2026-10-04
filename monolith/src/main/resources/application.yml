@@ -1,0 +1,19 @@
+spring:
+  application:
+    name: ecommerce-monolith
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ecommerce
+    username: ${DB_USER:ecommerce}      # default value if the variable is not set
+    password: ${DB_PASSWORD:ecommerce}
+  jpa:
+    hibernate:
+      ddl-auto: update                  # dev: Hibernate creates/updates the tables
+    open-in-view: false                 # best practice: no open session in controllers
+    properties:
+      hibernate:
+        format_sql: true
+
+server:
+  port: 8080
+  error:
+    include-message: always             # show error messages (dev only)
