@@ -1,0 +1,40 @@
+@host = http://localhost:8080
+
+### 1. Create a category (expect 201)
+POST {{host}}/api/categories
+Content-Type: application/json
+
+{ "name": "Electronics", "description": "Phones and laptops" }
+
+### 2. List categories (expect 200)
+GET {{host}}/api/categories
+
+### 3. Get one category (expect 200)
+GET {{host}}/api/categories/1
+
+### 4. Update a category (expect 200)
+PUT {{host}}/api/categories/1
+Content-Type: application/json
+
+{ "name": "Electronics", "description": "Updated description" }
+
+### 5. Duplicate name (expect 409)
+POST {{host}}/api/categories
+Content-Type: application/json
+
+{ "name": "electronics", "description": "Same name, different case" }
+
+### 6. Blank name (expect 400)
+POST {{host}}/api/categories
+Content-Type: application/json
+
+{ "name": "", "description": "Invalid" }
+
+### 7. Unknown id (expect 404)
+GET {{host}}/api/categories/999
+
+### 8. Delete a category (expect 204)
+DELETE {{host}}/api/categories/1
+
+### 9. Delete again (expect 404)
+DELETE {{host}}/api/categories/1
