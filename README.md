@@ -46,6 +46,25 @@ docker compose -f infra/docker-compose.yml stop
 ```
 
 ## API endpoints
+## Endpoints
+
+### Categories
+| Méthode | URL | Description | Code |
+|---|---|---|---|
+| GET | /api/categories | Liste des catégories | 200 |
+| GET | /api/categories/{id} | Détail d'une catégorie | 200 / 404 |
+| POST | /api/categories | Créer | 201 / 409 |
+| PUT | /api/categories/{id} | Modifier | 200 / 404 |
+| DELETE | /api/categories/{id} | Supprimer | 204 / 409 |
+
+### Products
+| Méthode | URL | Description | Code |
+|---|---|---|---|
+| GET | /api/products | Liste des produits | 200 |
+| GET | /api/products/{id} | Détail d'un produit | 200 / 404 |
+| POST | /api/products | Créer | 201 / 400 / 404 |
+| PUT | /api/products/{id} | Modifier | 200 / 400 / 404 |
+| DELETE | /api/products/{id} | Supprimer | 204 / 404 |
 
 ### Categories
 
