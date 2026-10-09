@@ -38,3 +38,84 @@ DELETE {{host}}/api/categories/1
 
 ### 9. Delete again (expect 404)
 DELETE {{host}}/api/categories/1
+
+
+
+############################################################
+# PRODUCTS (run in order, top to bottom)
+############################################################
+
+### P1. Create a category for the tests (expect 201)
+# @name createCategory
+POST {{host}}/api/categories
+Content-Type: application/json
+
+{ "name": "Phones {{$timestamp}}", "description": "Category used by product tests" }
+
+### P2. Create a product (expect 201)
+# @name createProduct
+POST {{host}}/api/products
+Content-Type: application/json
+
+{
+  "name": "iPhone 15",
+  "description": "128 GB",
+  "price": 999.99,
+  "category": { "id": {{createCategory.response.body.$.id}} }
+}
+
+### P3. List products (expect 200)
+GET {{host}}/api/products
+
+### P4. Get the product (expect 200)
+GET {{host}}/api/products/{{createProduct.response.body.$.id}}
+
+### P5. Update the product (expect 200, new price)
+PUT {{host}}/api/products/{{createProduct.response.body.$.id}}
+Content-Type: application/json
+
+{
+  "name": "iPhone 15",
+  "description": "256 GB",
+  "price": 1099.99,
+  "category": { "id": {{createCategory.response.body.$.id}} }
+}
+
+### P6. Blank name (expect 400)
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "name": "", "price": 10.00, "category": { "id": {{createCategory.response.body.$.id}} } }
+
+### P7. Price is zero (expect 400)
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "name": "Free phone", "price": 0, "category": { "id": {{createCategory.response.body.$.id}} } }
+
+### P8. Category without id (expect 400)
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "name": "No category id", "price": 10.00, "category": { } }
+
+### P9. Unknown category (expect 404)
+POST {{host}}/api/products
+Content-Type: application/json
+
+{ "name": "Ghost category", "price": 10.00, "category": { "id": 999999 } }
+
+### P10. Unknown product (expect 404)
+GET {{host}}/api/products/999999
+
+### P11. Delete the category while a product uses it (expect 409)
+DELETE {{host}}/api/categories/{{createCategory.response.body.$.id}}
+
+### P12. Delete the product (expect 204)
+DELETE {{host}}/api/products/{{createProduct.response.body.$.id}}
+
+### P13. Delete the product again (expect 404)
+DELETE {{host}}/api/products/{{createProduct.response.body.$.id}}
+
+### P14. Now the category can be deleted (expect 204)
+DELETE {{host}}/api/categories/{{createCategory.response.body.$.id}}
