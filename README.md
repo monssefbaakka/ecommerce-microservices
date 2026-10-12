@@ -47,7 +47,41 @@ docker compose -f infra/docker-compose.yml stop
 
 ## API endpoints
 ## Endpoints
+## API Endpoints
 
+### Categories
+
+| Méthode | URL | Description | Codes |
+|---|---|---|---|
+| GET | /api/categories | Liste des catégories | 200 |
+| GET | /api/categories/{id} | Détail d'une catégorie | 200, 404 |
+| POST | /api/categories | Créer une catégorie | 201, 400, 409 |
+| PUT | /api/categories/{id} | Modifier une catégorie | 200, 404, 409 |
+| DELETE | /api/categories/{id} | Supprimer une catégorie | 204, 404, 409 |
+
+### Products
+
+| Méthode | URL | Description | Codes |
+|---|---|---|---|
+| GET | /api/products | Liste paginée, avec recherche et filtre | 200 |
+| GET | /api/products/{id} | Détail d'un produit | 200, 404 |
+| POST | /api/products | Créer un produit | 201, 400, 404 |
+| PUT | /api/products/{id} | Modifier un produit | 200, 400, 404 |
+| DELETE | /api/products/{id} | Supprimer un produit | 204, 404 |
+
+#### Paramètres de `GET /api/products`
+
+| Paramètre | Type | Description | Défaut |
+|---|---|---|---|
+| name | string | Recherche partielle sur le nom (insensible à la casse) | - |
+| categoryId | number | Filtre par catégorie | - |
+| page | number | Numéro de page (commence à 0) | 0 |
+| size | number | Nombre d'éléments par page | 10 |
+| sort | string | Tri, par exemple `price,desc` | id |
+
+Exemple :
+
+    GET /api/products?name=phone&categoryId=1&page=0&size=5&sort=price,desc
 ### Categories
 | Méthode | URL | Description | Code |
 |---|---|---|---|
