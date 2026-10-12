@@ -119,3 +119,14 @@ DELETE {{host}}/api/products/{{createProduct.response.body.$.id}}
 
 ### P14. Now the category can be deleted (expect 204)
 DELETE {{host}}/api/categories/{{createCategory.response.body.$.id}}
+### P15 - pagination
+GET http://localhost:8080/api/products?page=0&size=5
+
+### P16 - recherche par nom
+GET http://localhost:8080/api/products?name=phone
+
+### P17 - filtre par catégorie
+GET http://localhost:8080/api/products?categoryId=1
+
+### P18 - tout combiné
+GET http://localhost:8080/api/products?name=phone&categoryId=1&page=0&size=5&sort=price,desc
