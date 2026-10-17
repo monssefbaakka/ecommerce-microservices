@@ -1,5 +1,14 @@
 package com.monssef.ecommerce.product;
 
+import com.monssef.ecommerce.product.dto.ProductDTO;
+import com.monssef.ecommerce.product.dto.ProductRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
@@ -27,20 +36,31 @@ import java.net.URI;
 @RestController
 @RequestMapping("/api/products")
 @RequiredArgsConstructor
+@Tag(name = "Produits", description = "Gestion des produits du catalogue")
 public class ProductController {
 
     private final ProductService productService;
 @GetMapping
-public Page<Product> findAll(
-        @RequestParam(required = false) String name,
-        @RequestParam(required = false) Long categoryId,
+@Operation(summary = "Liste des produits", description = "Liste paginée avec recherche par nom et filtre par catégorie")
+@ApiResponse(responseCode = "200", description = "Liste paginée récupérée",
+        content = @Content(schema = @Schema(implementation = ProductDTO.class)))
+public Page<ProductDTO> findAll(
+        @RequestParam(required = false) @Parameter(description = "Recherche partielle sur le nom (insensible à la casse)") String name,
+        @RequestParam(required = false) @Parameter(description = "Filtre par identifiant de catégorie") Long categoryId,
         @PageableDefault(size = 10, sort = "id") Pageable pageable) {
     return productService.findAll(name, categoryId, pageable);
 }
-    // @Valid triggers the validation annotations of Product (@NotBlank, @DecimalMin, @NotNull...)
+    // @Valid triggers the validation annotations of ProductRequest (@NotBlank, @DecimalMin, @NotNull...)
     @PostMapping
-    public ResponseEntity<Product> create(@Valid @RequestBody Product product) {
-        Product created = productService.create(product);
+    @Operation(summary = "Créer un produit", description = "Crée un nouveau produit associé à une catégorie existante")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Produit créé",
+                    content = @Content(schema = @Schema(implementation = ProductDTO.class))),
+            @ApiResponse(responseCode = "400", description = "Requête invalide", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Catégorie introuvable", content = @Content)
+    })
+    public ResponseEntity<ProductDTO> create(@Valid @RequestBody ProductRequest request) {
+        ProductDTO created = productService.create(request);
         // 201 Created + Location header: /api/products/{id}
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
@@ -50,13 +70,26 @@ public Page<Product> findAll(
     }
 
     @PutMapping("/{id}")
-    public Product update(@PathVariable Long id, @Valid @RequestBody Product product) {
-        return productService.update(id, product);
+    @Operation(summary = "Modifier un produit", description = "Met à jour un produit existant")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Produit modifié",
+                    content = @Content(schema = @Schema(implementation = ProductDTO.class))),
+            @ApiResponse(responseCode = "400", description = "Requête invalide", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Produit ou catégorie introuvable", content = @Content)
+    })
+    public ProductDTO update(@PathVariable @Parameter(description = "Identifiant du produit") Long id,
+                             @Valid @RequestBody ProductRequest request) {
+        return productService.update(id, request);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT) // 204, no body
-    public void delete(@PathVariable Long id) {
+    @Operation(summary = "Supprimer un produit", description = "Supprime un produit par son identifiant")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Produit supprimé", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Produit non trouvé", content = @Content)
+    })
+    public void delete(@PathVariable @Parameter(description = "Identifiant du produit") Long id) {
         productService.delete(id);
     }
 }
