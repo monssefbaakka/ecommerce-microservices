@@ -57,8 +57,6 @@ docker compose -f infra/docker-compose.yml stop
 ```
 
 ## API endpoints
-## Endpoints
-## API Endpoints
 
 ### Categories
 
