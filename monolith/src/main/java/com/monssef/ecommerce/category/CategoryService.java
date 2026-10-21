@@ -27,9 +27,13 @@ public class CategoryService {
     }
 
     public CategoryDTO findById(Long id) {
-        Category category = repository.findById(id)
+        return toDto(findEntityById(id));
+    }
+
+    // Entity access for other services (e.g. ProductService needs the Category to link it)
+    public Category findEntityById(Long id) {
+        return repository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Category", id));
-        return toDto(category);
     }
 
     @Transactional

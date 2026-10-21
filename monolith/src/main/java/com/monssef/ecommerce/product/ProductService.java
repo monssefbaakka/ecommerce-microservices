@@ -80,7 +80,7 @@ public class ProductService {
         if (categoryId == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category id is required");
         }
-        return categoryService.findById(categoryId);
+        return categoryService.findEntityById(categoryId);
     }
 
     private ProductDTO toDto(Product product) {
