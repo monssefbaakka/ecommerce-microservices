@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phase 1 in progress (monolith CRUD). See the [roadmap](#roadmap).
+> **Status:** Phase 1 completed (monolith CRUD with DTOs, validation, exception handler, tests and Swagger). See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -13,7 +13,8 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Database | PostgreSQL 16 |
 | Build | Maven (wrapper included) |
 | Containers | Docker, Docker Compose |
-| Planned | Spring Security + JWT, Spring Cloud (Eureka, Gateway, OpenFeign), Resilience4j, GitHub Actions, OpenAPI/Swagger |
+| API docs | OpenAPI 3 / Swagger UI (springdoc) |
+| Planned | Spring Security + JWT, Spring Cloud (Eureka, Gateway, OpenFeign), Resilience4j, GitHub Actions |
 
 ## Getting started
 
@@ -37,7 +38,17 @@ cd monolith
 
 The API is available at `http://localhost:8080`.
 
+Swagger UI is available at `http://localhost:8080/swagger-ui.html`  
+OpenAPI definition at `http://localhost:8080/v3/api-docs`
+
 To try the endpoints, open `docs/requests.http` in VS Code (REST Client extension) or IntelliJ.
+
+### Run tests
+
+```bash
+cd monolith
+./mvnw test
+```
 
 ### Stop
 
@@ -146,9 +157,16 @@ erDiagram
 .
 ├── monolith/        Spring Boot application (Phases 1 to 4)
 │   └── src/main/java/com/monssef/ecommerce/
-│       ├── category/    entity, repository, service, controller
-│       ├── product/     entity, repository (service and controller in progress)
-│       └── common/      shared classes (exceptions)
+│       ├── category/
+│       │   ├── entity, repository, service, controller
+│       │   └── dto/       CategoryDTO, CategoryRequest
+│       ├── product/
+│       │   ├── entity, repository, service, controller
+│       │   └── dto/       ProductDTO, ProductRequest
+│       ├── common/
+│       │   ├── exceptions/  ResourceNotFoundException, GlobalExceptionHandler, ErrorResponse
+│       │   └── shared classes
+│       └── test/          Controller tests with MockMvc
 ├── services/        microservices (Phase 5 and later)
 ├── infra/           Docker Compose files
 └── docs/            HTTP request examples, architecture notes
@@ -160,14 +178,16 @@ The code is organized by feature rather than by layer, which makes the later spl
 
 | Phase | Goal | Status |
 |---|---|---|
-| 1 | Monolith CRUD (products and categories) | In progress |
+| 1 | Monolith CRUD (products and categories) | Done |
 | 2 | Spring Security, JWT, roles (USER / ADMIN) | Planned |
 | 3 | Cart, orders, stock management | Planned |
-| 4 | DTOs, exception handler, Swagger, tests, Docker, Actuator | Planned |
+| 4 | Actuator, Docker improvements | Planned |
 | 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | Planned |
 | 6 | OpenFeign, Resilience4j, advanced Docker Compose | Planned |
 | 7 | CI/CD with GitHub Actions | Planned |
 | 8 | Deployment and frontend (bonus) | Planned |
+
+> **Note:** DTOs, global exception handler, Swagger/OpenAPI and unit tests were delivered as part of Phase 1.
 
 Work is tracked with GitHub issues and a project board. Each issue is delivered through its own branch and pull request.
 

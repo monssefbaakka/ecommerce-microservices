@@ -1,5 +1,14 @@
 package com.monssef.ecommerce.category;
 
+import com.monssef.ecommerce.category.dto.CategoryDTO;
+import com.monssef.ecommerce.category.dto.CategoryRequest;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,24 +30,41 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/categories")
 @RequiredArgsConstructor
+@Tag(name = "Catégories", description = "Gestion des catégories de produits")
 public class CategoryController {
 
     private final CategoryService service;
 
     @GetMapping
-    public List<Category> findAll() {
+    @Operation(summary = "Liste des catégories", description = "Retourne toutes les catégories disponibles")
+    @ApiResponse(responseCode = "200", description = "Liste récupérée avec succès",
+            content = @Content(schema = @Schema(implementation = CategoryDTO.class)))
+    public List<CategoryDTO> findAll() {
         return service.findAll();
     }
 
     @GetMapping("/{id}")
-    public Category findById(@PathVariable Long id) {
+    @Operation(summary = "Détail d'une catégorie", description = "Retourne une catégorie par son identifiant")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Catégorie trouvée",
+                    content = @Content(schema = @Schema(implementation = CategoryDTO.class))),
+            @ApiResponse(responseCode = "404", description = "Catégorie non trouvée", content = @Content)
+    })
+    public CategoryDTO findById(@PathVariable @Parameter(description = "Identifiant de la catégorie") Long id) {
         return service.findById(id);
     }
 
-    // @Valid triggers the validation annotations of Category (@NotBlank, @Size...)
+    // @Valid triggers the validation annotations of CategoryRequest (@NotBlank, @Size...)
     @PostMapping
-    public ResponseEntity<Category> create(@Valid @RequestBody Category category) {
-        Category created = service.create(category);
+    @Operation(summary = "Créer une catégorie", description = "Crée une nouvelle catégorie")
+    @ApiResponses({
+            @ApiResponse(responseCode = "201", description = "Catégorie créée",
+                    content = @Content(schema = @Schema(implementation = CategoryDTO.class))),
+            @ApiResponse(responseCode = "400", description = "Requête invalide", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Catégorie déjà existante", content = @Content)
+    })
+    public ResponseEntity<CategoryDTO> create(@Valid @RequestBody CategoryRequest request) {
+        CategoryDTO created = service.create(request);
         // 201 Created + Location header: /api/categories/{id}
         URI location = ServletUriComponentsBuilder.fromCurrentRequest()
                 .path("/{id}")
@@ -48,13 +74,28 @@ public class CategoryController {
     }
 
     @PutMapping("/{id}")
-    public Category update(@PathVariable Long id, @Valid @RequestBody Category category) {
-        return service.update(id, category);
+    @Operation(summary = "Modifier une catégorie", description = "Met à jour une catégorie existante")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Catégorie modifiée",
+                    content = @Content(schema = @Schema(implementation = CategoryDTO.class))),
+            @ApiResponse(responseCode = "400", description = "Requête invalide", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Catégorie non trouvée", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Catégorie déjà existante", content = @Content)
+    })
+    public CategoryDTO update(@PathVariable @Parameter(description = "Identifiant de la catégorie") Long id,
+                              @Valid @RequestBody CategoryRequest request) {
+        return service.update(id, request);
     }
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT) // 204, no body
-    public void delete(@PathVariable Long id) {
+    @Operation(summary = "Supprimer une catégorie", description = "Supprime une catégorie par son identifiant")
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Catégorie supprimée", content = @Content),
+            @ApiResponse(responseCode = "404", description = "Catégorie non trouvée", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Catégorie encore utilisée par des produits", content = @Content)
+    })
+    public void delete(@PathVariable @Parameter(description = "Identifiant de la catégorie") Long id) {
         service.delete(id);
     }
 }
