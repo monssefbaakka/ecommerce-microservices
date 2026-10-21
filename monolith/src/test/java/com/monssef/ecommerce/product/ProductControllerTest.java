@@ -1,5 +1,6 @@
 package com.monssef.ecommerce.product;
 
+import com.monssef.ecommerce.config.SecurityConfig;
 import com.monssef.ecommerce.product.dto.ProductDTO;
 import com.monssef.ecommerce.product.dto.ProductRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -7,6 +8,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -24,6 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(ProductController.class)
+@Import(SecurityConfig.class) // @WebMvcTest does not load @Configuration classes
 class ProductControllerTest {
 
     @Autowired
@@ -46,9 +49,9 @@ class ProductControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].id").value(1))
                 .andExpect(jsonPath("$.content[0].name").value("iPhone 15"))
-                .andExpect(jsonPath("$.totalElements").value(1));
+                .andExpect(jsonPath("$.page.totalElements").value(1)); // PageSerializationMode.VIA_DTO
 
-        verify(productService).findAll(null, null, any());
+        verify(productService).findAll(isNull(), isNull(), any());
     }
 
     @Test

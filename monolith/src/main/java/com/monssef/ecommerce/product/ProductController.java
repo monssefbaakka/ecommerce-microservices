@@ -50,6 +50,17 @@ public Page<ProductDTO> findAll(
         @PageableDefault(size = 10, sort = "id") Pageable pageable) {
     return productService.findAll(name, categoryId, pageable);
 }
+
+    @GetMapping("/{id}")
+    @Operation(summary = "Détail d'un produit", description = "Retourne un produit par son identifiant")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Produit trouvé",
+                    content = @Content(schema = @Schema(implementation = ProductDTO.class))),
+            @ApiResponse(responseCode = "404", description = "Produit non trouvé", content = @Content)
+    })
+    public ProductDTO findById(@PathVariable @Parameter(description = "Identifiant du produit") Long id) {
+        return productService.findById(id);
+    }
     // @Valid triggers the validation annotations of ProductRequest (@NotBlank, @DecimalMin, @NotNull...)
     @PostMapping
     @Operation(summary = "Créer un produit", description = "Crée un nouveau produit associé à une catégorie existante")

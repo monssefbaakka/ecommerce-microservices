@@ -2,11 +2,13 @@ package com.monssef.ecommerce.category;
 
 import com.monssef.ecommerce.category.dto.CategoryDTO;
 import com.monssef.ecommerce.category.dto.CategoryRequest;
+import com.monssef.ecommerce.config.SecurityConfig;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -19,6 +21,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(CategoryController.class)
+@Import(SecurityConfig.class) // @WebMvcTest does not load @Configuration classes
 class CategoryControllerTest {
 
     @Autowired
