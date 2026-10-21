@@ -57,8 +57,15 @@ docker compose -f infra/docker-compose.yml stop
 ```
 
 ## API endpoints
-## Endpoints
-## API Endpoints
+
+### Auth
+
+| Méthode | URL | Description | Codes |
+|---|---|---|---|
+| POST | /api/auth/register | Créer un compte (rôle USER) | 201, 400, 409 |
+
+Corps de la requête : `{ "email": "john@example.com", "password": "secret123" }`.
+Le mot de passe doit contenir entre 8 et 72 caractères. Il est stocké hashé (BCrypt) et n'est jamais renvoyé.
 
 ### Categories
 

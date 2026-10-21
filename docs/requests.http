@@ -130,3 +130,33 @@ GET http://localhost:8080/api/products?categoryId=1
 
 ### P18 - tout combiné
 GET http://localhost:8080/api/products?name=phone&categoryId=1&page=0&size=5&sort=price,desc
+
+
+
+############################################################
+# AUTH
+############################################################
+
+### A1. Register a new user (expect 201, role USER, no password in response)
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "email": "user{{$timestamp}}@example.com", "password": "secret123" }
+
+### A2. Fixed email: run twice (expect 201, then 409)
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "email": "duplicate@example.com", "password": "secret123" }
+
+### A3. Invalid email (expect 400)
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "email": "not-an-email", "password": "secret123" }
+
+### A4. Password too short (expect 400)
+POST {{host}}/api/auth/register
+Content-Type: application/json
+
+{ "email": "short@example.com", "password": "123" }
