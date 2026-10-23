@@ -160,3 +160,28 @@ POST {{host}}/api/auth/register
 Content-Type: application/json
 
 { "email": "short@example.com", "password": "123" }
+
+### A5. Login with the account from A2 (expect 200, token + tokenType Bearer + expiresIn)
+# @name login
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "duplicate@example.com", "password": "secret123" }
+
+### A6. Wrong password (expect 401, same message as unknown email)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "duplicate@example.com", "password": "wrong-pass" }
+
+### A7. Unknown email (expect 401)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "ghost@example.com", "password": "secret123" }
+
+### A8. Missing password (expect 400)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "duplicate@example.com", "password": "" }
