@@ -17,3 +17,8 @@ server:
   port: 8080
   error:
     include-message: always             # show error messages (dev only)
+
+jwt:
+  # dev only: override with the JWT_SECRET env variable outside local dev
+  secret: ${JWT_SECRET:urSFJ7E1nhn9jjr73kPXdYlWW9zKQeTdT2jhx+KVFI4=}   # Base64, at least 256 bits (HS256)
+  expiration: ${JWT_EXPIRATION:1h}
