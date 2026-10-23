@@ -1,5 +1,7 @@
 package com.monssef.ecommerce.auth;
 
+import com.monssef.ecommerce.auth.dto.AuthResponse;
+import com.monssef.ecommerce.auth.dto.LoginRequest;
 import com.monssef.ecommerce.config.SecurityConfig;
 import com.monssef.ecommerce.user.Role;
 import com.monssef.ecommerce.user.UserService;
@@ -35,6 +37,9 @@ class AuthControllerTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private AuthService authService;
 
     @Test
     void register_shouldReturn201_whenValid() throws Exception {
@@ -90,5 +95,46 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isConflict());
+    }
+
+    @Test
+    void login_shouldReturn200WithToken_whenValid() throws Exception {
+        LoginRequest request = new LoginRequest("john@example.com", "secret123");
+        when(authService.login(any(LoginRequest.class)))
+                .thenReturn(new AuthResponse("jwt-token", "Bearer", 3600));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token").value("jwt-token"))
+                .andExpect(jsonPath("$.tokenType").value("Bearer"))
+                .andExpect(jsonPath("$.expiresIn").value(3600));
+    }
+
+    @Test
+    void login_shouldReturn400_whenPasswordMissing() throws Exception {
+        LoginRequest request = new LoginRequest("john@example.com", "");
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("password"));
+
+        verifyNoInteractions(authService);
+    }
+
+    @Test
+    void login_shouldReturn401_whenBadCredentials() throws Exception {
+        LoginRequest request = new LoginRequest("john@example.com", "wrong-pass");
+        when(authService.login(any(LoginRequest.class)))
+                .thenThrow(new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid email or password"));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message").value("Invalid email or password"));
     }
 }
