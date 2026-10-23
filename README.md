@@ -63,9 +63,26 @@ docker compose -f infra/docker-compose.yml stop
 | Méthode | URL | Description | Codes |
 |---|---|---|---|
 | POST | /api/auth/register | Créer un compte (rôle USER) | 201, 400, 409 |
+| POST | /api/auth/login | Se connecter et obtenir un token JWT | 200, 400, 401 |
 
 Corps de la requête : `{ "email": "john@example.com", "password": "secret123" }`.
 Le mot de passe doit contenir entre 8 et 72 caractères. Il est stocké hashé (BCrypt) et n'est jamais renvoyé.
+
+Le login prend le même corps et renvoie :
+
+```json
+{ "token": "eyJhbGciOiJIUzI1NiJ9...", "tokenType": "Bearer", "expiresIn": 3600 }
+```
+
+Le token est signé en HMAC-SHA (HS256 avec une clé de 256 bits). Il contient l'email (`sub`), le rôle (`role`) et expire après 1 h.
+Un email inconnu et un mauvais mot de passe renvoient le même 401, pour ne pas révéler quels comptes existent.
+
+| Variable | Rôle | Défaut |
+|---|---|---|
+| `JWT_SECRET` | Clé de signature, en Base64, 256 bits minimum (`openssl rand -base64 32`) | clé de dev dans `application.yml` |
+| `JWT_EXPIRATION` | Durée de vie du token (`30m`, `1h`, `1d`...) | `1h` |
+
+> La clé par défaut sert uniquement en local. Hors dev, définis toujours `JWT_SECRET`.
 
 ### Categories
 
