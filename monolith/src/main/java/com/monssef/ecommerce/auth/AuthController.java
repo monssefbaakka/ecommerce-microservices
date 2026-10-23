@@ -1,5 +1,7 @@
 package com.monssef.ecommerce.auth;
 
+import com.monssef.ecommerce.auth.dto.AuthResponse;
+import com.monssef.ecommerce.auth.dto.LoginRequest;
 import com.monssef.ecommerce.user.UserService;
 import com.monssef.ecommerce.user.dto.RegisterRequest;
 import com.monssef.ecommerce.user.dto.UserDTO;
@@ -25,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final UserService userService;
+    private final AuthService authService;
 
     // @Valid triggers the validation annotations of RegisterRequest (@Email, @Size...)
     @PostMapping("/register")
@@ -38,5 +41,17 @@ public class AuthController {
     })
     public UserDTO register(@Valid @RequestBody RegisterRequest request) {
         return userService.register(request);
+    }
+
+    @PostMapping("/login")
+    @Operation(summary = "Se connecter", description = "Vérifie les identifiants et renvoie un token JWT")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Connexion réussie",
+                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
+            @ApiResponse(responseCode = "400", description = "Requête invalide", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Email ou mot de passe incorrect", content = @Content)
+    })
+    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
+        return authService.login(request);
     }
 }
