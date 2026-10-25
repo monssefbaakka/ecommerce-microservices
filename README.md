@@ -84,6 +84,13 @@ Un email inconnu et un mauvais mot de passe renvoient le même 401, pour ne pas 
 
 > La clé par défaut sert uniquement en local. Hors dev, définis toujours `JWT_SECRET`.
 
+Pour s'authentifier, envoie le token dans l'en-tête de chaque requête :
+
+    Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
+
+Un filtre (`JwtAuthenticationFilter`) vérifie la signature et l'expiration, puis authentifie la requête avec l'email et le rôle du token, sans accès à la base.
+L'API est stateless : pas de session ni de cookie. Un token absent, invalide ou expiré laisse la requête anonyme.
+
 ### Categories
 
 | Méthode | URL | Description | Codes |
