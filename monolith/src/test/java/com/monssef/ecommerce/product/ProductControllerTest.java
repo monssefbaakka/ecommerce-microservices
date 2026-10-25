@@ -14,6 +14,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
@@ -82,6 +83,7 @@ class ProductControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void create_shouldReturn201_whenValid() throws Exception {
         ProductRequest request = new ProductRequest(
                 "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L);
@@ -101,6 +103,7 @@ class ProductControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void create_shouldReturn400_whenBlankName() throws Exception {
         ProductRequest request = new ProductRequest(
                 "", "description", new BigDecimal("10.00"), 1L);
@@ -112,6 +115,7 @@ class ProductControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void create_shouldReturn400_whenPriceIsZero() throws Exception {
         ProductRequest request = new ProductRequest(
                 "Free phone", "description", BigDecimal.ZERO, 1L);
@@ -123,6 +127,7 @@ class ProductControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void update_shouldReturnUpdatedProduct_whenValid() throws Exception {
         ProductRequest request = new ProductRequest(
                 "iPhone 15", "256 GB", new BigDecimal("1099.99"), 1L);
@@ -141,6 +146,7 @@ class ProductControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void delete_shouldReturn204() throws Exception {
         doNothing().when(productService).delete(1L);
 
@@ -148,5 +154,30 @@ class ProductControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(productService).delete(1L);
+    }
+
+    @Test
+    void create_shouldReturn401_whenAnonymous() throws Exception {
+        ProductRequest request = new ProductRequest(
+                "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L);
+
+        mockMvc.perform(post("/api/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.path").value("/api/products"));
+
+        verifyNoInteractions(productService);
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void delete_shouldReturn403_whenUserRole() throws Exception {
+        mockMvc.perform(delete("/api/products/1"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+
+        verifyNoInteractions(productService);
     }
 }
