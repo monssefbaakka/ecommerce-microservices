@@ -2,12 +2,14 @@ package com.monssef.ecommerce.category;
 
 import com.monssef.ecommerce.category.dto.CategoryDTO;
 import com.monssef.ecommerce.category.dto.CategoryRequest;
+import com.monssef.ecommerce.config.OpenApiConfig;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -56,12 +58,15 @@ public class CategoryController {
 
     // @Valid triggers the validation annotations of CategoryRequest (@NotBlank, @Size...)
     @PostMapping
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @Operation(summary = "Créer une catégorie", description = "Crée une nouvelle catégorie")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Catégorie créée",
                     content = @Content(schema = @Schema(implementation = CategoryDTO.class))),
             @ApiResponse(responseCode = "400", description = "Requête invalide", content = @Content),
-            @ApiResponse(responseCode = "409", description = "Catégorie déjà existante", content = @Content)
+            @ApiResponse(responseCode = "409", description = "Catégorie déjà existante", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Réservé au rôle ADMIN", content = @Content)
     })
     public ResponseEntity<CategoryDTO> create(@Valid @RequestBody CategoryRequest request) {
         CategoryDTO created = service.create(request);
@@ -74,13 +79,16 @@ public class CategoryController {
     }
 
     @PutMapping("/{id}")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @Operation(summary = "Modifier une catégorie", description = "Met à jour une catégorie existante")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Catégorie modifiée",
                     content = @Content(schema = @Schema(implementation = CategoryDTO.class))),
             @ApiResponse(responseCode = "400", description = "Requête invalide", content = @Content),
             @ApiResponse(responseCode = "404", description = "Catégorie non trouvée", content = @Content),
-            @ApiResponse(responseCode = "409", description = "Catégorie déjà existante", content = @Content)
+            @ApiResponse(responseCode = "409", description = "Catégorie déjà existante", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Réservé au rôle ADMIN", content = @Content)
     })
     public CategoryDTO update(@PathVariable @Parameter(description = "Identifiant de la catégorie") Long id,
                               @Valid @RequestBody CategoryRequest request) {
@@ -88,12 +96,15 @@ public class CategoryController {
     }
 
     @DeleteMapping("/{id}")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @ResponseStatus(HttpStatus.NO_CONTENT) // 204, no body
     @Operation(summary = "Supprimer une catégorie", description = "Supprime une catégorie par son identifiant")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Catégorie supprimée", content = @Content),
             @ApiResponse(responseCode = "404", description = "Catégorie non trouvée", content = @Content),
-            @ApiResponse(responseCode = "409", description = "Catégorie encore utilisée par des produits", content = @Content)
+            @ApiResponse(responseCode = "409", description = "Catégorie encore utilisée par des produits", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Réservé au rôle ADMIN", content = @Content)
     })
     public void delete(@PathVariable @Parameter(description = "Identifiant de la catégorie") Long id) {
         service.delete(id);

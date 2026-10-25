@@ -2,12 +2,14 @@ package com.monssef.ecommerce.product;
 
 import com.monssef.ecommerce.product.dto.ProductDTO;
 import com.monssef.ecommerce.product.dto.ProductRequest;
+import com.monssef.ecommerce.config.OpenApiConfig;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -63,12 +65,15 @@ public Page<ProductDTO> findAll(
     }
     // @Valid triggers the validation annotations of ProductRequest (@NotBlank, @DecimalMin, @NotNull...)
     @PostMapping
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @Operation(summary = "Créer un produit", description = "Crée un nouveau produit associé à une catégorie existante")
     @ApiResponses({
             @ApiResponse(responseCode = "201", description = "Produit créé",
                     content = @Content(schema = @Schema(implementation = ProductDTO.class))),
             @ApiResponse(responseCode = "400", description = "Requête invalide", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Catégorie introuvable", content = @Content)
+            @ApiResponse(responseCode = "404", description = "Catégorie introuvable", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Réservé au rôle ADMIN", content = @Content)
     })
     public ResponseEntity<ProductDTO> create(@Valid @RequestBody ProductRequest request) {
         ProductDTO created = productService.create(request);
@@ -81,12 +86,15 @@ public Page<ProductDTO> findAll(
     }
 
     @PutMapping("/{id}")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @Operation(summary = "Modifier un produit", description = "Met à jour un produit existant")
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Produit modifié",
                     content = @Content(schema = @Schema(implementation = ProductDTO.class))),
             @ApiResponse(responseCode = "400", description = "Requête invalide", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Produit ou catégorie introuvable", content = @Content)
+            @ApiResponse(responseCode = "404", description = "Produit ou catégorie introuvable", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Réservé au rôle ADMIN", content = @Content)
     })
     public ProductDTO update(@PathVariable @Parameter(description = "Identifiant du produit") Long id,
                              @Valid @RequestBody ProductRequest request) {
@@ -94,11 +102,14 @@ public Page<ProductDTO> findAll(
     }
 
     @DeleteMapping("/{id}")
+    @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)
     @ResponseStatus(HttpStatus.NO_CONTENT) // 204, no body
     @Operation(summary = "Supprimer un produit", description = "Supprime un produit par son identifiant")
     @ApiResponses({
             @ApiResponse(responseCode = "204", description = "Produit supprimé", content = @Content),
-            @ApiResponse(responseCode = "404", description = "Produit non trouvé", content = @Content)
+            @ApiResponse(responseCode = "404", description = "Produit non trouvé", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content),
+            @ApiResponse(responseCode = "403", description = "Réservé au rôle ADMIN", content = @Content)
     })
     public void delete(@PathVariable @Parameter(description = "Identifiant du produit") Long id) {
         productService.delete(id);
