@@ -1,5 +1,6 @@
 package com.monssef.ecommerce.category;
 
+import com.monssef.ecommerce.auth.JwtService;
 import com.monssef.ecommerce.category.dto.CategoryDTO;
 import com.monssef.ecommerce.category.dto.CategoryRequest;
 import com.monssef.ecommerce.config.SecurityConfig;
@@ -32,6 +33,9 @@ class CategoryControllerTest {
 
     @MockBean
     private CategoryService service;
+
+    @MockBean
+    private JwtService jwtService; // required by SecurityConfig (JWT filter)
 
     @Test
     void findAll_shouldReturnAllCategories() throws Exception {

@@ -1,5 +1,6 @@
 package com.monssef.ecommerce.product;
 
+import com.monssef.ecommerce.auth.JwtService;
 import com.monssef.ecommerce.config.SecurityConfig;
 import com.monssef.ecommerce.product.dto.ProductDTO;
 import com.monssef.ecommerce.product.dto.ProductRequest;
@@ -37,6 +38,9 @@ class ProductControllerTest {
 
     @MockBean
     private ProductService productService;
+
+    @MockBean
+    private JwtService jwtService; // required by SecurityConfig (JWT filter)
 
     @Test
     void findAll_shouldReturnPaginatedProducts() throws Exception {

@@ -41,6 +41,9 @@ class AuthControllerTest {
     @MockBean
     private AuthService authService;
 
+    @MockBean
+    private JwtService jwtService; // required by SecurityConfig (JWT filter)
+
     @Test
     void register_shouldReturn201_whenValid() throws Exception {
         RegisterRequest request = new RegisterRequest("john@example.com", "secret123");
