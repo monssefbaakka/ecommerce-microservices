@@ -1,7 +1,18 @@
 @host = http://localhost:8080
+# Must match ADMIN_EMAIL / ADMIN_PASSWORD used to start the app (see README)
+@adminEmail = admin@example.com
+@adminPassword = admin-pass
+
+### 0. Log in as ADMIN first: write requests on categories and products reuse this token
+# @name adminLogin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "{{adminEmail}}", "password": "{{adminPassword}}" }
 
 ### 1. Create a category (expect 201)
 POST {{host}}/api/categories
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 { "name": "Electronics", "description": "Phones and laptops" }
@@ -14,18 +25,21 @@ GET {{host}}/api/categories/1
 
 ### 4. Update a category (expect 200)
 PUT {{host}}/api/categories/1
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 { "name": "Electronics", "description": "Updated description" }
 
 ### 5. Duplicate name (expect 409)
 POST {{host}}/api/categories
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 { "name": "electronics", "description": "Same name, different case" }
 
 ### 6. Blank name (expect 400)
 POST {{host}}/api/categories
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 { "name": "", "description": "Invalid" }
@@ -35,9 +49,11 @@ GET {{host}}/api/categories/999
 
 ### 8. Delete a category (expect 204)
 DELETE {{host}}/api/categories/1
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 
 ### 9. Delete again (expect 404)
 DELETE {{host}}/api/categories/1
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 
 
 
@@ -48,6 +64,7 @@ DELETE {{host}}/api/categories/1
 ### P1. Create a category for the tests (expect 201)
 # @name createCategory
 POST {{host}}/api/categories
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 { "name": "Phones {{$timestamp}}", "description": "Category used by product tests" }
@@ -55,6 +72,7 @@ Content-Type: application/json
 ### P2. Create a product (expect 201)
 # @name createProduct
 POST {{host}}/api/products
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -72,6 +90,7 @@ GET {{host}}/api/products/{{createProduct.response.body.$.id}}
 
 ### P5. Update the product (expect 200, new price)
 PUT {{host}}/api/products/{{createProduct.response.body.$.id}}
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 {
@@ -83,24 +102,28 @@ Content-Type: application/json
 
 ### P6. Blank name (expect 400)
 POST {{host}}/api/products
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 { "name": "", "price": 10.00, "category": { "id": {{createCategory.response.body.$.id}} } }
 
 ### P7. Price is zero (expect 400)
 POST {{host}}/api/products
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 { "name": "Free phone", "price": 0, "category": { "id": {{createCategory.response.body.$.id}} } }
 
 ### P8. Category without id (expect 400)
 POST {{host}}/api/products
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 { "name": "No category id", "price": 10.00, "category": { } }
 
 ### P9. Unknown category (expect 404)
 POST {{host}}/api/products
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
 { "name": "Ghost category", "price": 10.00, "category": { "id": 999999 } }
@@ -110,15 +133,19 @@ GET {{host}}/api/products/999999
 
 ### P11. Delete the category while a product uses it (expect 409)
 DELETE {{host}}/api/categories/{{createCategory.response.body.$.id}}
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 
 ### P12. Delete the product (expect 204)
 DELETE {{host}}/api/products/{{createProduct.response.body.$.id}}
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 
 ### P13. Delete the product again (expect 404)
 DELETE {{host}}/api/products/{{createProduct.response.body.$.id}}
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 
 ### P14. Now the category can be deleted (expect 204)
 DELETE {{host}}/api/categories/{{createCategory.response.body.$.id}}
+Authorization: Bearer {{adminLogin.response.body.$.token}}
 ### P15 - pagination
 GET http://localhost:8080/api/products?page=0&size=5
 
@@ -185,3 +212,26 @@ POST {{host}}/api/auth/login
 Content-Type: application/json
 
 { "email": "duplicate@example.com", "password": "" }
+
+### A9. Read the catalog without a token (expect 200: GET is public)
+GET {{host}}/api/products
+
+### A10. Write without a token (expect 401)
+POST {{host}}/api/categories
+Content-Type: application/json
+
+{ "name": "No token", "description": "Rejected" }
+
+### A11. Write with a USER token from A5 (expect 403: ADMIN only)
+POST {{host}}/api/categories
+Content-Type: application/json
+Authorization: Bearer {{login.response.body.$.token}}
+
+{ "name": "User token", "description": "Rejected" }
+
+### A12. Tampered token (expect 401)
+POST {{host}}/api/categories
+Content-Type: application/json
+Authorization: Bearer not-a-valid-token
+
+{ "name": "Bad token", "description": "Rejected" }

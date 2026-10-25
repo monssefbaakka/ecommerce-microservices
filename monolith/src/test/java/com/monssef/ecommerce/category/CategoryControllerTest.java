@@ -1,5 +1,6 @@
 package com.monssef.ecommerce.category;
 
+import com.monssef.ecommerce.auth.JwtService;
 import com.monssef.ecommerce.category.dto.CategoryDTO;
 import com.monssef.ecommerce.category.dto.CategoryRequest;
 import com.monssef.ecommerce.config.SecurityConfig;
@@ -10,6 +11,7 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.util.List;
@@ -32,6 +34,9 @@ class CategoryControllerTest {
 
     @MockBean
     private CategoryService service;
+
+    @MockBean
+    private JwtService jwtService; // required by SecurityConfig (JWT filter)
 
     @Test
     void findAll_shouldReturnAllCategories() throws Exception {
@@ -70,6 +75,7 @@ class CategoryControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void create_shouldReturn201_whenValid() throws Exception {
         CategoryRequest request = new CategoryRequest("Electronics", "Phones and laptops");
         CategoryDTO dto = new CategoryDTO(1L, "Electronics", "Phones and laptops");
@@ -86,6 +92,7 @@ class CategoryControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void create_shouldReturn400_whenBlankName() throws Exception {
         CategoryRequest request = new CategoryRequest("", "description");
 
@@ -96,6 +103,7 @@ class CategoryControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void update_shouldReturnUpdatedCategory_whenValid() throws Exception {
         CategoryRequest request = new CategoryRequest("Electronics", "Updated description");
         CategoryDTO dto = new CategoryDTO(1L, "Electronics", "Updated description");
@@ -112,6 +120,7 @@ class CategoryControllerTest {
     }
 
     @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void delete_shouldReturn204() throws Exception {
         doNothing().when(service).delete(1L);
 
@@ -119,5 +128,33 @@ class CategoryControllerTest {
                 .andExpect(status().isNoContent());
 
         verify(service).delete(1L);
+    }
+
+    @Test
+    void create_shouldReturn401_whenAnonymous() throws Exception {
+        CategoryRequest request = new CategoryRequest("Electronics", "Phones and laptops");
+
+        mockMvc.perform(post("/api/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.path").value("/api/categories"));
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void update_shouldReturn403_whenUserRole() throws Exception {
+        CategoryRequest request = new CategoryRequest("Electronics", "Updated description");
+
+        mockMvc.perform(put("/api/categories/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+
+        verifyNoInteractions(service);
     }
 }

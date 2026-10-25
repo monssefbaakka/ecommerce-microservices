@@ -84,6 +84,41 @@ Un email inconnu et un mauvais mot de passe renvoient le même 401, pour ne pas 
 
 > La clé par défaut sert uniquement en local. Hors dev, définis toujours `JWT_SECRET`.
 
+Pour s'authentifier, envoie le token dans l'en-tête de chaque requête :
+
+    Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
+
+Un filtre (`JwtAuthenticationFilter`) vérifie la signature et l'expiration, puis authentifie la requête avec l'email et le rôle du token, sans accès à la base.
+L'API est stateless : pas de session ni de cookie. Un token absent, invalide ou expiré laisse la requête anonyme.
+
+### Rôles et accès
+
+| Endpoints | Accès |
+|---|---|
+| `POST /api/auth/register`, `POST /api/auth/login` | Public |
+| `GET /api/categories/**`, `GET /api/products/**` | Public |
+| `POST`, `PUT`, `DELETE` sur `/api/categories/**` et `/api/products/**` | `ADMIN` |
+| Swagger UI, `/v3/api-docs` | Public |
+| Tout le reste (panier, commandes à venir) | Connecté (`USER` ou `ADMIN`) |
+
+Sans token valide, un endpoint protégé renvoie **401**. Avec un token valide mais le mauvais rôle, il renvoie **403**.
+Les deux réponses ont le même format JSON que les autres erreurs (`status`, `error`, `message`, `path`).
+
+L'inscription crée toujours un compte `USER`. Pour avoir un compte `ADMIN`, lance l'application avec :
+
+| Variable | Rôle |
+|---|---|
+| `ADMIN_EMAIL` | Email du compte admin créé au démarrage |
+| `ADMIN_PASSWORD` | Son mot de passe (8 à 72 caractères) |
+
+```bash
+ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=admin-pass ./mvnw spring-boot:run
+```
+
+Le compte est créé seulement si les deux variables sont définies et que l'email est libre. Un compte existant n'est jamais promu ADMIN.
+
+Dans Swagger UI, clique sur **Authorize** et colle le token (sans `Bearer `) pour appeler les endpoints protégés.
+
 ### Categories
 
 | Méthode | URL | Description | Codes |
@@ -203,7 +238,7 @@ The code is organized by feature rather than by layer, which makes the later spl
 | Phase | Goal | Status |
 |---|---|---|
 | 1 | Monolith CRUD (products and categories) | Done |
-| 2 | Spring Security, JWT, roles (USER / ADMIN) | Planned |
+| 2 | Spring Security, JWT, roles (USER / ADMIN) | In progress |
 | 3 | Cart, orders, stock management | Planned |
 | 4 | Actuator, Docker improvements | Planned |
 | 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | Planned |
