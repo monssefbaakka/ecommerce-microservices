@@ -56,7 +56,7 @@ public class ProductService {
 
     @Transactional
     public ProductDTO update(Long id, ProductRequest request) {
-        Product existing = repositoryFindById(id);
+        Product existing = findEntityById(id);
         existing.setName(request.getName());
         existing.setDescription(request.getDescription());
         existing.setPrice(request.getPrice());
@@ -66,11 +66,12 @@ public class ProductService {
 
     @Transactional
     public void delete(Long id) {
-        Product existing = repositoryFindById(id);
+        Product existing = findEntityById(id);
         productRepository.delete(existing);
     }
 
-    private Product repositoryFindById(Long id) {
+    // Used by other services (cart) that need the entity, not the DTO
+    public Product findEntityById(Long id) {
         return productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", id));
     }
