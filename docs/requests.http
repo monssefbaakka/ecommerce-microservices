@@ -235,3 +235,85 @@ Content-Type: application/json
 Authorization: Bearer not-a-valid-token
 
 { "name": "Bad token", "description": "Rejected" }
+
+
+############################################################
+# CART (run in order; needs request 0 and the account from A2)
+############################################################
+
+### C1. Create a category for the cart tests (expect 201)
+# @name cartCategory
+POST {{host}}/api/categories
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "Cart tests", "description": "Products used by the cart requests" }
+
+### C2. Create a product for the cart tests (expect 201)
+# @name cartProduct
+POST {{host}}/api/products
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "Headphones", "description": "Wireless", "price": 59.90, "categoryId": {{cartCategory.response.body.$.id}} }
+
+### C3. Log in as USER (expect 200)
+# @name userLogin
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "duplicate@example.com", "password": "secret123" }
+
+### C4. Empty cart (expect 200, items [], total 0)
+GET {{host}}/api/cart
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### C5. Add 2 headphones (expect 200, quantity 2, total 119.80)
+POST {{host}}/api/cart/items
+Authorization: Bearer {{userLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "productId": {{cartProduct.response.body.$.id}}, "quantity": 2 }
+
+### C6. Add the same product again (expect 200, still one line, quantity 3)
+POST {{host}}/api/cart/items
+Authorization: Bearer {{userLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "productId": {{cartProduct.response.body.$.id}}, "quantity": 1 }
+
+### C7. Change the quantity (expect 200, quantity 5)
+PUT {{host}}/api/cart/items/{{cartProduct.response.body.$.id}}
+Authorization: Bearer {{userLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "quantity": 5 }
+
+### C8. Quantity 0 (expect 400)
+POST {{host}}/api/cart/items
+Authorization: Bearer {{userLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "productId": {{cartProduct.response.body.$.id}}, "quantity": 0 }
+
+### C9. Unknown product (expect 404)
+POST {{host}}/api/cart/items
+Authorization: Bearer {{userLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "productId": 999999, "quantity": 1 }
+
+### C10. Cart without a token (expect 401)
+GET {{host}}/api/cart
+
+### C11. Remove the product (expect 200, items [])
+DELETE {{host}}/api/cart/items/{{cartProduct.response.body.$.id}}
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### C12. Remove it again (expect 404: not in the cart)
+DELETE {{host}}/api/cart/items/{{cartProduct.response.body.$.id}}
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### C13. Empty the cart (expect 204)
+DELETE {{host}}/api/cart
+Authorization: Bearer {{userLogin.response.body.$.token}}
