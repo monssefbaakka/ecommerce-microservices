@@ -99,7 +99,7 @@ L'API est stateless : pas de session ni de cookie. Un token absent, invalide ou 
 | `GET /api/categories/**`, `GET /api/products/**` | Public |
 | `POST`, `PUT`, `DELETE` sur `/api/categories/**` et `/api/products/**` | `ADMIN` |
 | Swagger UI, `/v3/api-docs` | Public |
-| `/api/cart/**` et tout le reste (commandes à venir) | Connecté (`USER` ou `ADMIN`) |
+| `/api/cart/**`, `/api/orders/**` et tout le reste | Connecté (`USER` ou `ADMIN`) |
 
 Sans token valide, un endpoint protégé renvoie **401**. Avec un token valide mais le mauvais rôle, il renvoie **403**.
 Les deux réponses ont le même format JSON que les autres erreurs (`status`, `error`, `message`, `path`).
@@ -179,6 +179,34 @@ La quantité va de 1 à 100 par produit. Chaque réponse renvoie le panier compl
 ```
 
 Le panier affiche toujours le prix actuel du produit. Si un ADMIN supprime un produit, il disparaît des paniers.
+
+### Orders
+
+Passer commande transforme le panier de l'utilisateur connecté en commande `PENDING`, puis vide le panier. On ne peut voir que ses propres commandes.
+
+| Méthode | URL | Description | Codes |
+|---|---|---|---|
+| POST | /api/orders | Passer commande avec le contenu de mon panier (sans corps) | 201, 400, 401 |
+| GET | /api/orders/{id} | Voir une de mes commandes | 200, 401, 404 |
+
+`POST` renvoie **400** si le panier est vide, et **201** avec l'en-tête `Location: /api/orders/{id}` sinon.
+Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'existe pas.
+
+```json
+{
+  "id": 1,
+  "status": "PENDING",
+  "items": [
+    { "productId": 1, "productName": "iPhone 15", "unitPrice": 999.99, "quantity": 2, "subtotal": 1999.98 }
+  ],
+  "totalQuantity": 2,
+  "total": 1999.98,
+  "createdAt": "2026-10-27T10:00:00Z"
+}
+```
+
+Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (`productId` devient `null` si le produit est supprimé).
+Le stock n'est pas encore vérifié (#31, #32).
 ### Categories
 | Méthode | URL | Description | Code |
 |---|---|---|---|

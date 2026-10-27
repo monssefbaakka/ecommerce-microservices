@@ -317,3 +317,39 @@ Authorization: Bearer {{userLogin.response.body.$.token}}
 ### C13. Empty the cart (expect 204)
 DELETE {{host}}/api/cart
 Authorization: Bearer {{userLogin.response.body.$.token}}
+
+
+############################################################
+# ORDERS (run in order, after the cart requests: C13 leaves the cart empty)
+############################################################
+
+### O1. Order with an empty cart (expect 400 "Cart is empty")
+POST {{host}}/api/orders
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### O2. Put 2 headphones in the cart (expect 200, total 119.80)
+POST {{host}}/api/cart/items
+Authorization: Bearer {{userLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "productId": {{cartProduct.response.body.$.id}}, "quantity": 2 }
+
+### O3. Place the order (expect 201, Location header, status PENDING, total 119.80)
+# @name placedOrder
+POST {{host}}/api/orders
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### O4. The cart is now empty (expect 200, items [])
+GET {{host}}/api/cart
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### O5. Read the order (expect 200, same lines and total as O3)
+GET {{host}}/api/orders/{{placedOrder.response.body.$.id}}
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### O6. Unknown order (expect 404)
+GET {{host}}/api/orders/999999
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### O7. Order without a token (expect 401)
+POST {{host}}/api/orders
