@@ -50,6 +50,7 @@ public class ProductService {
         product.setDescription(request.getDescription());
         product.setPrice(request.getPrice());
         product.setCategory(resolveCategory(request.getCategoryId()));
+        product.setStock(request.getStock());
         Product saved = productRepository.save(product);
         return toDto(saved);
     }
@@ -61,6 +62,7 @@ public class ProductService {
         existing.setDescription(request.getDescription());
         existing.setPrice(request.getPrice());
         existing.setCategory(resolveCategory(request.getCategoryId()));
+        existing.setStock(request.getStock());
         return toDto(productRepository.save(existing));
     }
 
@@ -91,6 +93,7 @@ public class ProductService {
                 product.getDescription(),
                 product.getPrice(),
                 product.getCategory() != null ? product.getCategory().getId() : null,
+                product.getStock(),
                 product.getCreatedAt()
         );
     }
