@@ -79,7 +79,8 @@ Content-Type: application/json
   "name": "iPhone 15",
   "description": "128 GB",
   "price": 999.99,
-  "category": { "id": {{createCategory.response.body.$.id}} }
+  "category": { "id": {{createCategory.response.body.$.id}} },
+  "stock": 25
 }
 
 ### P3. List products (expect 200)
@@ -97,7 +98,8 @@ Content-Type: application/json
   "name": "iPhone 15",
   "description": "256 GB",
   "price": 1099.99,
-  "category": { "id": {{createCategory.response.body.$.id}} }
+  "category": { "id": {{createCategory.response.body.$.id}} },
+  "stock": 20
 }
 
 ### P6. Blank name (expect 400)
@@ -255,7 +257,7 @@ POST {{host}}/api/products
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
-{ "name": "Headphones", "description": "Wireless", "price": 59.90, "categoryId": {{cartCategory.response.body.$.id}} }
+{ "name": "Headphones", "description": "Wireless", "price": 59.90, "categoryId": {{cartCategory.response.body.$.id}}, "stock": 10 }
 
 ### C3. Log in as USER (expect 200)
 # @name userLogin
@@ -353,3 +355,35 @@ Authorization: Bearer {{userLogin.response.body.$.token}}
 
 ### O7. Order without a token (expect 401)
 POST {{host}}/api/orders
+
+### O8. The order took 2 units (expect 200, stock 8)
+GET {{host}}/api/products/{{cartProduct.response.body.$.id}}
+
+### O9. More than the stock in the cart (expect 409 "Not enough stock ... 8 left")
+POST {{host}}/api/cart/items
+Authorization: Bearer {{userLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "productId": {{cartProduct.response.body.$.id}}, "quantity": 9 }
+
+### O10. Put 3 in the cart (expect 200)
+POST {{host}}/api/cart/items
+Authorization: Bearer {{userLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "productId": {{cartProduct.response.body.$.id}}, "quantity": 3 }
+
+### O11. ADMIN lowers the stock to 1 (expect 200, stock 1)
+PUT {{host}}/api/products/{{cartProduct.response.body.$.id}}
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "Headphones", "description": "Wireless", "price": 59.90, "categoryId": {{cartCategory.response.body.$.id}}, "stock": 1 }
+
+### O12. Order the 3 (expect 409: only 1 left, the cart and the stock are unchanged)
+POST {{host}}/api/orders
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### O13. Empty the cart (expect 204)
+DELETE {{host}}/api/cart
+Authorization: Bearer {{userLogin.response.body.$.token}}

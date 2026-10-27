@@ -23,16 +23,19 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
 
-    // Turns the cart into an order, then empties the cart, in one transaction:
-    // if saving the order fails, the cart is left untouched.
-    // Stock is not checked yet: that comes with #31 and #32
+    // Turns the cart into an order, removes the units from the stock, then empties the cart,
+    // in one transaction: if one product lacks stock (409), nothing is changed.
+    // Two orders at the same time can still both take the last unit: handled in #32
     @Transactional
     public OrderDTO placeOrder(String email) {
         Cart cart = cartRepository.findByUserEmail(email)
                 .filter(c -> !c.getItems().isEmpty())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cart is empty"));
         Order order = new Order(cart.getUser());
-        cart.getItems().forEach(item -> order.addItem(item.getProduct(), item.getQuantity()));
+        cart.getItems().forEach(item -> {
+            item.getProduct().removeStock(item.getQuantity()); // saved by dirty checking
+            order.addItem(item.getProduct(), item.getQuantity());
+        });
         Order saved = orderRepository.save(order);
         cart.getItems().clear(); // orphanRemoval deletes the cart lines
         return toDto(saved);

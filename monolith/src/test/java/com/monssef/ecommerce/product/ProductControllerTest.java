@@ -46,7 +46,7 @@ class ProductControllerTest {
     @Test
     void findAll_shouldReturnPaginatedProducts() throws Exception {
         ProductDTO dto = new ProductDTO(
-                1L, "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, Instant.now());
+                1L, "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, 10, Instant.now());
         Page<ProductDTO> page = new PageImpl<>(List.of(dto), PageRequest.of(0, 10), 1);
         when(productService.findAll(any(), any(), any())).thenReturn(page);
 
@@ -62,7 +62,7 @@ class ProductControllerTest {
     @Test
     void findById_shouldReturnProduct_whenExists() throws Exception {
         ProductDTO dto = new ProductDTO(
-                1L, "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, Instant.now());
+                1L, "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, 10, Instant.now());
         when(productService.findById(1L)).thenReturn(dto);
 
         mockMvc.perform(get("/api/products/1"))
@@ -86,9 +86,9 @@ class ProductControllerTest {
     @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void create_shouldReturn201_whenValid() throws Exception {
         ProductRequest request = new ProductRequest(
-                "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L);
+                "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, 10);
         ProductDTO dto = new ProductDTO(
-                1L, "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, Instant.now());
+                1L, "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, 10, Instant.now());
         when(productService.create(any(ProductRequest.class))).thenReturn(dto);
 
         mockMvc.perform(post("/api/products")
@@ -97,16 +97,47 @@ class ProductControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.name").value("iPhone 15"))
-                .andExpect(jsonPath("$.price").value(999.99));
+                .andExpect(jsonPath("$.price").value(999.99))
+                .andExpect(jsonPath("$.stock").value(10));
 
         verify(productService).create(any(ProductRequest.class));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void create_shouldReturn400_whenStockMissing() throws Exception {
+        ProductRequest request = new ProductRequest(
+                "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, null);
+
+        mockMvc.perform(post("/api/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("stock"));
+
+        verifyNoInteractions(productService);
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN")
+    void create_shouldReturn400_whenStockNegative() throws Exception {
+        ProductRequest request = new ProductRequest(
+                "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, -1);
+
+        mockMvc.perform(post("/api/products")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[0].field").value("stock"));
+
+        verifyNoInteractions(productService);
     }
 
     @Test
     @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void create_shouldReturn400_whenBlankName() throws Exception {
         ProductRequest request = new ProductRequest(
-                "", "description", new BigDecimal("10.00"), 1L);
+                "", "description", new BigDecimal("10.00"), 1L, 10);
 
         mockMvc.perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -118,7 +149,7 @@ class ProductControllerTest {
     @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void create_shouldReturn400_whenPriceIsZero() throws Exception {
         ProductRequest request = new ProductRequest(
-                "Free phone", "description", BigDecimal.ZERO, 1L);
+                "Free phone", "description", BigDecimal.ZERO, 1L, 10);
 
         mockMvc.perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -130,9 +161,9 @@ class ProductControllerTest {
     @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
     void update_shouldReturnUpdatedProduct_whenValid() throws Exception {
         ProductRequest request = new ProductRequest(
-                "iPhone 15", "256 GB", new BigDecimal("1099.99"), 1L);
+                "iPhone 15", "256 GB", new BigDecimal("1099.99"), 1L, 10);
         ProductDTO dto = new ProductDTO(
-                1L, "iPhone 15", "256 GB", new BigDecimal("1099.99"), 1L, Instant.now());
+                1L, "iPhone 15", "256 GB", new BigDecimal("1099.99"), 1L, 10, Instant.now());
         when(productService.update(eq(1L), any(ProductRequest.class))).thenReturn(dto);
 
         mockMvc.perform(put("/api/products/1")
@@ -159,7 +190,7 @@ class ProductControllerTest {
     @Test
     void create_shouldReturn401_whenAnonymous() throws Exception {
         ProductRequest request = new ProductRequest(
-                "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L);
+                "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, 10);
 
         mockMvc.perform(post("/api/products")
                         .contentType(MediaType.APPLICATION_JSON)

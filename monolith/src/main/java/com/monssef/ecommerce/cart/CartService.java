@@ -5,6 +5,7 @@ import com.monssef.ecommerce.cart.dto.CartDTO;
 import com.monssef.ecommerce.cart.dto.CartItemDTO;
 import com.monssef.ecommerce.cart.dto.UpdateCartItemRequest;
 import com.monssef.ecommerce.common.ResourceNotFoundException;
+import com.monssef.ecommerce.product.InsufficientStockException;
 import com.monssef.ecommerce.product.Product;
 import com.monssef.ecommerce.product.ProductService;
 import com.monssef.ecommerce.user.User;
@@ -27,7 +28,7 @@ import java.util.List;
 @Transactional(readOnly = true)
 public class CartService {
 
-    // Per product line. Real stock checks come with stock management (#31)
+    // Per product line, on top of the stock of the product
     public static final int MAX_QUANTITY = 100;
 
     private final CartRepository cartRepository;
@@ -48,15 +49,15 @@ public class CartService {
         Cart cart = cartRepository.findByUserEmail(email)
                 .orElseGet(() -> new Cart(findUser(email))); // the cart is created on the first add
         cart.findItem(product.getId()).ifPresentOrElse(
-                item -> item.setQuantity(checkQuantity(item.getQuantity() + request.getQuantity())),
-                () -> cart.addItem(product, request.getQuantity()));
+                item -> item.setQuantity(checkQuantity(product, item.getQuantity() + request.getQuantity())),
+                () -> cart.addItem(product, checkQuantity(product, request.getQuantity())));
         return toDto(cartRepository.save(cart));
     }
 
     @Transactional
     public CartDTO updateItem(String email, Long productId, UpdateCartItemRequest request) {
         CartItem item = findItem(email, productId);
-        item.setQuantity(request.getQuantity());
+        item.setQuantity(checkQuantity(item.getProduct(), request.getQuantity()));
         return toDto(item.getCart());
     }
 
@@ -86,10 +87,14 @@ public class CartService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "User not found"));
     }
 
-    private int checkQuantity(int quantity) {
+    // 400 above the per-line maximum, 409 above the stock. The order checks the stock again
+    private int checkQuantity(Product product, int quantity) {
         if (quantity > MAX_QUANTITY) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "Quantity cannot exceed " + MAX_QUANTITY + " per product");
+        }
+        if (!product.hasStock(quantity)) {
+            throw new InsufficientStockException(product);
         }
         return quantity;
     }

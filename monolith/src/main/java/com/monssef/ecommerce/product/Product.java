@@ -11,12 +11,14 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Digits;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnDefault;
 import org.hibernate.annotations.CreationTimestamp;
 
 import java.math.BigDecimal;
@@ -49,6 +51,12 @@ public class Product {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
+    // Units left. The default fills existing rows when Hibernate adds the column
+    @Min(0)
+    @ColumnDefault("0")
+    @Column(nullable = false)
+    private int stock;
+
     // Many products -> one category. The client sends: "category": { "id": 1 }
     @NotNull
     @ManyToOne(optional = false)
@@ -59,4 +67,16 @@ public class Product {
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    public boolean hasStock(int quantity) {
+        return stock >= quantity;
+    }
+
+    // Called when an order is placed: 409 if fewer units are left than ordered
+    public void removeStock(int quantity) {
+        if (!hasStock(quantity)) {
+            throw new InsufficientStockException(this);
+        }
+        stock -= quantity;
+    }
 }

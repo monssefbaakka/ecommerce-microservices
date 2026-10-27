@@ -5,6 +5,8 @@ import com.monssef.ecommerce.common.ResourceNotFoundException;
 import com.monssef.ecommerce.config.SecurityConfig;
 import com.monssef.ecommerce.order.dto.OrderDTO;
 import com.monssef.ecommerce.order.dto.OrderItemDTO;
+import com.monssef.ecommerce.product.InsufficientStockException;
+import com.monssef.ecommerce.product.Product;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -68,6 +70,16 @@ class OrderControllerTest {
     }
 
     @Test
+    @WithMockUser(username = EMAIL)
+    void placeOrder_shouldReturn409_whenNotEnoughStock() throws Exception {
+        when(orderService.placeOrder(EMAIL)).thenThrow(new InsufficientStockException(product()));
+
+        mockMvc.perform(post("/api/orders"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Not enough stock for product 1 (iPhone 15): 1 left"));
+    }
+
+    @Test
     void placeOrder_shouldReturn401_whenAnonymous() throws Exception {
         mockMvc.perform(post("/api/orders"))
                 .andExpect(status().isUnauthorized())
@@ -113,6 +125,14 @@ class OrderControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verifyNoInteractions(orderService);
+    }
+
+    private Product product() {
+        Product product = new Product();
+        product.setId(1L);
+        product.setName("iPhone 15");
+        product.setStock(1);
+        return product;
     }
 
     private OrderDTO order() {

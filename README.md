@@ -139,6 +139,15 @@ Dans Swagger UI, clique sur **Authorize** et colle le token (sans `Bearer `) pou
 | PUT | /api/products/{id} | Modifier un produit | 200, 400, 404 |
 | DELETE | /api/products/{id} | Supprimer un produit | 204, 404 |
 
+Corps de `POST` et `PUT` :
+
+```json
+{ "name": "iPhone 15", "description": "128 GB", "price": 999.99, "categoryId": 1, "stock": 25 }
+```
+
+`stock` est le nombre d'unités disponibles. Il est obligatoire et ne peut pas être négatif (400 sinon). Il est renvoyé dans chaque produit.
+Seul un ADMIN le modifie, avec `PUT`. Passer commande le diminue automatiquement.
+
 #### Paramètres de `GET /api/products`
 
 | Paramètre | Type | Description | Défaut |
@@ -160,13 +169,13 @@ Chaque utilisateur connecté a un seul panier, créé au premier ajout. L'email 
 | Méthode | URL | Description | Codes |
 |---|---|---|---|
 | GET | /api/cart | Voir mon panier (vide s'il n'existe pas encore) | 200, 401 |
-| POST | /api/cart/items | Ajouter un produit, ou augmenter sa quantité s'il y est déjà | 200, 400, 401, 404 |
-| PUT | /api/cart/items/{productId} | Changer la quantité d'un produit | 200, 400, 401, 404 |
+| POST | /api/cart/items | Ajouter un produit, ou augmenter sa quantité s'il y est déjà | 200, 400, 401, 404, 409 |
+| PUT | /api/cart/items/{productId} | Changer la quantité d'un produit | 200, 400, 401, 404, 409 |
 | DELETE | /api/cart/items/{productId} | Retirer un produit | 200, 401, 404 |
 | DELETE | /api/cart | Vider le panier | 204, 401 |
 
 Corps de `POST /api/cart/items` : `{ "productId": 1, "quantity": 2 }`. Pour `PUT`, seulement `{ "quantity": 5 }`.
-La quantité va de 1 à 100 par produit. Chaque réponse renvoie le panier complet :
+La quantité va de 1 à 100 par produit, sans dépasser le stock du produit (**409** sinon). Chaque réponse renvoie le panier complet :
 
 ```json
 {
@@ -186,10 +195,11 @@ Passer commande transforme le panier de l'utilisateur connecté en commande `PEN
 
 | Méthode | URL | Description | Codes |
 |---|---|---|---|
-| POST | /api/orders | Passer commande avec le contenu de mon panier (sans corps) | 201, 400, 401 |
+| POST | /api/orders | Passer commande avec le contenu de mon panier (sans corps) | 201, 400, 401, 409 |
 | GET | /api/orders/{id} | Voir une de mes commandes | 200, 401, 404 |
 
-`POST` renvoie **400** si le panier est vide, et **201** avec l'en-tête `Location: /api/orders/{id}` sinon.
+`POST` renvoie **400** si le panier est vide, **409** si un produit n'a plus assez de stock, et **201** avec l'en-tête `Location: /api/orders/{id}` sinon.
+La commande retire les unités du stock. Le stock est vérifié à nouveau à ce moment, car il a pu baisser depuis l'ajout au panier : si un seul produit manque, rien n'est modifié (ni stock, ni panier).
 Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'existe pas.
 
 ```json
@@ -206,7 +216,7 @@ Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'ex
 ```
 
 Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (`productId` devient `null` si le produit est supprimé).
-Le stock n'est pas encore vérifié (#31, #32).
+Deux commandes passées au même moment peuvent encore prendre la même dernière unité : c'est traité dans #32.
 ### Categories
 | Méthode | URL | Description | Code |
 |---|---|---|---|
@@ -266,6 +276,7 @@ erDiagram
         varchar name
         varchar description
         numeric price
+        int stock
         bigint category_id FK
         timestamp created_at
     }

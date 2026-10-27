@@ -4,6 +4,7 @@ import com.monssef.ecommerce.cart.Cart;
 import com.monssef.ecommerce.cart.CartRepository;
 import com.monssef.ecommerce.common.ResourceNotFoundException;
 import com.monssef.ecommerce.order.dto.OrderDTO;
+import com.monssef.ecommerce.product.InsufficientStockException;
 import com.monssef.ecommerce.product.Product;
 import com.monssef.ecommerce.user.User;
 import org.junit.jupiter.api.Test;
@@ -72,6 +73,40 @@ class OrderServiceTest {
 
         assertThat(cart.getItems()).isEmpty();
         assertThat(result.getItems()).hasSize(1); // the order keeps its lines
+    }
+
+    @Test
+    void placeOrder_shouldRemoveOrderedUnitsFromStock() {
+        Product phone = product(1L, "iPhone 15", "999.99");
+        Product phoneCase = product(2L, "Case", "19.90");
+        Cart cart = new Cart(user());
+        cart.addItem(phone, 2);
+        cart.addItem(phoneCase, 10); // the whole stock
+        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.placeOrder(EMAIL);
+
+        assertThat(phone.getStock()).isEqualTo(8);
+        assertThat(phoneCase.getStock()).isZero();
+    }
+
+    @Test
+    void placeOrder_shouldThrow409AndKeepCart_whenNotEnoughStock() {
+        // The stock dropped after the product was put in the cart
+        Product product = product(1L, "iPhone 15", "999.99");
+        Cart cart = new Cart(user());
+        cart.addItem(product, 2);
+        product.setStock(1);
+        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+
+        assertThatThrownBy(() -> service.placeOrder(EMAIL))
+                .isInstanceOf(InsufficientStockException.class)
+                .hasMessageContaining("Not enough stock for product 1 (iPhone 15): 1 left");
+
+        assertThat(product.getStock()).isEqualTo(1);
+        assertThat(cart.getItems()).hasSize(1);
+        verify(orderRepository, never()).save(any());
     }
 
     @Test
@@ -144,6 +179,7 @@ class OrderServiceTest {
         product.setId(id);
         product.setName(name);
         product.setPrice(new BigDecimal(price));
+        product.setStock(10);
         return product;
     }
 }
