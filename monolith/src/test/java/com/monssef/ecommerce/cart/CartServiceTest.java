@@ -4,6 +4,7 @@ import com.monssef.ecommerce.cart.dto.AddCartItemRequest;
 import com.monssef.ecommerce.cart.dto.CartDTO;
 import com.monssef.ecommerce.cart.dto.UpdateCartItemRequest;
 import com.monssef.ecommerce.common.ResourceNotFoundException;
+import com.monssef.ecommerce.product.InsufficientStockException;
 import com.monssef.ecommerce.product.Product;
 import com.monssef.ecommerce.product.ProductService;
 import com.monssef.ecommerce.user.User;
@@ -119,6 +120,38 @@ class CartServiceTest {
     }
 
     @Test
+    void addItem_shouldThrow409_whenNotEnoughStock() {
+        Product product = product(1L, "iPhone 15", "999.99");
+        product.setStock(3);
+        Cart cart = new Cart(user());
+        cart.addItem(product, 2);
+        when(productService.findEntityById(1L)).thenReturn(product);
+        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+
+        // 2 already in the cart + 2 more = 4, only 3 left
+        assertThatThrownBy(() -> service.addItem(EMAIL, new AddCartItemRequest(1L, 2)))
+                .isInstanceOf(InsufficientStockException.class)
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+
+        assertThat(cart.getItems().get(0).getQuantity()).isEqualTo(2);
+        verify(cartRepository, never()).save(any());
+    }
+
+    @Test
+    void addItem_shouldThrow409_whenProductOutOfStock() {
+        Product product = product(1L, "iPhone 15", "999.99");
+        product.setStock(0);
+        when(productService.findEntityById(1L)).thenReturn(product);
+        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(new Cart(user())));
+
+        assertThatThrownBy(() -> service.addItem(EMAIL, new AddCartItemRequest(1L, 1)))
+                .isInstanceOf(InsufficientStockException.class);
+
+        verify(cartRepository, never()).save(any());
+    }
+
+    @Test
     void addItem_shouldThrow404_whenProductDoesNotExist() {
         when(productService.findEntityById(99L)).thenThrow(new ResourceNotFoundException("Product", 99L));
 
@@ -137,6 +170,18 @@ class CartServiceTest {
         CartDTO result = service.updateItem(EMAIL, 1L, new UpdateCartItemRequest(7));
 
         assertThat(result.getItems().get(0).getQuantity()).isEqualTo(7);
+    }
+
+    @Test
+    void updateItem_shouldThrow409_whenNotEnoughStock() {
+        Cart cart = new Cart(user());
+        cart.addItem(product(1L, "iPhone 15", "999.99"), 2); // stock 10
+        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+
+        assertThatThrownBy(() -> service.updateItem(EMAIL, 1L, new UpdateCartItemRequest(11)))
+                .isInstanceOf(InsufficientStockException.class);
+
+        assertThat(cart.getItems().get(0).getQuantity()).isEqualTo(2);
     }
 
     @Test
@@ -194,6 +239,7 @@ class CartServiceTest {
         product.setId(id);
         product.setName(name);
         product.setPrice(new BigDecimal(price));
+        product.setStock(10);
         return product;
     }
 }
