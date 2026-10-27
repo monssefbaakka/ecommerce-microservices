@@ -225,6 +225,9 @@ erDiagram
     USERS ||--o| CARTS : owns
     CARTS ||--o{ CART_ITEMS : contains
     PRODUCTS ||--o{ CART_ITEMS : "added as"
+    USERS ||--o{ ORDERS : places
+    ORDERS ||--|{ ORDER_ITEMS : contains
+    PRODUCTS |o--o{ ORDER_ITEMS : "ordered as"
     CATEGORIES {
         bigint id PK
         varchar name UK
@@ -255,7 +258,25 @@ erDiagram
         bigint product_id FK
         int quantity
     }
+    ORDERS {
+        bigint id PK
+        bigint user_id FK
+        varchar status
+        numeric total
+        timestamp created_at
+    }
+    ORDER_ITEMS {
+        bigint id PK
+        bigint order_id FK
+        bigint product_id FK "null if the product was deleted"
+        varchar product_name
+        numeric unit_price
+        int quantity
+    }
 ```
+
+Une commande garde une copie du nom et du prix de chaque produit au moment de l'achat : elle ne change pas si le produit est modifié ensuite.
+Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON DELETE SET NULL`) et la ligne reste dans l'historique.
 
 ## Project structure
 
