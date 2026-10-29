@@ -7,9 +7,12 @@ import com.monssef.ecommerce.order.dto.OrderDTO;
 import com.monssef.ecommerce.product.InsufficientStockException;
 import com.monssef.ecommerce.product.Product;
 import com.monssef.ecommerce.user.User;
+import jakarta.persistence.EntityManager;
+import jakarta.persistence.LockModeType;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -35,6 +38,9 @@ class OrderServiceTest {
     @Mock
     private CartRepository cartRepository;
 
+    @Mock
+    private EntityManager entityManager;
+
     @InjectMocks
     private OrderService service;
 
@@ -44,7 +50,7 @@ class OrderServiceTest {
         Cart cart = new Cart(user);
         cart.addItem(product(1L, "iPhone 15", "999.99"), 2);
         cart.addItem(product(2L, "Case", "19.90"), 1);
-        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+        when(cartRepository.findForUpdateByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         OrderDTO result = service.placeOrder(EMAIL);
@@ -66,7 +72,7 @@ class OrderServiceTest {
     void placeOrder_shouldEmptyTheCart() {
         Cart cart = new Cart(user());
         cart.addItem(product(1L, "iPhone 15", "999.99"), 2);
-        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+        when(cartRepository.findForUpdateByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         OrderDTO result = service.placeOrder(EMAIL);
@@ -82,7 +88,7 @@ class OrderServiceTest {
         Cart cart = new Cart(user());
         cart.addItem(phone, 2);
         cart.addItem(phoneCase, 10); // the whole stock
-        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+        when(cartRepository.findForUpdateByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
         when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         service.placeOrder(EMAIL);
@@ -98,7 +104,7 @@ class OrderServiceTest {
         Cart cart = new Cart(user());
         cart.addItem(product, 2);
         product.setStock(1);
-        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+        when(cartRepository.findForUpdateByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
 
         assertThatThrownBy(() -> service.placeOrder(EMAIL))
                 .isInstanceOf(InsufficientStockException.class)
@@ -110,8 +116,45 @@ class OrderServiceTest {
     }
 
     @Test
+    void placeOrder_shouldLockProductsInIdOrder() {
+        Product phone = product(1L, "iPhone 15", "999.99");
+        Product phoneCase = product(2L, "Case", "19.90");
+        Cart cart = new Cart(user());
+        cart.addItem(phoneCase, 1); // added first, locked second
+        cart.addItem(phone, 1);
+        when(cartRepository.findForUpdateByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.placeOrder(EMAIL);
+
+        InOrder inOrder = inOrder(entityManager);
+        inOrder.verify(entityManager).refresh(phone, LockModeType.PESSIMISTIC_WRITE);
+        inOrder.verify(entityManager).refresh(phoneCase, LockModeType.PESSIMISTIC_WRITE);
+    }
+
+    @Test
+    void placeOrder_shouldThrow409_whenAnotherOrderTookTheStockBeforeTheLock() {
+        Product product = product(1L, "iPhone 15", "999.99");
+        Cart cart = new Cart(user());
+        cart.addItem(product, 2);
+        when(cartRepository.findForUpdateByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+        // The lock was acquired once the other order committed: the reload brings its new stock
+        doAnswer(invocation -> {
+            product.setStock(1);
+            return null;
+        }).when(entityManager).refresh(product, LockModeType.PESSIMISTIC_WRITE);
+
+        assertThatThrownBy(() -> service.placeOrder(EMAIL))
+                .isInstanceOf(InsufficientStockException.class)
+                .hasMessageContaining("1 left");
+
+        assertThat(cart.getItems()).hasSize(1);
+        verify(orderRepository, never()).save(any());
+    }
+
+    @Test
     void placeOrder_shouldThrow400_whenCartIsEmpty() {
-        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(new Cart(user())));
+        when(cartRepository.findForUpdateByUserEmail(EMAIL)).thenReturn(Optional.of(new Cart(user())));
 
         assertThatThrownBy(() -> service.placeOrder(EMAIL))
                 .isInstanceOf(ResponseStatusException.class)
@@ -123,7 +166,7 @@ class OrderServiceTest {
 
     @Test
     void placeOrder_shouldThrow400_whenUserHasNoCart() {
-        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.empty());
+        when(cartRepository.findForUpdateByUserEmail(EMAIL)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.placeOrder(EMAIL))
                 .isInstanceOf(ResponseStatusException.class)
