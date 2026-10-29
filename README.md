@@ -196,7 +196,10 @@ Passer commande transforme le panier de l'utilisateur connecté en commande `PEN
 | Méthode | URL | Description | Codes |
 |---|---|---|---|
 | POST | /api/orders | Passer commande avec le contenu de mon panier (sans corps) | 201, 400, 401, 409 |
+| GET | /api/orders | Historique de mes commandes (paginé) | 200, 401 |
 | GET | /api/orders/{id} | Voir une de mes commandes | 200, 401, 404 |
+
+`GET /api/orders` renvoie uniquement mes commandes, les plus récentes d'abord, 10 par page (`?page=0&size=10`, `sort` modifiable comme pour les produits). Chaque élément de `content` a le même format qu'une commande ci-dessous.
 
 `POST` renvoie **400** si le panier est vide, **409** si un produit n'a plus assez de stock, et **201** avec l'en-tête `Location: /api/orders/{id}` sinon.
 La commande retire les unités du stock. Le stock est vérifié à nouveau à ce moment, car il a pu baisser depuis l'ajout au panier : si un seul produit manque, rien n'est modifié (ni stock, ni panier).

@@ -387,3 +387,14 @@ Authorization: Bearer {{userLogin.response.body.$.token}}
 ### O13. Empty the cart (expect 204)
 DELETE {{host}}/api/cart
 Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### O14. My order history (expect 200, newest first, page.totalElements 1)
+GET {{host}}/api/orders
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### O15. History, page of 5 (expect 200, page.size 5)
+GET {{host}}/api/orders?page=0&size=5
+Authorization: Bearer {{userLogin.response.body.$.token}}
+
+### O16. History without a token (expect 401)
+GET {{host}}/api/orders
