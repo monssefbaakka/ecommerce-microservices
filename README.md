@@ -216,7 +216,7 @@ Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'ex
 ```
 
 Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (`productId` devient `null` si le produit est supprimé).
-Deux commandes passées au même moment peuvent encore prendre la même dernière unité : c'est traité dans #32.
+Deux commandes passées au même moment sont traitées l'une après l'autre : le panier et ses produits sont verrouillés (`SELECT ... FOR UPDATE`) jusqu'à la fin de la commande. La seconde attend, puis voit le stock laissé par la première : deux clients ne peuvent pas prendre la même dernière unité (**409** pour le second). Un double clic sur « Commander » crée une seule commande : la seconde requête trouve le panier déjà vidé (**400**).
 ### Categories
 | Méthode | URL | Description | Code |
 |---|---|---|---|
