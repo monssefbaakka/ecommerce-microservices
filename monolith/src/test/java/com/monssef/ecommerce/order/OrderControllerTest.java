@@ -8,10 +8,16 @@ import com.monssef.ecommerce.order.dto.OrderItemDTO;
 import com.monssef.ecommerce.product.InsufficientStockException;
 import com.monssef.ecommerce.product.Product;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.web.servlet.MockMvc;
@@ -21,6 +27,10 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -96,6 +106,44 @@ class OrderControllerTest {
 
         mockMvc.perform(post("/api/orders"))
                 .andExpect(status().isCreated());
+    }
+
+    @Test
+    @WithMockUser(username = EMAIL)
+    void findAll_shouldReturnPageOfMyOrders_newestFirst() throws Exception {
+        when(orderService.findAll(eq(EMAIL), any()))
+                .thenReturn(new PageImpl<>(List.of(order()), PageRequest.of(0, 10), 1));
+
+        mockMvc.perform(get("/api/orders"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].id").value(7))
+                .andExpect(jsonPath("$.content[0].items[0].productName").value("iPhone 15"))
+                .andExpect(jsonPath("$.page.totalElements").value(1));
+
+        ArgumentCaptor<Pageable> captor = ArgumentCaptor.forClass(Pageable.class);
+        verify(orderService).findAll(eq(EMAIL), captor.capture());
+        assertThat(captor.getValue().getPageSize()).isEqualTo(10);
+        assertThat(captor.getValue().getSort())
+                .isEqualTo(Sort.by(Sort.Direction.DESC, "createdAt", "id"));
+    }
+
+    @Test
+    @WithMockUser(username = EMAIL)
+    void findAll_shouldPassRequestedPage() throws Exception {
+        when(orderService.findAll(eq(EMAIL), any())).thenReturn(Page.empty());
+
+        mockMvc.perform(get("/api/orders").param("page", "2").param("size", "5"))
+                .andExpect(status().isOk());
+
+        verify(orderService).findAll(eq(EMAIL), argThat(p -> p.getPageNumber() == 2 && p.getPageSize() == 5));
+    }
+
+    @Test
+    void findAll_shouldReturn401_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/api/orders"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(orderService);
     }
 
     @Test

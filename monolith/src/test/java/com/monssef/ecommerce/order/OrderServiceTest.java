@@ -16,10 +16,15 @@ import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.util.List;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -173,6 +178,30 @@ class OrderServiceTest {
                 .hasMessageContaining("Cart is empty");
 
         verifyNoInteractions(orderRepository);
+    }
+
+    @Test
+    void findAll_shouldReturnOrdersOfUserOnly() {
+        Order order = new Order(user());
+        order.setId(7L);
+        order.addItem(product(1L, "iPhone 15", "999.99"), 2);
+        Pageable pageable = PageRequest.of(0, 10);
+        when(orderRepository.findByUserEmail(EMAIL, pageable))
+                .thenReturn(new PageImpl<>(List.of(order), pageable, 1));
+
+        Page<OrderDTO> result = service.findAll(EMAIL, pageable);
+
+        assertThat(result.getTotalElements()).isEqualTo(1);
+        assertThat(result.getContent().get(0).getId()).isEqualTo(7L);
+        assertThat(result.getContent().get(0).getTotal()).isEqualByComparingTo("1999.98");
+    }
+
+    @Test
+    void findAll_shouldReturnEmptyPage_whenNoOrders() {
+        Pageable pageable = PageRequest.of(0, 10);
+        when(orderRepository.findByUserEmail(EMAIL, pageable)).thenReturn(Page.empty(pageable));
+
+        assertThat(service.findAll(EMAIL, pageable).getContent()).isEmpty();
     }
 
     @Test
