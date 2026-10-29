@@ -10,6 +10,8 @@ import com.monssef.ecommerce.product.Product;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -48,6 +50,10 @@ public class OrderService {
         Order saved = orderRepository.save(order);
         cart.getItems().clear(); // orphanRemoval deletes the cart lines
         return toDto(saved);
+    }
+
+    public Page<OrderDTO> findAll(String email, Pageable pageable) {
+        return orderRepository.findByUserEmail(email, pageable).map(this::toDto);
     }
 
     // 404 also when the order exists but belongs to someone else: no way to probe other ids
