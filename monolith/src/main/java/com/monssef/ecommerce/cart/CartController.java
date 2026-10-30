@@ -56,6 +56,7 @@ public class CartController {
                     content = @Content(schema = @Schema(implementation = CartDTO.class))),
             @ApiResponse(responseCode = "400", description = "Requête invalide ou quantité trop grande", content = @Content),
             @ApiResponse(responseCode = "404", description = "Produit introuvable", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Stock insuffisant pour la quantité totale", content = @Content),
             @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content)
     })
     public CartDTO addItem(@Parameter(hidden = true) Principal principal,
@@ -68,8 +69,9 @@ public class CartController {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Panier mis à jour",
                     content = @Content(schema = @Schema(implementation = CartDTO.class))),
-            @ApiResponse(responseCode = "400", description = "Requête invalide", content = @Content),
+            @ApiResponse(responseCode = "400", description = "Requête invalide ou quantité trop grande", content = @Content),
             @ApiResponse(responseCode = "404", description = "Produit absent du panier", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Stock insuffisant", content = @Content),
             @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content)
     })
     public CartDTO updateItem(@Parameter(hidden = true) Principal principal,

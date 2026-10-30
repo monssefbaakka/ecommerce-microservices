@@ -14,6 +14,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+import org.springdoc.core.annotations.ParameterObject;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,12 +31,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
-
 
 import java.net.URI;
-
 
 @RestController
 @RequestMapping("/api/products")
@@ -42,16 +41,19 @@ import java.net.URI;
 public class ProductController {
 
     private final ProductService productService;
-@GetMapping
-@Operation(summary = "Liste des produits", description = "Liste paginée avec recherche par nom et filtre par catégorie")
-@ApiResponse(responseCode = "200", description = "Liste paginée récupérée",
-        content = @Content(schema = @Schema(implementation = ProductDTO.class)))
-public Page<ProductDTO> findAll(
-        @RequestParam(required = false) @Parameter(description = "Recherche partielle sur le nom (insensible à la casse)") String name,
-        @RequestParam(required = false) @Parameter(description = "Filtre par identifiant de catégorie") Long categoryId,
-        @PageableDefault(size = 10, sort = "id") Pageable pageable) {
-    return productService.findAll(name, categoryId, pageable);
-}
+
+    @GetMapping
+    @Operation(summary = "Liste des produits", description = "Liste paginée avec recherche par nom et filtre par catégorie")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Liste paginée récupérée"),
+            @ApiResponse(responseCode = "400", description = "Tri inconnu (?sort=foo)", content = @Content)
+    })
+    public Page<ProductDTO> findAll(
+            @RequestParam(required = false) @Parameter(description = "Recherche partielle sur le nom (insensible à la casse)") String name,
+            @RequestParam(required = false) @Parameter(description = "Filtre par identifiant de catégorie") Long categoryId,
+            @ParameterObject @PageableDefault(size = 10, sort = "id") Pageable pageable) {
+        return productService.findAll(name, categoryId, pageable);
+    }
 
     @GetMapping("/{id}")
     @Operation(summary = "Détail d'un produit", description = "Retourne un produit par son identifiant")
@@ -63,6 +65,7 @@ public Page<ProductDTO> findAll(
     public ProductDTO findById(@PathVariable @Parameter(description = "Identifiant du produit") Long id) {
         return productService.findById(id);
     }
+
     // @Valid triggers the validation annotations of ProductRequest (@NotBlank, @DecimalMin, @NotNull...)
     @PostMapping
     @SecurityRequirement(name = OpenApiConfig.BEARER_AUTH)

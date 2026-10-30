@@ -42,6 +42,9 @@ The API is available at `http://localhost:8080`.
 Swagger UI is available at `http://localhost:8080/swagger-ui.html`  
 OpenAPI definition at `http://localhost:8080/v3/api-docs`
 
+Swagger UI documents every endpoint with its request and response bodies (with examples), the paging parameters (`page`, `size`, `sort`) and every error code with the common `ErrorResponse` format.
+To call a protected endpoint: run `POST /api/auth/login`, copy the `token`, click **Authorize** and paste it. The token is kept after a page reload.
+
 To try the endpoints, open `docs/requests.http` in VS Code (REST Client extension) or IntelliJ.
 
 ### Run tests
@@ -221,6 +224,37 @@ Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'ex
 
 Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (`productId` devient `null` si le produit est supprimé).
 Deux commandes passées au même moment sont traitées l'une après l'autre : le panier et ses produits sont verrouillés (`SELECT ... FOR UPDATE`) jusqu'à la fin de la commande. La seconde attend, puis voit le stock laissé par la première : deux clients ne peuvent pas prendre la même dernière unité (**409** pour le second). Un double clic sur « Commander » crée une seule commande : la seconde requête trouve le panier déjà vidé (**400**).
+
+### Erreurs
+
+Toutes les erreurs ont le même format JSON, qu'elles viennent d'un service, de Spring MVC ou de Spring Security :
+
+```json
+{
+  "status": 400,
+  "error": "Validation failed",
+  "message": "Un ou plusieurs champs sont invalides",
+  "path": "/api/products",
+  "errors": [
+    { "field": "price", "message": "Le prix doit être supérieur à 0" }
+  ]
+}
+```
+
+`errors` détaille les champs invalides d'un `@Valid` ; il est vide pour les autres erreurs.
+
+| Code | Cas |
+|---|---|
+| 400 | Champ invalide, JSON malformé, mauvais type dans l'URL (`/api/products/abc`), paramètre obligatoire manquant, tri inconnu (`?sort=foo`), règle métier (panier vide...) |
+| 401 / 403 | Token absent ou invalide / rôle insuffisant |
+| 404 | Ressource introuvable ou URL inconnue |
+| 405 | Méthode non supportée (en-tête `Allow` avec les méthodes possibles) |
+| 409 | Conflit : nom déjà pris, stock insuffisant, contrainte de base de données |
+| 415 | `Content-Type` non supporté (le JSON est attendu) |
+| 500 | Erreur inattendue |
+
+Les détails internes (message SQL, stack trace) ne sont jamais renvoyés au client : ils sont écrits dans les logs de l'application.
+
 ### Categories
 | Méthode | URL | Description | Code |
 |---|---|---|---|

@@ -11,6 +11,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -43,6 +44,7 @@ public class OrderController {
             @ApiResponse(responseCode = "201", description = "Commande créée",
                     content = @Content(schema = @Schema(implementation = OrderDTO.class))),
             @ApiResponse(responseCode = "400", description = "Panier vide", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Stock insuffisant : ni le stock ni le panier ne changent", content = @Content),
             @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content)
     })
     public ResponseEntity<OrderDTO> placeOrder(@Parameter(hidden = true) Principal principal) {
@@ -59,11 +61,12 @@ public class OrderController {
     @GetMapping
     @Operation(summary = "Historique de mes commandes", description = "Liste paginée de mes commandes, les plus récentes d'abord")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Liste paginée récupérée",
-                    content = @Content(schema = @Schema(implementation = OrderDTO.class))),
+            @ApiResponse(responseCode = "200", description = "Liste paginée récupérée"),
+            @ApiResponse(responseCode = "400", description = "Tri inconnu (?sort=foo)", content = @Content),
             @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content)
     })
     public Page<OrderDTO> findAll(@Parameter(hidden = true) Principal principal,
+                                  @ParameterObject
                                   @PageableDefault(size = 10, sort = {"createdAt", "id"}, direction = Sort.Direction.DESC)
                                   Pageable pageable) {
         return orderService.findAll(principal.getName(), pageable);

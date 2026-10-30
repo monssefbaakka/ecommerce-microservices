@@ -398,3 +398,32 @@ Authorization: Bearer {{userLogin.response.body.$.token}}
 
 ### O16. History without a token (expect 401)
 GET {{host}}/api/orders
+
+############################################################
+# ERRORS (same JSON format: status, error, message, path, errors)
+############################################################
+
+### E1. Malformed JSON (expect 400)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "john@example.com",
+
+### E2. Wrong type in the URL (expect 400)
+GET {{host}}/api/products/abc
+
+### E3. Unknown sort property (expect 400, "Invalid sort property: foo")
+GET {{host}}/api/products?sort=foo
+
+### E4. Method not supported (expect 405, header Allow)
+DELETE {{host}}/api/auth/login
+
+### E5. Not JSON (expect 415)
+POST {{host}}/api/auth/login
+Content-Type: text/plain
+
+john@example.com
+
+### E6. Unknown URL with a token (expect 404)
+GET {{host}}/api/unknown
+Authorization: Bearer {{adminLogin.response.body.$.token}}
