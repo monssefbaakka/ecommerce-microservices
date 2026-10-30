@@ -77,4 +77,13 @@ class OpenApiDocumentationTest {
                 .andExpect(status().is3xxRedirection())
                 .andExpect(header().string("Location", containsString("/swagger-ui/index.html")));
     }
+
+    @Test
+    void apiDocs_shouldDescribeTheApi() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath("$.info.title").value("E-commerce API"))
+                .andExpect(jsonPath("$.info.version").value("0.0.1"))
+                .andExpect(jsonPath("$.info.description").value(containsString("token JWT")))
+                .andExpect(jsonPath("$.info.license.name").value("MIT"));
+    }
 }
