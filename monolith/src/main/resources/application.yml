@@ -13,6 +13,13 @@ spring:
       hibernate:
         format_sql: true
 
+springdoc:
+  default-produces-media-type: application/json   # instead of */* on every response
+  swagger-ui:
+    persist-authorization: true         # keeps the token after a page reload
+    tags-sorter: alpha
+    operations-sorter: method
+
 server:
   port: 8080
   error:
