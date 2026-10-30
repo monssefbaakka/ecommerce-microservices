@@ -44,6 +44,7 @@ public class OrderController {
             @ApiResponse(responseCode = "201", description = "Commande créée",
                     content = @Content(schema = @Schema(implementation = OrderDTO.class))),
             @ApiResponse(responseCode = "400", description = "Panier vide", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Stock insuffisant : ni le stock ni le panier ne changent", content = @Content),
             @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content)
     })
     public ResponseEntity<OrderDTO> placeOrder(@Parameter(hidden = true) Principal principal) {
