@@ -18,6 +18,7 @@ public class UserService {
 
     private final UserRepository repository;
     private final PasswordEncoder passwordEncoder;
+    private final UserMapper mapper;
 
     @Transactional
     public UserDTO register(RegisterRequest request) {
@@ -32,10 +33,6 @@ public class UserService {
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setRole(Role.USER); // a client can never register as ADMIN
         User saved = repository.save(user);
-        return toDto(saved);
-    }
-
-    private UserDTO toDto(User user) {
-        return new UserDTO(user.getId(), user.getEmail(), user.getRole(), user.getCreatedAt());
+        return mapper.toDto(saved);
     }
 }

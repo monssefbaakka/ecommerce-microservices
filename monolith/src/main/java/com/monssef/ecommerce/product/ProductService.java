@@ -20,6 +20,7 @@ public class ProductService {
 
     private final ProductRepository productRepository;
     private final CategoryService categoryService;
+    private final ProductMapper mapper;
 
     public Page<ProductDTO> findAll(String name, Long categoryId, Pageable pageable) {
         boolean hasName = name != null && !name.isBlank();
@@ -33,37 +34,29 @@ public class ProductService {
         } else {
             page = productRepository.findAll(pageable);
         }
-        return page.map(this::toDto);
+        return page.map(mapper::toDto);
     }
 
     public ProductDTO findById(Long id) {
         Product product = productRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("Product", id));
-        return toDto(product);
+        return mapper.toDto(product);
     }
 
     @Transactional
     public ProductDTO create(ProductRequest request) {
-        Product product = new Product();
-        product.setId(null); // ignore any id sent by the client
-        product.setName(request.getName());
-        product.setDescription(request.getDescription());
-        product.setPrice(request.getPrice());
+        Product product = mapper.toEntity(request);
         product.setCategory(resolveCategory(request.getCategoryId()));
-        product.setStock(request.getStock());
         Product saved = productRepository.save(product);
-        return toDto(saved);
+        return mapper.toDto(saved);
     }
 
     @Transactional
     public ProductDTO update(Long id, ProductRequest request) {
         Product existing = findEntityById(id);
-        existing.setName(request.getName());
-        existing.setDescription(request.getDescription());
-        existing.setPrice(request.getPrice());
+        mapper.update(request, existing);
         existing.setCategory(resolveCategory(request.getCategoryId()));
-        existing.setStock(request.getStock());
-        return toDto(productRepository.save(existing));
+        return mapper.toDto(productRepository.save(existing));
     }
 
     @Transactional
@@ -84,17 +77,5 @@ public class ProductService {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Category id is required");
         }
         return categoryService.findEntityById(categoryId);
-    }
-
-    private ProductDTO toDto(Product product) {
-        return new ProductDTO(
-                product.getId(),
-                product.getName(),
-                product.getDescription(),
-                product.getPrice(),
-                product.getCategory() != null ? product.getCategory().getId() : null,
-                product.getStock(),
-                product.getCreatedAt()
-        );
     }
 }
