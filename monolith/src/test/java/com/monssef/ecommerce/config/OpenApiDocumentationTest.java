@@ -102,4 +102,13 @@ class OpenApiDocumentationTest {
                         .value(errorRef))
                 .andExpect(jsonPath("$.paths['/api/products/{id}'].delete.responses['204'].content").doesNotExist());
     }
+
+    @Test
+    void apiDocs_shouldListCategoriesAsAnArray() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath("$.paths['/api/categories'].get.responses['200'].content['*/*'].schema.type")
+                        .value("array"))
+                .andExpect(jsonPath("$.paths['/api/categories'].get.responses['200'].content['*/*'].schema.items.$ref")
+                        .value("#/components/schemas/CategoryDTO"));
+    }
 }

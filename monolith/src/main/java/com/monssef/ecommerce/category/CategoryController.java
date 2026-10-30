@@ -39,8 +39,8 @@ public class CategoryController {
 
     @GetMapping
     @Operation(summary = "Liste des catégories", description = "Retourne toutes les catégories disponibles")
-    @ApiResponse(responseCode = "200", description = "Liste récupérée avec succès",
-            content = @Content(schema = @Schema(implementation = CategoryDTO.class)))
+    // No content here: springdoc reads List<CategoryDTO> and documents an array
+    @ApiResponse(responseCode = "200", description = "Liste récupérée avec succès")
     public List<CategoryDTO> findAll() {
         return service.findAll();
     }
