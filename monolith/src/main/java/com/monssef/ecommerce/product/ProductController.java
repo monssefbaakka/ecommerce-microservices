@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 
+import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,12 +45,14 @@ public class ProductController {
     private final ProductService productService;
 @GetMapping
 @Operation(summary = "Liste des produits", description = "Liste paginée avec recherche par nom et filtre par catégorie")
-@ApiResponse(responseCode = "200", description = "Liste paginée récupérée",
-        content = @Content(schema = @Schema(implementation = ProductDTO.class)))
+@ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Liste paginée récupérée"),
+        @ApiResponse(responseCode = "400", description = "Tri inconnu (?sort=foo)", content = @Content)
+})
 public Page<ProductDTO> findAll(
         @RequestParam(required = false) @Parameter(description = "Recherche partielle sur le nom (insensible à la casse)") String name,
         @RequestParam(required = false) @Parameter(description = "Filtre par identifiant de catégorie") Long categoryId,
-        @PageableDefault(size = 10, sort = "id") Pageable pageable) {
+        @ParameterObject @PageableDefault(size = 10, sort = "id") Pageable pageable) {
     return productService.findAll(name, categoryId, pageable);
 }
 

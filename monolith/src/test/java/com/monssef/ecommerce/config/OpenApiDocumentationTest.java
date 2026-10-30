@@ -13,6 +13,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsString;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -110,5 +111,19 @@ class OpenApiDocumentationTest {
                         .value("array"))
                 .andExpect(jsonPath("$.paths['/api/categories'].get.responses['200'].content['application/json'].schema.items.$ref")
                         .value("#/components/schemas/CategoryDTO"));
+    }
+
+    @Test
+    void apiDocs_shouldDescribeProductsPage() throws Exception {
+        String products = "$.paths['/api/products'].get";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath(products + ".parameters[*].name").value(contains("name", "categoryId", "page", "size", "sort")))
+                .andExpect(jsonPath(products + ".parameters[?(@.name == 'size')].schema.default").value(contains(10)))
+                .andExpect(jsonPath(products + ".responses['200'].content['application/json'].schema.$ref")
+                        .value("#/components/schemas/PagedModelProductDTO"))
+                .andExpect(jsonPath("$.components.schemas.PagedModelProductDTO.properties.content.items.$ref")
+                        .value("#/components/schemas/ProductDTO"))
+                .andExpect(jsonPath("$.components.schemas.PagedModelProductDTO.properties.page.$ref")
+                        .value("#/components/schemas/PageMetadata"));
     }
 }
