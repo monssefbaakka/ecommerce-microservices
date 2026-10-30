@@ -137,4 +137,11 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath(orders + ".responses['200'].content['application/json'].schema.$ref")
                         .value("#/components/schemas/PagedModelOrderDTO"));
     }
+
+    @Test
+    void apiDocs_shouldDocumentStockConflictsOnTheCart() throws Exception {
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath("$.paths['/api/cart/items'].post.responses['409']").exists())
+                .andExpect(jsonPath("$.paths['/api/cart/items/{productId}'].put.responses['409']").exists());
+    }
 }
