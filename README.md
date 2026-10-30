@@ -42,6 +42,9 @@ The API is available at `http://localhost:8080`.
 Swagger UI is available at `http://localhost:8080/swagger-ui.html`  
 OpenAPI definition at `http://localhost:8080/v3/api-docs`
 
+Swagger UI documents every endpoint with its request and response bodies (with examples), the paging parameters (`page`, `size`, `sort`) and every error code with the common `ErrorResponse` format.
+To call a protected endpoint: run `POST /api/auth/login`, copy the `token`, click **Authorize** and paste it. The token is kept after a page reload.
+
 To try the endpoints, open `docs/requests.http` in VS Code (REST Client extension) or IntelliJ.
 
 ### Run tests
