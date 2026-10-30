@@ -86,4 +86,20 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.info.description").value(containsString("token JWT")))
                 .andExpect(jsonPath("$.info.license.name").value("MIT"));
     }
+
+    @Test
+    void apiDocs_shouldDescribeErrorsWithErrorResponse() throws Exception {
+        String errorRef = "#/components/schemas/ErrorResponse";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath("$.components.schemas.ErrorResponse.properties.status").exists())
+                .andExpect(jsonPath("$.components.schemas.ErrorResponse.properties.errors.items.$ref")
+                        .value("#/components/schemas/FieldError"))
+                .andExpect(jsonPath("$.paths['/api/products'].post.responses['400'].content['application/json'].schema.$ref")
+                        .value(errorRef))
+                .andExpect(jsonPath("$.paths['/api/orders/{id}'].get.responses['404'].content['application/json'].schema.$ref")
+                        .value(errorRef))
+                .andExpect(jsonPath("$.paths['/api/auth/login'].post.responses['401'].content['application/json'].schema.$ref")
+                        .value(errorRef))
+                .andExpect(jsonPath("$.paths['/api/products/{id}'].delete.responses['204'].content").doesNotExist());
+    }
 }
