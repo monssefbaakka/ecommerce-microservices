@@ -5,11 +5,12 @@ import com.monssef.ecommerce.cart.CartItem;
 import com.monssef.ecommerce.cart.CartRepository;
 import com.monssef.ecommerce.common.ResourceNotFoundException;
 import com.monssef.ecommerce.order.dto.OrderDTO;
-import com.monssef.ecommerce.order.dto.OrderItemDTO;
 import com.monssef.ecommerce.product.Product;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.LockModeType;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -29,6 +30,7 @@ public class OrderService {
     private final OrderRepository orderRepository;
     private final CartRepository cartRepository;
     private final EntityManager entityManager;
+    private final OrderMapper mapper;
 
     // Turns the cart into an order, removes the units from the stock, then empties the cart,
     // in one transaction: if one product lacks stock (409), nothing is changed.
@@ -47,13 +49,17 @@ public class OrderService {
         });
         Order saved = orderRepository.save(order);
         cart.getItems().clear(); // orphanRemoval deletes the cart lines
-        return toDto(saved);
+        return mapper.toDto(saved);
+    }
+
+    public Page<OrderDTO> findAll(String email, Pageable pageable) {
+        return orderRepository.findByUserEmail(email, pageable).map(mapper::toDto);
     }
 
     // 404 also when the order exists but belongs to someone else: no way to probe other ids
     public OrderDTO findById(String email, Long id) {
         return orderRepository.findByIdAndUserEmail(id, email)
-                .map(this::toDto)
+                .map(mapper::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", id));
     }
 
@@ -65,26 +71,5 @@ public class OrderService {
                 .map(CartItem::getProduct)
                 .sorted(Comparator.comparing(Product::getId))
                 .forEach(product -> entityManager.refresh(product, LockModeType.PESSIMISTIC_WRITE));
-    }
-
-    private OrderDTO toDto(Order order) {
-        return new OrderDTO(
-                order.getId(),
-                order.getStatus(),
-                order.getItems().stream().map(this::toDto).toList(),
-                order.getTotalQuantity(),
-                order.getTotal(),
-                order.getCreatedAt()
-        );
-    }
-
-    private OrderItemDTO toDto(OrderItem item) {
-        return new OrderItemDTO(
-                item.getProduct() != null ? item.getProduct().getId() : null,
-                item.getProductName(),
-                item.getUnitPrice(),
-                item.getQuantity(),
-                item.getSubtotal()
-        );
     }
 }

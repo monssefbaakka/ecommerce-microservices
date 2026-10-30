@@ -16,6 +16,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -55,5 +56,16 @@ public class Cart {
         CartItem item = new CartItem(this, product, quantity);
         items.add(item);
         return item;
+    }
+
+    public int getTotalQuantity() {
+        return items.stream().mapToInt(CartItem::getQuantity).sum();
+    }
+
+    // Computed, not stored: follows the current product prices
+    public BigDecimal getTotal() {
+        return items.stream()
+                .map(CartItem::getSubtotal)
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
     }
 }

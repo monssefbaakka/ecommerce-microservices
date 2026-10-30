@@ -2,7 +2,6 @@ package com.monssef.ecommerce.cart;
 
 import com.monssef.ecommerce.cart.dto.AddCartItemRequest;
 import com.monssef.ecommerce.cart.dto.CartDTO;
-import com.monssef.ecommerce.cart.dto.CartItemDTO;
 import com.monssef.ecommerce.cart.dto.UpdateCartItemRequest;
 import com.monssef.ecommerce.common.ResourceNotFoundException;
 import com.monssef.ecommerce.product.InsufficientStockException;
@@ -34,11 +33,12 @@ public class CartService {
     private final CartRepository cartRepository;
     private final UserRepository userRepository;
     private final ProductService productService;
+    private final CartMapper mapper;
 
     // No cart yet: return an empty one without writing anything on a GET
     public CartDTO getCart(String email) {
         return cartRepository.findByUserEmail(email)
-                .map(this::toDto)
+                .map(mapper::toDto)
                 .orElseGet(() -> new CartDTO(List.of(), 0, BigDecimal.ZERO));
     }
 
@@ -51,14 +51,14 @@ public class CartService {
         cart.findItem(product.getId()).ifPresentOrElse(
                 item -> item.setQuantity(checkQuantity(product, item.getQuantity() + request.getQuantity())),
                 () -> cart.addItem(product, checkQuantity(product, request.getQuantity())));
-        return toDto(cartRepository.save(cart));
+        return mapper.toDto(cartRepository.save(cart));
     }
 
     @Transactional
     public CartDTO updateItem(String email, Long productId, UpdateCartItemRequest request) {
         CartItem item = findItem(email, productId);
         item.setQuantity(checkQuantity(item.getProduct(), request.getQuantity()));
-        return toDto(item.getCart());
+        return mapper.toDto(item.getCart());
     }
 
     @Transactional
@@ -66,7 +66,7 @@ public class CartService {
         CartItem item = findItem(email, productId);
         Cart cart = item.getCart();
         cart.getItems().remove(item); // orphanRemoval deletes the row
-        return toDto(cart);
+        return mapper.toDto(cart);
     }
 
     @Transactional
@@ -97,27 +97,5 @@ public class CartService {
             throw new InsufficientStockException(product);
         }
         return quantity;
-    }
-
-    private CartDTO toDto(Cart cart) {
-        List<CartItemDTO> items = cart.getItems().stream()
-                .map(this::toDto)
-                .toList();
-        int totalQuantity = items.stream().mapToInt(CartItemDTO::getQuantity).sum();
-        BigDecimal total = items.stream()
-                .map(CartItemDTO::getSubtotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
-        return new CartDTO(items, totalQuantity, total);
-    }
-
-    private CartItemDTO toDto(CartItem item) {
-        Product product = item.getProduct();
-        return new CartItemDTO(
-                product.getId(),
-                product.getName(),
-                product.getPrice(),
-                item.getQuantity(),
-                item.getSubtotal()
-        );
     }
 }
