@@ -151,4 +151,18 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.paths['/api/orders'].post.responses['409'].content['application/json'].schema.$ref")
                         .value("#/components/schemas/ErrorResponse"));
     }
+
+    @Test
+    void apiDocs_shouldDescribeDtoFieldsWithExamples() throws Exception {
+        String schemas = "$.components.schemas";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath(schemas + ".LoginRequest.properties.email.example").value("john@example.com"))
+                .andExpect(jsonPath(schemas + ".LoginRequest.required").value(contains("email", "password")))
+                .andExpect(jsonPath(schemas + ".ProductRequest.properties.price.example").value(999.99))
+                .andExpect(jsonPath(schemas + ".ProductRequest.properties.price.minimum").value(0.01))
+                .andExpect(jsonPath(schemas + ".OrderItemDTO.properties.productId.description")
+                        .value(containsString("supprimé")))
+                .andExpect(jsonPath(schemas + ".CartDTO.description").value("Panier de l'utilisateur connecté"))
+                .andExpect(jsonPath(schemas + ".UserDTO.properties.password").doesNotExist());
+    }
 }
