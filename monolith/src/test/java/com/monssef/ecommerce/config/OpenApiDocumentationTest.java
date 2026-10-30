@@ -126,4 +126,15 @@ class OpenApiDocumentationTest {
                 .andExpect(jsonPath("$.components.schemas.PagedModelProductDTO.properties.page.$ref")
                         .value("#/components/schemas/PageMetadata"));
     }
+
+    @Test
+    void apiDocs_shouldDescribeOrdersPageNewestFirst() throws Exception {
+        String orders = "$.paths['/api/orders'].get";
+        mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(jsonPath(orders + ".parameters[*].name").value(contains("page", "size", "sort")))
+                .andExpect(jsonPath(orders + ".parameters[?(@.name == 'sort')].schema.default[*]")
+                        .value(contains("createdAt,DESC", "id,DESC")))
+                .andExpect(jsonPath(orders + ".responses['200'].content['application/json'].schema.$ref")
+                        .value("#/components/schemas/PagedModelOrderDTO"));
+    }
 }
