@@ -41,3 +41,12 @@ management:
     web:
       exposure:
         include: health,info            # nothing else over HTTP: env, beans, heapdump... stay closed
+  endpoint:
+    health:
+      probes:
+        enabled: true                   # /actuator/health/liveness and /actuator/health/readiness
+      group:
+        # Liveness = the process works: never the database, or a database outage would restart the app.
+        # Readiness = it can serve requests: needs the database
+        readiness:
+          include: readinessState,db
