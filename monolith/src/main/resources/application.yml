@@ -35,3 +35,9 @@ app:
     # optional: creates an ADMIN account at startup when both are set and the email is free
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info            # nothing else over HTTP: env, beans, heapdump... stay closed
