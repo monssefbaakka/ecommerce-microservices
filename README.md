@@ -15,6 +15,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
 | Containers | Docker, Docker Compose |
 | API docs | OpenAPI 3 / Swagger UI (springdoc) |
+| Tests | JUnit 5, Mockito, MockMvc, Testcontainers, JaCoCo |
 | Planned | Spring Security + JWT, Spring Cloud (Eureka, Gateway, OpenFeign), Resilience4j, GitHub Actions |
 
 ## Getting started
@@ -380,7 +381,7 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │       ├── common/
 │       │   ├── exceptions/  ResourceNotFoundException, GlobalExceptionHandler, ErrorResponse
 │       │   └── shared classes
-│       └── test/          Controller tests with MockMvc
+│       └── test/          Unit, MockMvc and Testcontainers integration tests (support/ holds the IT base)
 ├── services/        microservices (Phase 5 and later)
 ├── infra/           Docker Compose files
 └── docs/            HTTP request examples, architecture notes
