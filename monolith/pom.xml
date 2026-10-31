@@ -203,6 +203,14 @@
                         </exclude>
                     </excludes>
                 </configuration>
+                <executions>
+                    <!-- Writes META-INF/build-info.properties: version and build time shown by /actuator/info -->
+                    <execution>
+                        <goals>
+                            <goal>build-info</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>
