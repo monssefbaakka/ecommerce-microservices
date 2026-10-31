@@ -319,26 +319,6 @@ L'image Docker a un `HEALTHCHECK` sur la readiness : `docker ps` affiche `health
 | PUT | /api/products/{id} | Modifier | 200 / 400 / 404 |
 | DELETE | /api/products/{id} | Supprimer | 204 / 404 |
 
-### Categories
-
-| Method | URL | Description | Status codes |
-|---|---|---|---|
-| GET | `/api/categories` | List categories | 200 |
-| GET | `/api/categories/{id}` | Get one category | 200, 404 |
-| POST | `/api/categories` | Create a category | 201, 400, 409 |
-| PUT | `/api/categories/{id}` | Update a category | 200, 400, 404, 409 |
-| DELETE | `/api/categories/{id}` | Delete a category | 204, 404, 409 |
-
-### Products (in progress)
-
-| Method | URL | Description |
-|---|---|---|
-| GET | `/api/products` | List products (search and pagination planned) |
-| GET | `/api/products/{id}` | Get one product |
-| POST | `/api/products` | Create a product |
-| PUT | `/api/products/{id}` | Update a product |
-| DELETE | `/api/products/{id}` | Delete a product |
-
 ## Database schema
 
 ```mermaid
