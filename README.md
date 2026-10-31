@@ -51,8 +51,18 @@ To try the endpoints, open `docs/requests.http` in VS Code (REST Client extensio
 
 ```bash
 cd monolith
-./mvnw test
+./mvnw test      # unit and slice tests (*Test): fast, no database, no Docker
+./mvnw verify    # + integration tests (*IT) on a real PostgreSQL, + coverage report
 ```
+
+| Kind | Classes | What they check |
+|---|---|---|
+| Unit | `*ServiceTest`, `*MapperTest`, `CartTest`, `OrderTest`, ... | Business rules with Mockito, no Spring context |
+| Slice | `*ControllerTest`, `SecurityConfigTest` | HTTP layer with MockMvc: status codes, JSON, validation, security rules |
+| Integration | `*IT` (`AuthFlowIT`, `CatalogIT`, `CartFlowIT`, `OrderFlowIT`, ...) | The whole application on PostgreSQL 16: real JWTs, transactions, foreign keys, concurrent orders |
+
+The integration tests start a `postgres:16-alpine` container with [Testcontainers](https://testcontainers.com/): Docker must be running, nothing else to set up. Without Docker they are skipped, not failed.
+Each test starts from empty tables. The coverage report of both runs is written to `monolith/target/site/jacoco/index.html`.
 
 ### Stop
 
