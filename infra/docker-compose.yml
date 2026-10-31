@@ -16,5 +16,22 @@ services:
       timeout: 3s
       retries: 10
 
+  # The monolith in a container. Behind the "app" profile, so "docker compose up" alone
+  # still starts only PostgreSQL for "./mvnw spring-boot:run" (both would want port 8080)
+  app:
+    profiles: ["app"]
+    build: ../monolith
+    image: ecommerce-monolith:latest
+    container_name: ecommerce-app
+    depends_on:
+      postgres:
+        condition: service_healthy   # waits for pg_isready, not only for the container start
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/ecommerce   # the service name, not localhost
+      DB_USER: ecommerce
+      DB_PASSWORD: ecommerce
+    ports:
+      - "8080:8080"
+
 volumes:
   postgres_data:
