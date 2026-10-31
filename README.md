@@ -78,7 +78,7 @@ cd monolith
 ### Stop
 
 ```bash
-docker compose -f infra/docker-compose.yml stop
+docker compose -f infra/docker-compose.yml --profile app stop   # --profile app also stops the app container
 ```
 
 ## API endpoints
@@ -380,7 +380,7 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 
 ```
 .
-├── monolith/        Spring Boot application (Phases 1 to 4)
+├── monolith/        Spring Boot application (Phases 1 to 4), with its Dockerfile
 │   └── src/main/java/com/monssef/ecommerce/
 │       ├── category/
 │       │   ├── entity, repository, service, controller, mapper
@@ -393,7 +393,7 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │       │   └── shared classes
 │       └── test/          Controller tests with MockMvc
 ├── services/        microservices (Phase 5 and later)
-├── infra/           Docker Compose files
+├── infra/           Docker Compose file (PostgreSQL, app profile) and .env.example
 └── docs/            HTTP request examples, architecture notes
 ```
 
