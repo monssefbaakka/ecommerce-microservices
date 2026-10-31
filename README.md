@@ -57,7 +57,7 @@ The whole stack (PostgreSQL + the application) can also run in containers, witho
 docker compose -f infra/docker-compose.yml --profile app up -d --build
 ```
 
-The API is then on the same `http://localhost:8080`. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+The API is then on the same `http://localhost:8080`. `docker ps` shows the app as `healthy` once it answers on `/actuator/health/readiness` (about 20 s). Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
 To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git).
 
