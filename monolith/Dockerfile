@@ -11,11 +11,19 @@ COPY src src
 # Tests are neither compiled nor run here: "mvn verify" runs them outside the image (the ITs need Docker)
 RUN ./mvnw -B package -Dmaven.test.skip=true
 
+# Split the fat jar into its Spring Boot layers: libraries first, our classes last
+RUN java -Djarmode=tools -jar target/*.jar extract --layers --launcher --destination extracted
+
 # Stage 2: run it on a JRE, without Maven or the sources
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
-COPY --from=build /workspace/target/*.jar app.jar
+# One image layer per Spring Boot layer, from the least to the most often changed:
+# a code change only rebuilds and pushes the small "application" layer
+COPY --from=build /workspace/extracted/dependencies/ ./
+COPY --from=build /workspace/extracted/spring-boot-loader/ ./
+COPY --from=build /workspace/extracted/snapshot-dependencies/ ./
+COPY --from=build /workspace/extracted/application/ ./
 
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
