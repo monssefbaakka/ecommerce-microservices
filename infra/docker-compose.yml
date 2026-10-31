@@ -26,6 +26,10 @@ services:
     depends_on:
       postgres:
         condition: service_healthy   # waits for pg_isready, not only for the container start
+    # Optional secrets and admin account (JWT_SECRET, ADMIN_EMAIL...): copy .env.example to .env
+    env_file:
+      - path: .env
+        required: false
     environment:
       DB_URL: jdbc:postgresql://postgres:5432/ecommerce   # the service name, not localhost
       DB_USER: ecommerce
