@@ -43,6 +43,10 @@ management:
         include: health,info            # nothing else over HTTP: env, beans, heapdump... stay closed
   endpoint:
     health:
+      # Anyone sees {"status":"UP"}; only an ADMIN token sees each component (db, disk space...)
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: ADMIN
       probes:
         enabled: true                   # /actuator/health/liveness and /actuator/health/readiness
       group:
