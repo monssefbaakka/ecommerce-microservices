@@ -54,3 +54,13 @@ management:
         # Readiness = it can serve requests: needs the database
         readiness:
           include: readinessState,db
+  info:
+    env:
+      enabled: true                     # shows the info.* properties below
+    java:
+      enabled: true                     # Java version and vendor of the running JVM
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: E-commerce monolith (catalog, cart, orders)
