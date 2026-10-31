@@ -83,6 +83,31 @@ public abstract class IntegrationTest {
         return "Bearer " + body(result).get("token").asText();
     }
 
+    protected long createCategory(String adminToken, String name) throws Exception {
+        MvcResult result = mockMvc.perform(auth(json(post("/api/categories"), Map.of("name", name)), adminToken))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return body(result).get("id").asLong();
+    }
+
+    protected long createProduct(String adminToken, long categoryId, String name, String price, int stock)
+            throws Exception {
+        Map<String, Object> request = Map.of("name", name, "price", price, "categoryId", categoryId, "stock", stock);
+        MvcResult result = mockMvc.perform(auth(json(post("/api/products"), request), adminToken))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return body(result).get("id").asLong();
+    }
+
+    protected void addToCart(String token, long productId, int quantity) throws Exception {
+        mockMvc.perform(auth(json(post("/api/cart/items"), Map.of("productId", productId, "quantity", quantity)), token))
+                .andExpect(status().isOk());
+    }
+
+    protected int stockOf(long productId) {
+        return jdbcTemplate.queryForObject("SELECT stock FROM products WHERE id = ?", Integer.class, productId);
+    }
+
     protected MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder request, Object body)
             throws Exception {
         return request.contentType(MediaType.APPLICATION_JSON)
