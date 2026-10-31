@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phase 1 completed (monolith CRUD with DTOs, validation, exception handler, tests and Swagger). See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -431,9 +431,9 @@ Controllers only ever receive and return DTOs, never entities. Each feature has 
 | Phase | Goal | Status |
 |---|---|---|
 | 1 | Monolith CRUD (products and categories) | Done |
-| 2 | Spring Security, JWT, roles (USER / ADMIN) | In progress |
-| 3 | Cart, orders, stock management | Planned |
-| 4 | Actuator, Docker improvements | Planned |
+| 2 | Spring Security, JWT, roles (USER / ADMIN) | Done |
+| 3 | Cart, orders, stock management | Done |
+| 4 | Tests, Docker, Actuator | In progress |
 | 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | Planned |
 | 6 | OpenFeign, Resilience4j, advanced Docker Compose | Planned |
 | 7 | CI/CD with GitHub Actions | Planned |
