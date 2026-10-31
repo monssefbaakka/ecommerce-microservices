@@ -35,3 +35,34 @@ app:
     # optional: creates an ADMIN account at startup when both are set and the email is free
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info            # nothing else over HTTP: env, beans, heapdump... stay closed
+  endpoint:
+    health:
+      # Anyone sees {"status":"UP"}; only an ADMIN token sees each component (db, disk space...)
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: ADMIN
+      probes:
+        enabled: true                   # /actuator/health/liveness and /actuator/health/readiness
+      group:
+        # Liveness = the process works: never the database, or a database outage would restart the app.
+        # Readiness = it can serve requests: needs the database
+        liveness:
+          include: livenessState        # declared like readiness, so an ADMIN also sees what it checks
+        readiness:
+          include: readinessState,db
+  info:
+    env:
+      enabled: true                     # shows the info.* properties below
+    java:
+      enabled: true                     # Java version and vendor of the running JVM
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: E-commerce monolith (catalog, cart, orders)

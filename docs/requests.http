@@ -427,3 +427,22 @@ john@example.com
 ### E6. Unknown URL with a token (expect 404)
 GET {{host}}/api/unknown
 Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### H1. Health without a token (expect 200, only {"status":"UP"})
+GET {{host}}/actuator/health
+
+### H2. Health with an ADMIN token (expect 200, with the db and diskSpace components)
+GET {{host}}/actuator/health
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### H3. Liveness: the process works, never checks the database (expect 200)
+GET {{host}}/actuator/health/liveness
+
+### H4. Readiness: ready to serve requests, database included (expect 200, 503 if PostgreSQL is down)
+GET {{host}}/actuator/health/readiness
+
+### H5. Version, build time and JVM (expect 200)
+GET {{host}}/actuator/info
+
+### H6. Endpoint not exposed over HTTP (expect 401 without token, 404 for an ADMIN)
+GET {{host}}/actuator/env

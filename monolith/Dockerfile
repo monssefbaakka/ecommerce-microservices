@@ -34,4 +34,10 @@ COPY --from=build /workspace/extracted/application/ ./
 ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75.0"
 
 EXPOSE 8080
+
+# "healthy" = ready to serve requests, database included (readiness probe of Actuator).
+# BusyBox wget ships with the Alpine image: no curl to install
+HEALTHCHECK --interval=10s --timeout=3s --start-period=60s --retries=3 \
+    CMD wget -qO- http://localhost:8080/actuator/health/readiness || exit 1
+
 ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]

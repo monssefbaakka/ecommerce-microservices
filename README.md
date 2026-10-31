@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phase 1 completed (monolith CRUD with DTOs, validation, exception handler, tests and Swagger). See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -15,6 +15,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
 | Containers | Docker, Docker Compose |
 | API docs | OpenAPI 3 / Swagger UI (springdoc) |
+| Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info) |
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, JaCoCo |
 | Planned | Spring Security + JWT, Spring Cloud (Eureka, Gateway, OpenFeign), Resilience4j, GitHub Actions |
 
@@ -56,7 +57,7 @@ The whole stack (PostgreSQL + the application) can also run in containers, witho
 docker compose -f infra/docker-compose.yml --profile app up -d --build
 ```
 
-The API is then on the same `http://localhost:8080`. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+The API is then on the same `http://localhost:8080`. `docker ps` shows the app as `healthy` once it answers on `/actuator/health/readiness` (about 20 s). Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
 To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git).
 
@@ -287,6 +288,19 @@ Toutes les erreurs ont le même format JSON, qu'elles viennent d'un service, de 
 
 Les détails internes (message SQL, stack trace) ne sont jamais renvoyés au client : ils sont écrits dans les logs de l'application.
 
+### Santé (Actuator)
+
+| Méthode | URL | Accès | Description | Code |
+|---|---|---|---|---|
+| GET | `/actuator/health` | Public | État global : `{"status":"UP"}` ; avec un token ADMIN, détail de chaque composant (`db`, `diskSpace`...) | 200 / 503 |
+| GET | `/actuator/health/liveness` | Public | Le processus fonctionne. Ne vérifie **jamais** la base : une panne de PostgreSQL ne doit pas faire redémarrer l'application | 200 / 503 |
+| GET | `/actuator/health/readiness` | Public | L'application peut servir des requêtes : vérifie la base | 200 / 503 |
+| GET | `/actuator/info` | Public | Nom, version et date du build, version de Java | 200 |
+
+Seuls `health` et `info` sont exposés en HTTP : `env`, `beans`, `heapdump`... restent fermés (**404**, même pour un ADMIN). Toute autre URL `/actuator/**` demande de toute façon le rôle ADMIN (**401** / **403**).
+
+L'image Docker a un `HEALTHCHECK` sur la readiness : `docker ps` affiche `healthy` quand l'application répond et voit la base, `unhealthy` si PostgreSQL tombe.
+
 ### Categories
 | Méthode | URL | Description | Code |
 |---|---|---|---|
@@ -304,26 +318,6 @@ Les détails internes (message SQL, stack trace) ne sont jamais renvoyés au cli
 | POST | /api/products | Créer | 201 / 400 / 404 |
 | PUT | /api/products/{id} | Modifier | 200 / 400 / 404 |
 | DELETE | /api/products/{id} | Supprimer | 204 / 404 |
-
-### Categories
-
-| Method | URL | Description | Status codes |
-|---|---|---|---|
-| GET | `/api/categories` | List categories | 200 |
-| GET | `/api/categories/{id}` | Get one category | 200, 404 |
-| POST | `/api/categories` | Create a category | 201, 400, 409 |
-| PUT | `/api/categories/{id}` | Update a category | 200, 400, 404, 409 |
-| DELETE | `/api/categories/{id}` | Delete a category | 204, 404, 409 |
-
-### Products (in progress)
-
-| Method | URL | Description |
-|---|---|---|
-| GET | `/api/products` | List products (search and pagination planned) |
-| GET | `/api/products/{id}` | Get one product |
-| POST | `/api/products` | Create a product |
-| PUT | `/api/products/{id}` | Update a product |
-| DELETE | `/api/products/{id}` | Delete a product |
 
 ## Database schema
 
@@ -417,9 +411,9 @@ Controllers only ever receive and return DTOs, never entities. Each feature has 
 | Phase | Goal | Status |
 |---|---|---|
 | 1 | Monolith CRUD (products and categories) | Done |
-| 2 | Spring Security, JWT, roles (USER / ADMIN) | In progress |
-| 3 | Cart, orders, stock management | Planned |
-| 4 | Actuator, Docker improvements | Planned |
+| 2 | Spring Security, JWT, roles (USER / ADMIN) | Done |
+| 3 | Cart, orders, stock management | Done |
+| 4 | Tests, Docker, Actuator | In progress |
 | 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | Planned |
 | 6 | OpenFeign, Resilience4j, advanced Docker Compose | Planned |
 | 7 | CI/CD with GitHub Actions | Planned |
