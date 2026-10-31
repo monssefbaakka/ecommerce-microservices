@@ -138,6 +138,11 @@
                     </compilerArgs>
                 </configuration>
             </plugin>
+            <!-- *IT classes run in "mvn verify" (Docker needed), *Test classes stay fast in "mvn test" -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+            </plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
