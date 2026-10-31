@@ -52,6 +52,8 @@ management:
       group:
         # Liveness = the process works: never the database, or a database outage would restart the app.
         # Readiness = it can serve requests: needs the database
+        liveness:
+          include: livenessState        # declared like readiness, so an ADMIN also sees what it checks
         readiness:
           include: readinessState,db
   info:
