@@ -18,6 +18,10 @@ RUN java -Djarmode=tools -jar target/*.jar extract --layers --launcher --destina
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
+# Never run as root: a flaw in the application would not give root access to the container
+RUN addgroup -S spring && adduser -S spring -G spring
+USER spring:spring
+
 # One image layer per Spring Boot layer, from the least to the most often changed:
 # a code change only rebuilds and pushes the small "application" layer
 COPY --from=build /workspace/extracted/dependencies/ ./
