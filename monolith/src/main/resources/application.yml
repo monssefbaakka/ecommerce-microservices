@@ -2,7 +2,7 @@ spring:
   application:
     name: ecommerce-monolith
   datasource:
-    url: jdbc:postgresql://localhost:5432/ecommerce
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ecommerce}   # in Docker: the postgres service host
     username: ${DB_USER:ecommerce}      # default value if the variable is not set
     password: ${DB_PASSWORD:ecommerce}
   jpa:
