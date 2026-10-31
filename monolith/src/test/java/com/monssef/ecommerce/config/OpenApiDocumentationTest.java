@@ -21,11 +21,15 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 // Full application context (controllers, services, mappers, security, springdoc) without a database:
-// the JPA auto-configuration is left out and the repositories are mocks
-@SpringBootTest(properties = "spring.autoconfigure.exclude="
-        + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
-        + "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,"
-        + "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration")
+// the JPA auto-configuration is left out and the repositories are mocks.
+// No DataSource means no "db" health indicator, which the readiness group lists: skip that check here
+@SpringBootTest(properties = {
+        "spring.autoconfigure.exclude="
+                + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,"
+                + "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration",
+        "management.endpoint.health.validate-group-membership=false"
+})
 @AutoConfigureMockMvc
 class OpenApiDocumentationTest {
 
