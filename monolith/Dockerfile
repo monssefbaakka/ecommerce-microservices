@@ -4,6 +4,9 @@ WORKDIR /workspace
 
 COPY mvnw pom.xml ./
 COPY .mvn .mvn
+# Own layer: dependencies are downloaded again only when pom.xml changes, not on every code change
+RUN ./mvnw -B dependency:go-offline
+
 COPY src src
 # Tests are neither compiled nor run here: "mvn verify" runs them outside the image (the ITs need Docker)
 RUN ./mvnw -B package -Dmaven.test.skip=true
