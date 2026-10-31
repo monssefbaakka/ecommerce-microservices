@@ -287,6 +287,19 @@ Toutes les erreurs ont le même format JSON, qu'elles viennent d'un service, de 
 
 Les détails internes (message SQL, stack trace) ne sont jamais renvoyés au client : ils sont écrits dans les logs de l'application.
 
+### Santé (Actuator)
+
+| Méthode | URL | Accès | Description | Code |
+|---|---|---|---|---|
+| GET | `/actuator/health` | Public | État global : `{"status":"UP"}` ; avec un token ADMIN, détail de chaque composant (`db`, `diskSpace`...) | 200 / 503 |
+| GET | `/actuator/health/liveness` | Public | Le processus fonctionne. Ne vérifie **jamais** la base : une panne de PostgreSQL ne doit pas faire redémarrer l'application | 200 / 503 |
+| GET | `/actuator/health/readiness` | Public | L'application peut servir des requêtes : vérifie la base | 200 / 503 |
+| GET | `/actuator/info` | Public | Nom, version et date du build, version de Java | 200 |
+
+Seuls `health` et `info` sont exposés en HTTP : `env`, `beans`, `heapdump`... restent fermés (**404**, même pour un ADMIN). Toute autre URL `/actuator/**` demande de toute façon le rôle ADMIN (**401** / **403**).
+
+L'image Docker a un `HEALTHCHECK` sur la readiness : `docker ps` affiche `healthy` quand l'application répond et voit la base, `unhealthy` si PostgreSQL tombe.
+
 ### Categories
 | Méthode | URL | Description | Code |
 |---|---|---|---|
