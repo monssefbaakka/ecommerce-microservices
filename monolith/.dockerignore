@@ -1,0 +1,10 @@
+# Only the wrapper, the pom and the sources are needed to build the image
+target/
+*.log
+.idea/
+.vscode/
+*.iml
+.env
+.gitkeep
+Dockerfile
+.dockerignore

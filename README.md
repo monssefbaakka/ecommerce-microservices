@@ -47,6 +47,27 @@ To call a protected endpoint: run `POST /api/auth/login`, copy the `token`, clic
 
 To try the endpoints, open `docs/requests.http` in VS Code (REST Client extension) or IntelliJ.
 
+### Run with Docker
+
+The whole stack (PostgreSQL + the application) can also run in containers, without Java on the machine:
+
+```bash
+docker compose -f infra/docker-compose.yml --profile app up -d --build
+```
+
+The API is then on the same `http://localhost:8080`. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+
+To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git).
+
+The image is built by [monolith/Dockerfile](monolith/Dockerfile) in two stages: the JDK and Maven only exist in the build stage, the final image holds a JRE and the application, split into Spring Boot layers so that a code change only rebuilds the last one. It runs as a non-root user and sizes the heap from the container memory limit (`JAVA_TOOL_OPTIONS`).
+
+To build and run the image alone:
+
+```bash
+docker build -t ecommerce-monolith monolith
+docker run -p 8080:8080 -e DB_URL=jdbc:postgresql://host.docker.internal:5432/ecommerce ecommerce-monolith
+```
+
 ### Run tests
 
 ```bash
@@ -57,7 +78,7 @@ cd monolith
 ### Stop
 
 ```bash
-docker compose -f infra/docker-compose.yml stop
+docker compose -f infra/docker-compose.yml --profile app stop   # --profile app also stops the app container
 ```
 
 ## API endpoints
@@ -359,7 +380,7 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 
 ```
 .
-├── monolith/        Spring Boot application (Phases 1 to 4)
+├── monolith/        Spring Boot application (Phases 1 to 4), with its Dockerfile
 │   └── src/main/java/com/monssef/ecommerce/
 │       ├── category/
 │       │   ├── entity, repository, service, controller, mapper
@@ -372,7 +393,7 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │       │   └── shared classes
 │       └── test/          Controller tests with MockMvc
 ├── services/        microservices (Phase 5 and later)
-├── infra/           Docker Compose files
+├── infra/           Docker Compose file (PostgreSQL, app profile) and .env.example
 └── docs/            HTTP request examples, architecture notes
 ```
 
