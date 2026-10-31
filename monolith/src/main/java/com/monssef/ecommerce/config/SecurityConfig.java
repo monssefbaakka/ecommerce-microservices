@@ -34,6 +34,10 @@ public class SecurityConfig {
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/error").permitAll() // otherwise Spring Boot error pages turn into 401
+                // Health checks come from Docker or a load balancer, without a token
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                // Any other actuator endpoint, if one is ever exposed, is for ADMIN only
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
                 // Catalog: anyone can read, only ADMIN can write
                 .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**").permitAll()
                 .requestMatchers("/api/products/**", "/api/categories/**").hasRole("ADMIN")
