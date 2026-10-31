@@ -92,7 +92,7 @@ class SecurityConfigTest {
     @Test
     void createProduct_shouldReturn201_whenAdminToken() throws Exception {
         when(productService.create(any(ProductRequest.class))).thenReturn(new ProductDTO(
-                1L, "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, Instant.now()));
+                1L, "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, 10, Instant.now()));
 
         createProduct("Bearer " + tokenFor("admin@example.com", Role.ADMIN))
                 .andExpect(status().isCreated())
@@ -192,7 +192,7 @@ class SecurityConfigTest {
 
     private ResultActions createProduct(String authorization) throws Exception {
         ProductRequest request = new ProductRequest(
-                "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L);
+                "iPhone 15", "128 GB", new BigDecimal("999.99"), 1L, 10);
         return mockMvc.perform(post("/api/products")
                 .header(HttpHeaders.AUTHORIZATION, authorization)
                 .contentType(MediaType.APPLICATION_JSON)

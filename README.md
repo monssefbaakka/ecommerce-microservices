@@ -15,6 +15,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
 | Containers | Docker, Docker Compose |
 | API docs | OpenAPI 3 / Swagger UI (springdoc) |
+| Tests | JUnit 5, Mockito, MockMvc, Testcontainers, JaCoCo |
 | Planned | Spring Security + JWT, Spring Cloud (Eureka, Gateway, OpenFeign), Resilience4j, GitHub Actions |
 
 ## Getting started
@@ -72,8 +73,18 @@ docker run -p 8080:8080 -e DB_URL=jdbc:postgresql://host.docker.internal:5432/ec
 
 ```bash
 cd monolith
-./mvnw test
+./mvnw test      # unit and slice tests (*Test): fast, no database, no Docker
+./mvnw verify    # + integration tests (*IT) on a real PostgreSQL, + coverage report
 ```
+
+| Kind | Classes | What they check |
+|---|---|---|
+| Unit | `*ServiceTest`, `*MapperTest`, `CartTest`, `OrderTest`, ... | Business rules with Mockito, no Spring context |
+| Slice | `*ControllerTest`, `SecurityConfigTest` | HTTP layer with MockMvc: status codes, JSON, validation, security rules |
+| Integration | `*IT` (`AuthFlowIT`, `CatalogIT`, `CartFlowIT`, `OrderFlowIT`, ...) | The whole application on PostgreSQL 16: real JWTs, transactions, foreign keys, concurrent orders |
+
+The integration tests start a `postgres:16-alpine` container with [Testcontainers](https://testcontainers.com/): Docker must be running, nothing else to set up. Without Docker they are skipped, not failed.
+Each test starts from empty tables. The coverage report of both runs is written to `monolith/target/site/jacoco/index.html`.
 
 ### Stop
 
@@ -391,7 +402,7 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │       ├── common/
 │       │   ├── exceptions/  ResourceNotFoundException, GlobalExceptionHandler, ErrorResponse
 │       │   └── shared classes
-│       └── test/          Controller tests with MockMvc
+│       └── test/          Unit, MockMvc and Testcontainers integration tests (support/ holds the IT base)
 ├── services/        microservices (Phase 5 and later)
 ├── infra/           Docker Compose file (PostgreSQL, app profile) and .env.example
 └── docs/            HTTP request examples, architecture notes
