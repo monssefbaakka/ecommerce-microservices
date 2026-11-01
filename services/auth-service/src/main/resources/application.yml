@@ -29,6 +29,19 @@ app:
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
 
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    healthcheck:
+      enabled: true                     # sends the Actuator status: DOWN (database lost) = no more traffic
+  instance:
+    # Address given to the others: localhost in dev, the service name in Docker
+    hostname: ${INSTANCE_HOSTNAME:localhost}
+    # Dev: a heartbeat every 10 s, removed 30 s after the last one (defaults: 30 s / 90 s)
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
 management:
   endpoints:
     web:
