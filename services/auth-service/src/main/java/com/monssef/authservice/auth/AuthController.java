@@ -1,5 +1,7 @@
 package com.monssef.authservice.auth;
 
+import com.monssef.authservice.auth.dto.AuthResponse;
+import com.monssef.authservice.auth.dto.LoginRequest;
 import com.monssef.authservice.user.UserService;
 import com.monssef.authservice.user.dto.RegisterRequest;
 import com.monssef.authservice.user.dto.UserDTO;
@@ -19,11 +21,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
     private final UserService userService;
+    private final AuthService authService;
 
     // @Valid triggers the validation annotations of RegisterRequest (@Email, @Size...)
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED) // 201, no Location header: there is no GET /api/users/{id}
     public UserDTO register(@Valid @RequestBody RegisterRequest request) {
         return userService.register(request);
+    }
+
+    @PostMapping("/login")
+    public AuthResponse login(@Valid @RequestBody LoginRequest request) {
+        return authService.login(request);
     }
 }
