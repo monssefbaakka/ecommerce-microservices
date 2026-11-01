@@ -31,3 +31,24 @@ eureka:
     hostname: ${INSTANCE_HOSTNAME:localhost}
     lease-renewal-interval-in-seconds: 10
     lease-expiration-duration-in-seconds: 30
+
+management:
+  endpoints:
+    web:
+      exposure:
+        # No "gateway" endpoint: it lists the routes and can change them, and the gateway is public
+        include: health,info
+  endpoint:
+    health:
+      probes:
+        enabled: true                   # /actuator/health/liveness and /actuator/health/readiness
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: API gateway (single entry point of the platform)
