@@ -46,6 +46,11 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
         </dependency>
+        <!-- Cache of the instance list used by lb://: without it LoadBalancer warns about its default cache -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+        </dependency>
         <!-- /actuator/health for Docker, /actuator/info -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
