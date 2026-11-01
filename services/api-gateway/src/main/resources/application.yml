@@ -1,0 +1,6 @@
+spring:
+  application:
+    name: api-gateway
+
+server:
+  port: ${PORT:8090}                    # 8080 stays the monolith's port while it still runs on its own
