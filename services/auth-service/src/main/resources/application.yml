@@ -40,6 +40,7 @@ eureka:
       defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
     healthcheck:
       enabled: true                     # sends the Actuator status: DOWN (database lost) = no more traffic
+    instance-info-replication-interval-seconds: 10   # dev: status changes reach Eureka in 10 s (default 30 s)
   instance:
     # Address given to the others: localhost in dev, the service name in Docker
     hostname: ${INSTANCE_HOSTNAME:localhost}
@@ -48,6 +49,11 @@ eureka:
     lease-expiration-duration-in-seconds: 30
 
 management:
+  health:
+    eureka:
+      # This indicator reports the status Eureka holds for us, which itself comes from our health:
+      # once DOWN (e.g. at startup), the service would stay DOWN forever. Not needed in our own health
+      enabled: false
   endpoints:
     web:
       exposure:
