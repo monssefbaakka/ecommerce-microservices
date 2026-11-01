@@ -1,6 +1,27 @@
 spring:
   application:
     name: api-gateway
+  cloud:
+    gateway:
+      server:
+        webflux:
+          # Checked in this order, the first matching route wins
+          routes:
+            # lb:// = the address comes from Eureka, with load balancing between the instances
+            - id: auth-service
+              uri: lb://auth-service
+              predicates:
+                - Path=/api/auth/**
 
 server:
   port: ${PORT:8090}                    # 8080 stays the monolith's port while it still runs on its own
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    registry-fetch-interval-seconds: 5  # dev: sees a new or stopped service within seconds (default 30 s)
+  instance:
+    hostname: ${INSTANCE_HOSTNAME:localhost}
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
