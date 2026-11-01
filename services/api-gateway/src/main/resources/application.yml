@@ -12,6 +12,12 @@ spring:
               uri: lb://auth-service
               predicates:
                 - Path=/api/auth/**
+            # Everything not extracted yet (catalog, cart, orders) still lives in the monolith.
+            # Fixed URL: the monolith does not register in Eureka. Must stay after the routes above
+            - id: monolith
+              uri: ${MONOLITH_URL:http://localhost:8080}
+              predicates:
+                - Path=/api/**
 
 server:
   port: ${PORT:8090}                    # 8080 stays the monolith's port while it still runs on its own
