@@ -28,3 +28,33 @@ app:
     # optional: creates an ADMIN account at startup when both are set and the email is free
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info            # nothing else over HTTP
+  endpoint:
+    health:
+      # Anyone sees {"status":"UP"}; only an ADMIN token sees each component (db, disk space...)
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: ADMIN
+      probes:
+        enabled: true                   # /actuator/health/liveness and /actuator/health/readiness
+      group:
+        # Liveness never checks the database (an outage must not restart the service), readiness does
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: Authentication service (accounts, register, login, JWT)

@@ -33,6 +33,9 @@ public class SecurityConfig {
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
                 .requestMatchers("/error").permitAll() // otherwise Spring Boot error pages turn into 401
+                // Health checks come from Docker, Eureka or the gateway, without a token
+                .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
+                .requestMatchers("/actuator/**").hasRole("ADMIN")
                 // Anything not listed above needs a token: nothing is open by mistake
                 .anyRequest().authenticated())
             .exceptionHandling(ex -> ex
