@@ -22,3 +22,9 @@ jwt:
   # dev only: override with the JWT_SECRET env variable outside local dev
   secret: ${JWT_SECRET:urSFJ7E1nhn9jjr73kPXdYlWW9zKQeTdT2jhx+KVFI4=}   # Base64, at least 256 bits (HS256)
   expiration: ${JWT_EXPIRATION:1h}
+
+app:
+  admin:
+    # optional: creates an ADMIN account at startup when both are set and the email is free
+    email: ${ADMIN_EMAIL:}
+    password: ${ADMIN_PASSWORD:}
