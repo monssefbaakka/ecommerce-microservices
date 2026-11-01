@@ -12,6 +12,11 @@ spring:
       ddl-auto: update                  # dev: same mapping as the monolith, so the shared table stays identical
     open-in-view: false
 
+springdoc:
+  default-produces-media-type: application/json   # instead of */* on every response
+  swagger-ui:
+    operations-sorter: method
+
 server:
   port: ${PORT:8081}
   error:

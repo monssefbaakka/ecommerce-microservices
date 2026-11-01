@@ -32,6 +32,7 @@ public class SecurityConfig {
             // Rules are checked in order: the first match wins
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers("/api/auth/**").permitAll()
+                .requestMatchers("/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**").permitAll()
                 .requestMatchers("/error").permitAll() // otherwise Spring Boot error pages turn into 401
                 // Health checks come from Docker, Eureka or the gateway, without a token
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
