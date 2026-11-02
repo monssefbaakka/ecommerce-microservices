@@ -446,3 +446,59 @@ GET {{host}}/actuator/info
 
 ### H6. Endpoint not exposed over HTTP (expect 401 without token, 404 for an ADMIN)
 GET {{host}}/actuator/env
+
+
+############################################################
+# MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, Eureka 8761)
+############################################################
+@gateway = http://localhost:8090
+@authService = http://localhost:8081
+@eureka = http://localhost:8761
+
+### G1. Register through the gateway: routed to auth-service (expect 201, then 409 on a second run)
+POST {{gateway}}/api/auth/register
+Content-Type: application/json
+
+{ "email": "gateway@example.com", "password": "password123" }
+
+### G2. Login through the gateway: the token comes from auth-service (expect 200)
+# @name gatewayLogin
+POST {{gateway}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "gateway@example.com", "password": "password123" }
+
+### G3. Catalog through the gateway: routed to the monolith (expect 200)
+GET {{gateway}}/api/products
+
+### G4. Cart through the gateway with the auth-service token: the monolith accepts it (expect 200)
+GET {{gateway}}/api/cart
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### G5. No route for this path (expect 404, ErrorResponse from the gateway)
+GET {{gateway}}/unknown
+
+### G6. Stop auth-service first (docker stop ecommerce-auth-service), wait ~30 s (expect 503, ErrorResponse)
+POST {{gateway}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "gateway@example.com", "password": "password123" }
+
+### G7. Gateway health and info (expect 200)
+GET {{gateway}}/actuator/health
+
+### G8. Route list not exposed: the gateway is public (expect 404)
+GET {{gateway}}/actuator/gateway/routes
+
+### S1. auth-service directly, without the gateway (expect 200)
+POST {{authService}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "gateway@example.com", "password": "password123" }
+
+### S2. auth-service readiness: database included (expect 200)
+GET {{authService}}/actuator/health/readiness
+
+### R1. Instances registered in Eureka: API-GATEWAY and AUTH-SERVICE, status UP (expect 200)
+GET {{eureka}}/eureka/apps
+Accept: application/json
