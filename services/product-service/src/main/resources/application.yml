@@ -28,3 +28,33 @@ jwt:
   # Must be the same key as auth-service, which issues the tokens.
   # dev only: override with the JWT_SECRET env variable outside local dev
   secret: ${JWT_SECRET:urSFJ7E1nhn9jjr73kPXdYlWW9zKQeTdT2jhx+KVFI4=}   # Base64, at least 256 bits (HS256)
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info            # nothing else over HTTP
+  endpoint:
+    health:
+      # Anyone sees {"status":"UP"}; only an ADMIN token sees each component (db, disk space...)
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: ADMIN
+      probes:
+        enabled: true                   # /actuator/health/liveness and /actuator/health/readiness
+      group:
+        # Liveness never checks the database (an outage must not restart the service), readiness does
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: Catalog service (categories and products)
