@@ -124,10 +124,13 @@ Phase 5 extracts the monolith step by step. The first services are in [services/
 flowchart LR
     client([Client]) --> gateway["api-gateway :8090"]
     gateway -- "/api/auth/**" --> auth["auth-service :8081"]
+    gateway -- "/api/products/**<br/>/api/categories/**" --> product["product-service :8082"]
     gateway -- "other /api/**" --> monolith["monolith :8080"]
     auth -. registers .-> eureka["discovery-server :8761<br/>Eureka"]
-    gateway -. registers, finds auth-service .-> eureka
+    product -. registers .-> eureka
+    gateway -. registers, finds the services .-> eureka
     auth --> db[(PostgreSQL)]
+    product --> db
     monolith --> db
 ```
 
@@ -135,12 +138,13 @@ flowchart LR
 |---|---|---|
 | [discovery-server](services/discovery-server) | 8761 | Eureka registry: each service registers under its name, the gateway asks it where they are |
 | [auth-service](services/auth-service) | 8081 | `POST /api/auth/register` and `POST /api/auth/login`, extracted from the monolith with the same rules, errors and Swagger UI |
-| [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service (`lb://auth-service`, found through Eureka), every other `/api/**` to the monolith |
+| [product-service](services/product-service) | 8082 | Catalog: CRUD on `/api/categories` and `/api/products` (paging, name search, category filter), extracted from the monolith with the same rules, errors, roles and Swagger UI |
+| [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service, `/api/products/**` and `/api/categories/**` to product-service (`lb://...`, found through Eureka), every other `/api/**` to the monolith |
 
-- **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on the cart and orders. Set the same `JWT_SECRET` on both outside local dev.
-- **Shared database for now:** auth-service reads and writes the monolith's `users` table. Each service gets its own database in #46.
-- **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when auth-service is not registered in Eureka or does not answer.
-- **Health:** each service sends its Actuator status to Eureka. If auth-service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
+- **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on the cart and orders. product-service checks them the same way, without a database call: only an `ADMIN` token can write the catalog. Set the same `JWT_SECRET` on all three outside local dev.
+- **Shared database for now:** auth-service reads and writes the monolith's `users` table, product-service its `categories` and `products` tables. The monolith still needs them for the cart, the orders and the stock, so a product created through the gateway is right away visible there. Each service gets its own database in #46.
+- **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when the target service is not registered in Eureka or does not answer.
+- **Health:** each service sends its Actuator status to Eureka. If auth-service or product-service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
 
 To run them without Docker, start PostgreSQL, then in this order, each in its own terminal:
 
@@ -148,6 +152,7 @@ To run them without Docker, start PostgreSQL, then in this order, each in its ow
 cd services/discovery-server && ./mvnw spring-boot:run   # wait for "Started", dashboard on :8761
 cd monolith && ./mvnw spring-boot:run                    # creates the tables
 cd services/auth-service && ./mvnw spring-boot:run
+cd services/product-service && ./mvnw spring-boot:run
 cd services/api-gateway && ./mvnw spring-boot:run        # then call http://localhost:8090/api/...
 ```
 
