@@ -11,14 +11,16 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 /**
- * The real gateway on a random port, in front of two fake services.
- * No Eureka server: auth-service is declared in the simple discovery client, which lb:// also reads.
+ * The real gateway on a random port, in front of three fake services.
+ * No Eureka server: auth-service and product-service are declared in the simple discovery client,
+ * which lb:// also reads.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "eureka.client.enabled=false")
 class GatewayRoutingTest {
 
     private static final StubService AUTH_SERVICE = new StubService("auth");
+    private static final StubService PRODUCT_SERVICE = new StubService("product");
     private static final StubService MONOLITH = new StubService("monolith");
 
     @Autowired
@@ -27,12 +29,14 @@ class GatewayRoutingTest {
     @DynamicPropertySource
     static void downstreamServices(DynamicPropertyRegistry registry) {
         registry.add("spring.cloud.discovery.client.simple.instances.auth-service[0].uri", AUTH_SERVICE::url);
+        registry.add("spring.cloud.discovery.client.simple.instances.product-service[0].uri", PRODUCT_SERVICE::url);
         registry.add("MONOLITH_URL", MONOLITH::url);
     }
 
     @AfterAll
     static void stopStubs() {
         AUTH_SERVICE.close();
+        PRODUCT_SERVICE.close();
         MONOLITH.close();
     }
 
@@ -62,13 +66,35 @@ class GatewayRoutingTest {
     }
 
     @Test
-    void catalog_shouldStillGoToTheMonolith() {
-        client.get().uri("/api/products")
+    void products_shouldGoToProductServiceWithQueryUnchanged() {
+        client.get().uri("/api/products?name=iphone&sort=price,desc")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.service").isEqualTo("product")
+                .jsonPath("$.path").isEqualTo("/api/products");
+    }
+
+    @Test
+    void categories_shouldGoToProductService() {
+        client.delete().uri("/api/categories/3")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer admin-token")
+                .exchange()
+                .expectBody()
+                .jsonPath("$.service").isEqualTo("product")
+                .jsonPath("$.method").isEqualTo("DELETE")
+                .jsonPath("$.path").isEqualTo("/api/categories/3")
+                .jsonPath("$.authorization").isEqualTo("Bearer admin-token");
+    }
+
+    @Test
+    void cart_shouldStillGoToTheMonolith() {
+        client.get().uri("/api/cart")
                 .exchange()
                 .expectStatus().isOk()
                 .expectBody()
                 .jsonPath("$.service").isEqualTo("monolith")
-                .jsonPath("$.path").isEqualTo("/api/products");
+                .jsonPath("$.path").isEqualTo("/api/cart");
     }
 
     @Test

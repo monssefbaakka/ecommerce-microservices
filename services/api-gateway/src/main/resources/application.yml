@@ -12,7 +12,11 @@ spring:
               uri: lb://auth-service
               predicates:
                 - Path=/api/auth/**
-            # Everything not extracted yet (catalog, cart, orders) still lives in the monolith.
+            - id: product-service
+              uri: lb://product-service
+              predicates:
+                - Path=/api/products/**,/api/categories/**
+            # Everything not extracted yet (cart, orders) still lives in the monolith.
             # Fixed URL: the monolith does not register in Eureka. Must stay after the routes above
             - id: monolith
               uri: ${MONOLITH_URL:http://localhost:8080}
