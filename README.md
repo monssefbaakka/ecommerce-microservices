@@ -225,6 +225,8 @@ Dans Swagger UI, clique sur **Authorize** et colle le token (sans `Bearer `) pou
 
 ### Categories
 
+> Via la gateway (port 8090), les catégories et les produits sont servis par [product-service](#microservices), avec les mêmes URLs, règles, rôles et codes que le monolithe. Son Swagger UI est sur `http://localhost:8082/swagger-ui.html`.
+
 | Méthode | URL | Description | Codes |
 |---|---|---|---|
 | GET | /api/categories | Liste des catégories | 200 |
