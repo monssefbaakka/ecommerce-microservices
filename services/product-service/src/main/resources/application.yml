@@ -1,0 +1,18 @@
+spring:
+  application:
+    name: product-service               # also the name it registers under in Eureka
+  datasource:
+    # Same database as the monolith for now: both read and write "categories" and "products"
+    # (the monolith still needs them for the cart and the orders). Each service gets its own database in #46
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ecommerce}
+    username: ${DB_USER:ecommerce}
+    password: ${DB_PASSWORD:ecommerce}
+  jpa:
+    hibernate:
+      ddl-auto: update                  # dev: same mapping as the monolith, so the shared tables stay identical
+    open-in-view: false
+
+server:
+  port: ${PORT:8082}
+  error:
+    include-message: always             # show error messages (dev only)
