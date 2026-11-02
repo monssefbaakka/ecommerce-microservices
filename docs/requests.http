@@ -79,7 +79,7 @@ Content-Type: application/json
   "name": "iPhone 15",
   "description": "128 GB",
   "price": 999.99,
-  "category": { "id": {{createCategory.response.body.$.id}} },
+  "categoryId": {{createCategory.response.body.$.id}},
   "stock": 25
 }
 
@@ -98,7 +98,7 @@ Content-Type: application/json
   "name": "iPhone 15",
   "description": "256 GB",
   "price": 1099.99,
-  "category": { "id": {{createCategory.response.body.$.id}} },
+  "categoryId": {{createCategory.response.body.$.id}},
   "stock": 20
 }
 
@@ -107,28 +107,28 @@ POST {{host}}/api/products
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
-{ "name": "", "price": 10.00, "category": { "id": {{createCategory.response.body.$.id}} } }
+{ "name": "", "price": 10.00, "categoryId": {{createCategory.response.body.$.id}}, "stock": 1 }
 
 ### P7. Price is zero (expect 400)
 POST {{host}}/api/products
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
-{ "name": "Free phone", "price": 0, "category": { "id": {{createCategory.response.body.$.id}} } }
+{ "name": "Free phone", "price": 0, "categoryId": {{createCategory.response.body.$.id}}, "stock": 1 }
 
-### P8. Category without id (expect 400)
+### P8. No category id (expect 400)
 POST {{host}}/api/products
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
-{ "name": "No category id", "price": 10.00, "category": { } }
+{ "name": "No category id", "price": 10.00, "stock": 1 }
 
 ### P9. Unknown category (expect 404)
 POST {{host}}/api/products
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
-{ "name": "Ghost category", "price": 10.00, "category": { "id": 999999 } }
+{ "name": "Ghost category", "price": 10.00, "categoryId": 999999, "stock": 1 }
 
 ### P10. Unknown product (expect 404)
 GET {{host}}/api/products/999999
