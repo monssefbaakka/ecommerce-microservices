@@ -457,8 +457,11 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │       │   ├── exceptions/  ResourceNotFoundException, GlobalExceptionHandler, ErrorResponse
 │       │   └── shared classes
 │       └── test/          Unit, MockMvc and Testcontainers integration tests (support/ holds the IT base)
-├── services/        microservices (Phase 5 and later)
-├── infra/           Docker Compose file (PostgreSQL, app profile) and .env.example
+├── services/        microservices (Phase 5 and later), each a Maven project with its Dockerfile
+│   ├── discovery-server/   Eureka registry
+│   ├── auth-service/       register, login, JWT
+│   └── api-gateway/        single entry point, routes to the services and the monolith
+├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices) and .env.example
 └── docs/            HTTP request examples, architecture notes
 ```
 
