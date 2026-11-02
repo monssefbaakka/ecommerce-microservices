@@ -491,6 +491,59 @@ GET {{gateway}}/actuator/health
 ### G8. Route list not exposed: the gateway is public (expect 404)
 GET {{gateway}}/actuator/gateway/routes
 
+### C1. ADMIN login through the gateway (expect 200, needs ADMIN_EMAIL / ADMIN_PASSWORD in infra/.env)
+# @name gatewayAdminLogin
+POST {{gateway}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "{{adminEmail}}", "password": "{{adminPassword}}" }
+
+### C2. Create a category through the gateway: written by product-service (expect 201)
+# @name gatewayCategory
+POST {{gateway}}/api/categories
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "Gateway {{$timestamp}}", "description": "Created through product-service" }
+
+### C3. Create a product in it (expect 201)
+# @name gatewayProduct
+POST {{gateway}}/api/products
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "Gateway phone", "description": "64 GB", "price": 199.99, "categoryId": {{gatewayCategory.response.body.$.id}}, "stock": 5 }
+
+### C4. Paging, search and filter like the monolith (expect 200, page.totalElements = 1)
+GET {{gateway}}/api/products?name=gateway&categoryId={{gatewayCategory.response.body.$.id}}&page=0&size=5&sort=price,desc
+
+### C5. Same product read by the monolith: the tables are shared (expect 200)
+GET {{host}}/api/products/{{gatewayProduct.response.body.$.id}}
+
+### C6. Write without a token (expect 401, ErrorResponse from product-service)
+POST {{gateway}}/api/categories
+Content-Type: application/json
+
+{ "name": "No token", "description": "Rejected" }
+
+### C7. Write with a USER token (expect 403)
+POST {{gateway}}/api/categories
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "User token", "description": "Rejected" }
+
+### C8. Delete the product, then the category (expect 204 twice)
+DELETE {{gateway}}/api/products/{{gatewayProduct.response.body.$.id}}
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
+###
+DELETE {{gateway}}/api/categories/{{gatewayCategory.response.body.$.id}}
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
+### C9. Stop product-service first (docker stop ecommerce-product-service), wait ~30 s (expect 503, ErrorResponse)
+GET {{gateway}}/api/products
+
 ### S1. auth-service directly, without the gateway (expect 200)
 POST {{authService}}/api/auth/login
 Content-Type: application/json
