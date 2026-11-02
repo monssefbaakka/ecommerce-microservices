@@ -15,9 +15,11 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
 | Containers | Docker, Docker Compose |
 | API docs | OpenAPI 3 / Swagger UI (springdoc) |
+| Security | Spring Security, JWT (jjwt) |
+| Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer |
 | Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info) |
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, JaCoCo |
-| Planned | Spring Security + JWT, Spring Cloud (Eureka, Gateway, OpenFeign), Resilience4j, GitHub Actions |
+| Planned | OpenFeign, Resilience4j, GitHub Actions |
 
 ## Getting started
 
