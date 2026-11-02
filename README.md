@@ -116,6 +116,43 @@ cd services/auth-service    # or discovery-server, api-gateway
 docker compose -f infra/docker-compose.yml --profile app stop   # --profile app also stops the app and service containers
 ```
 
+## Microservices
+
+Phase 5 extracts the monolith step by step. The first services are in [services/](services/):
+
+```mermaid
+flowchart LR
+    client([Client]) --> gateway["api-gateway :8090"]
+    gateway -- "/api/auth/**" --> auth["auth-service :8081"]
+    gateway -- "other /api/**" --> monolith["monolith :8080"]
+    auth -. registers .-> eureka["discovery-server :8761<br/>Eureka"]
+    gateway -. registers, finds auth-service .-> eureka
+    auth --> db[(PostgreSQL)]
+    monolith --> db
+```
+
+| Service | Port | Role |
+|---|---|---|
+| [discovery-server](services/discovery-server) | 8761 | Eureka registry: each service registers under its name, the gateway asks it where they are |
+| [auth-service](services/auth-service) | 8081 | `POST /api/auth/register` and `POST /api/auth/login`, extracted from the monolith with the same rules, errors and Swagger UI |
+| [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service (`lb://auth-service`, found through Eureka), every other `/api/**` to the monolith |
+
+- **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on the cart and orders. Set the same `JWT_SECRET` on both outside local dev.
+- **Shared database for now:** auth-service reads and writes the monolith's `users` table. Each service gets its own database in #46.
+- **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when auth-service is not registered in Eureka or does not answer.
+- **Health:** each service sends its Actuator status to Eureka. If auth-service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
+
+To run them without Docker, start PostgreSQL, then in this order, each in its own terminal:
+
+```bash
+cd services/discovery-server && ./mvnw spring-boot:run   # wait for "Started", dashboard on :8761
+cd monolith && ./mvnw spring-boot:run                    # creates the tables
+cd services/auth-service && ./mvnw spring-boot:run
+cd services/api-gateway && ./mvnw spring-boot:run        # then call http://localhost:8090/api/...
+```
+
+The requests in `docs/requests.http` (section *MICROSERVICES*) go through the gateway.
+
 ## API endpoints
 
 ### Auth
