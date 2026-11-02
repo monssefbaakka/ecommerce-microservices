@@ -64,12 +64,13 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build
 | `ecommerce-api-gateway` | `http://localhost:8090` | Single entry point: use this one |
 | `ecommerce-app` | `http://localhost:8080` | The monolith, still reachable directly |
 | `ecommerce-auth-service` | `http://localhost:8081` | Register and login |
+| `ecommerce-product-service` | `http://localhost:8082` | Categories and products |
 | `ecommerce-discovery-server` | `http://localhost:8761` | Eureka dashboard |
 | `ecommerce-postgres` | `localhost:5432` | PostgreSQL |
 
-`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. auth-service starts last (about 1 min): it waits for Eureka and for the monolith, which creates the shared tables. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. auth-service and product-service start last (about 1 min): they wait for Eureka and for the monolith, which creates the shared tables. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
-To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith and auth-service both read it, so they share the same secret.
+To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith, auth-service and product-service all read it, so they share the same secret.
 
 Each service has its own Dockerfile, built the same way. The monolith's image is built by [monolith/Dockerfile](monolith/Dockerfile) in two stages: the JDK and Maven only exist in the build stage, the final image holds a JRE and the application, split into Spring Boot layers so that a code change only rebuilds the last one. It runs as a non-root user and sizes the heap from the container memory limit (`JAVA_TOOL_OPTIONS`).
 
