@@ -469,6 +469,7 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 ├── services/        microservices (Phase 5 and later), each a Maven project with its Dockerfile
 │   ├── discovery-server/   Eureka registry
 │   ├── auth-service/       register, login, JWT
+│   ├── product-service/    categories and products, ADMIN writes checked from the JWT
 │   └── api-gateway/        single entry point, routes to the services and the monolith
 ├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices) and .env.example
 └── docs/            HTTP request examples, architecture notes
