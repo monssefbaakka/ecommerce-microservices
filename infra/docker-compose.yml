@@ -38,7 +38,7 @@ services:
       - "8080:8080"
     restart: unless-stopped   # restarts after a crash or a Docker restart, not after "docker compose stop"
 
-  # Service registry: auth-service and the gateway register here and find each other by name
+  # Service registry: auth-service, product-service and the gateway register here and find each other by name
   discovery-server:
     profiles: ["app"]
     build: ../services/discovery-server
@@ -75,7 +75,33 @@ services:
       - "8081:8081"
     restart: unless-stopped
 
-  # Single entry point: /api/auth/** to auth-service (through Eureka), the rest of /api/** to the monolith
+  product-service:
+    profiles: ["app"]
+    build: ../services/product-service
+    image: ecommerce-product-service:latest
+    container_name: ecommerce-product-service
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      # Same "categories" and "products" tables as the monolith: let it create the schema first
+      app:
+        condition: service_healthy
+    # Same JWT_SECRET as auth-service, or the ADMIN tokens would be rejected here
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/ecommerce
+      DB_USER: ecommerce
+      DB_PASSWORD: ecommerce
+      EUREKA_URL: http://discovery-server:8761/eureka
+      INSTANCE_HOSTNAME: product-service   # address registered in Eureka, reachable by the gateway
+    ports:
+      - "8082:8082"
+    restart: unless-stopped
+
+  # Single entry point: /api/auth/** to auth-service, /api/products/** and /api/categories/** to product-service
+  # (both through Eureka), the rest of /api/** to the monolith
   api-gateway:
     profiles: ["app"]
     build: ../services/api-gateway

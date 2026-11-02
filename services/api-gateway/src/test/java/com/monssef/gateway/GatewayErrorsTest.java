@@ -48,12 +48,12 @@ class GatewayErrorsTest {
 
     @Test
     void serviceNotAnswering_shouldReturn503WithoutItsAddress() {
-        client.get().uri("/api/products")
+        client.get().uri("/api/cart")
                 .exchange()
                 .expectStatus().isEqualTo(503)
                 .expectBody()
                 .jsonPath("$.message").isEqualTo("Service unavailable")
-                .jsonPath("$.path").isEqualTo("/api/products");
+                .jsonPath("$.path").isEqualTo("/api/cart");
     }
 
     @Test

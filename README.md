@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 started: Eureka, API gateway and auth-service run next to the monolith. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 started: Eureka, API gateway, auth-service and product-service run next to the monolith. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -64,12 +64,13 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build
 | `ecommerce-api-gateway` | `http://localhost:8090` | Single entry point: use this one |
 | `ecommerce-app` | `http://localhost:8080` | The monolith, still reachable directly |
 | `ecommerce-auth-service` | `http://localhost:8081` | Register and login |
+| `ecommerce-product-service` | `http://localhost:8082` | Categories and products |
 | `ecommerce-discovery-server` | `http://localhost:8761` | Eureka dashboard |
 | `ecommerce-postgres` | `localhost:5432` | PostgreSQL |
 
-`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. auth-service starts last (about 1 min): it waits for Eureka and for the monolith, which creates the shared tables. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. auth-service and product-service start last (about 1 min): they wait for Eureka and for the monolith, which creates the shared tables. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
-To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith and auth-service both read it, so they share the same secret.
+To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith, auth-service and product-service all read it, so they share the same secret.
 
 Each service has its own Dockerfile, built the same way. The monolith's image is built by [monolith/Dockerfile](monolith/Dockerfile) in two stages: the JDK and Maven only exist in the build stage, the final image holds a JRE and the application, split into Spring Boot layers so that a code change only rebuilds the last one. It runs as a non-root user and sizes the heap from the container memory limit (`JAVA_TOOL_OPTIONS`).
 
@@ -100,7 +101,7 @@ Each test starts from empty tables. The coverage report of both runs is written 
 Each microservice is a separate Maven project with its own tests, run the same way from its folder:
 
 ```bash
-cd services/auth-service    # or discovery-server, api-gateway
+cd services/auth-service    # or discovery-server, product-service, api-gateway
 ./mvnw verify
 ```
 
@@ -108,7 +109,8 @@ cd services/auth-service    # or discovery-server, api-gateway
 |---|---|
 | discovery-server | The registry starts, accepts registrations, serves the dashboard; only `health` and `info` are exposed |
 | auth-service | JWT, register / login rules, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (register then login, Actuator, OpenAPI) |
-| api-gateway | Routing to auth-service and to the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
+| product-service | JWT check, category and product rules, paging and search, `ErrorResponse` bodies, security chain (401 / 403) with MockMvc; `*IT` on PostgreSQL with Testcontainers (catalog flow, Actuator, OpenAPI) |
+| api-gateway | Routing to auth-service, product-service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
 
 ### Stop
 
@@ -124,10 +126,13 @@ Phase 5 extracts the monolith step by step. The first services are in [services/
 flowchart LR
     client([Client]) --> gateway["api-gateway :8090"]
     gateway -- "/api/auth/**" --> auth["auth-service :8081"]
+    gateway -- "/api/products/**<br/>/api/categories/**" --> product["product-service :8082"]
     gateway -- "other /api/**" --> monolith["monolith :8080"]
     auth -. registers .-> eureka["discovery-server :8761<br/>Eureka"]
-    gateway -. registers, finds auth-service .-> eureka
+    product -. registers .-> eureka
+    gateway -. registers, finds the services .-> eureka
     auth --> db[(PostgreSQL)]
+    product --> db
     monolith --> db
 ```
 
@@ -135,12 +140,13 @@ flowchart LR
 |---|---|---|
 | [discovery-server](services/discovery-server) | 8761 | Eureka registry: each service registers under its name, the gateway asks it where they are |
 | [auth-service](services/auth-service) | 8081 | `POST /api/auth/register` and `POST /api/auth/login`, extracted from the monolith with the same rules, errors and Swagger UI |
-| [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service (`lb://auth-service`, found through Eureka), every other `/api/**` to the monolith |
+| [product-service](services/product-service) | 8082 | Catalog: CRUD on `/api/categories` and `/api/products` (paging, name search, category filter), extracted from the monolith with the same rules, errors, roles and Swagger UI |
+| [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service, `/api/products/**` and `/api/categories/**` to product-service (`lb://...`, found through Eureka), every other `/api/**` to the monolith |
 
-- **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on the cart and orders. Set the same `JWT_SECRET` on both outside local dev.
-- **Shared database for now:** auth-service reads and writes the monolith's `users` table. Each service gets its own database in #46.
-- **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when auth-service is not registered in Eureka or does not answer.
-- **Health:** each service sends its Actuator status to Eureka. If auth-service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
+- **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on the cart and orders. product-service checks them the same way, without a database call: only an `ADMIN` token can write the catalog. Set the same `JWT_SECRET` on all three outside local dev.
+- **Shared database for now:** auth-service reads and writes the monolith's `users` table, product-service its `categories` and `products` tables. The monolith still needs them for the cart, the orders and the stock, so a product created through the gateway is right away visible there. Each service gets its own database in #46.
+- **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when the target service is not registered in Eureka or does not answer.
+- **Health:** each service sends its Actuator status to Eureka. If auth-service or product-service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
 
 To run them without Docker, start PostgreSQL, then in this order, each in its own terminal:
 
@@ -148,6 +154,7 @@ To run them without Docker, start PostgreSQL, then in this order, each in its ow
 cd services/discovery-server && ./mvnw spring-boot:run   # wait for "Started", dashboard on :8761
 cd monolith && ./mvnw spring-boot:run                    # creates the tables
 cd services/auth-service && ./mvnw spring-boot:run
+cd services/product-service && ./mvnw spring-boot:run
 cd services/api-gateway && ./mvnw spring-boot:run        # then call http://localhost:8090/api/...
 ```
 
@@ -217,6 +224,8 @@ Le compte est créé seulement si les deux variables sont définies et que l'ema
 Dans Swagger UI, clique sur **Authorize** et colle le token (sans `Bearer `) pour appeler les endpoints protégés.
 
 ### Categories
+
+> Via la gateway (port 8090), les catégories et les produits sont servis par [product-service](#microservices), avec les mêmes URLs, règles, rôles et codes que le monolithe. Son Swagger UI est sur `http://localhost:8082/swagger-ui.html`.
 
 | Méthode | URL | Description | Codes |
 |---|---|---|---|
@@ -460,6 +469,7 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 ├── services/        microservices (Phase 5 and later), each a Maven project with its Dockerfile
 │   ├── discovery-server/   Eureka registry
 │   ├── auth-service/       register, login, JWT
+│   ├── product-service/    categories and products, ADMIN writes checked from the JWT
 │   └── api-gateway/        single entry point, routes to the services and the monolith
 ├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices) and .env.example
 └── docs/            HTTP request examples, architecture notes

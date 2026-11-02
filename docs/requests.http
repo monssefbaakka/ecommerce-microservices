@@ -79,7 +79,7 @@ Content-Type: application/json
   "name": "iPhone 15",
   "description": "128 GB",
   "price": 999.99,
-  "category": { "id": {{createCategory.response.body.$.id}} },
+  "categoryId": {{createCategory.response.body.$.id}},
   "stock": 25
 }
 
@@ -98,7 +98,7 @@ Content-Type: application/json
   "name": "iPhone 15",
   "description": "256 GB",
   "price": 1099.99,
-  "category": { "id": {{createCategory.response.body.$.id}} },
+  "categoryId": {{createCategory.response.body.$.id}},
   "stock": 20
 }
 
@@ -107,28 +107,28 @@ POST {{host}}/api/products
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
-{ "name": "", "price": 10.00, "category": { "id": {{createCategory.response.body.$.id}} } }
+{ "name": "", "price": 10.00, "categoryId": {{createCategory.response.body.$.id}}, "stock": 1 }
 
 ### P7. Price is zero (expect 400)
 POST {{host}}/api/products
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
-{ "name": "Free phone", "price": 0, "category": { "id": {{createCategory.response.body.$.id}} } }
+{ "name": "Free phone", "price": 0, "categoryId": {{createCategory.response.body.$.id}}, "stock": 1 }
 
-### P8. Category without id (expect 400)
+### P8. No category id (expect 400)
 POST {{host}}/api/products
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
-{ "name": "No category id", "price": 10.00, "category": { } }
+{ "name": "No category id", "price": 10.00, "stock": 1 }
 
 ### P9. Unknown category (expect 404)
 POST {{host}}/api/products
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 Content-Type: application/json
 
-{ "name": "Ghost category", "price": 10.00, "category": { "id": 999999 } }
+{ "name": "Ghost category", "price": 10.00, "categoryId": 999999, "stock": 1 }
 
 ### P10. Unknown product (expect 404)
 GET {{host}}/api/products/999999
@@ -449,10 +449,11 @@ GET {{host}}/actuator/env
 
 
 ############################################################
-# MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, Eureka 8761)
+# MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, product-service 8082, Eureka 8761)
 ############################################################
 @gateway = http://localhost:8090
 @authService = http://localhost:8081
+@productService = http://localhost:8082
 @eureka = http://localhost:8761
 
 ### G1. Register through the gateway: routed to auth-service (expect 201, then 409 on a second run)
@@ -468,7 +469,7 @@ Content-Type: application/json
 
 { "email": "gateway@example.com", "password": "password123" }
 
-### G3. Catalog through the gateway: routed to the monolith (expect 200)
+### G3. Catalog through the gateway: routed to product-service (expect 200)
 GET {{gateway}}/api/products
 
 ### G4. Cart through the gateway with the auth-service token: the monolith accepts it (expect 200)
@@ -490,6 +491,59 @@ GET {{gateway}}/actuator/health
 ### G8. Route list not exposed: the gateway is public (expect 404)
 GET {{gateway}}/actuator/gateway/routes
 
+### C1. ADMIN login through the gateway (expect 200, needs ADMIN_EMAIL / ADMIN_PASSWORD in infra/.env)
+# @name gatewayAdminLogin
+POST {{gateway}}/api/auth/login
+Content-Type: application/json
+
+{ "email": "{{adminEmail}}", "password": "{{adminPassword}}" }
+
+### C2. Create a category through the gateway: written by product-service (expect 201)
+# @name gatewayCategory
+POST {{gateway}}/api/categories
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "Gateway {{$timestamp}}", "description": "Created through product-service" }
+
+### C3. Create a product in it (expect 201)
+# @name gatewayProduct
+POST {{gateway}}/api/products
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "Gateway phone", "description": "64 GB", "price": 199.99, "categoryId": {{gatewayCategory.response.body.$.id}}, "stock": 5 }
+
+### C4. Paging, search and filter like the monolith (expect 200, page.totalElements = 1)
+GET {{gateway}}/api/products?name=gateway&categoryId={{gatewayCategory.response.body.$.id}}&page=0&size=5&sort=price,desc
+
+### C5. Same product read by the monolith: the tables are shared (expect 200)
+GET {{host}}/api/products/{{gatewayProduct.response.body.$.id}}
+
+### C6. Write without a token (expect 401, ErrorResponse from product-service)
+POST {{gateway}}/api/categories
+Content-Type: application/json
+
+{ "name": "No token", "description": "Rejected" }
+
+### C7. Write with a USER token (expect 403)
+POST {{gateway}}/api/categories
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "User token", "description": "Rejected" }
+
+### C8. Delete the product, then the category (expect 204 twice)
+DELETE {{gateway}}/api/products/{{gatewayProduct.response.body.$.id}}
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
+###
+DELETE {{gateway}}/api/categories/{{gatewayCategory.response.body.$.id}}
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
+### C9. Stop product-service first (docker stop ecommerce-product-service), wait ~30 s (expect 503, ErrorResponse)
+GET {{gateway}}/api/products
+
 ### S1. auth-service directly, without the gateway (expect 200)
 POST {{authService}}/api/auth/login
 Content-Type: application/json
@@ -499,6 +553,12 @@ Content-Type: application/json
 ### S2. auth-service readiness: database included (expect 200)
 GET {{authService}}/actuator/health/readiness
 
-### R1. Instances registered in Eureka: API-GATEWAY and AUTH-SERVICE, status UP (expect 200)
+### S3. product-service directly, without the gateway (expect 200)
+GET {{productService}}/api/categories
+
+### S4. product-service readiness: database included (expect 200)
+GET {{productService}}/actuator/health/readiness
+
+### R1. Instances registered in Eureka: API-GATEWAY, AUTH-SERVICE and PRODUCT-SERVICE, status UP (expect 200)
 GET {{eureka}}/eureka/apps
 Accept: application/json

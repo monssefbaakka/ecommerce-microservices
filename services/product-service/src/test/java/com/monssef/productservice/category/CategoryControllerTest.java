@@ -1,0 +1,160 @@
+package com.monssef.productservice.category;
+
+import com.monssef.productservice.auth.JwtService;
+import com.monssef.productservice.category.dto.CategoryDTO;
+import com.monssef.productservice.category.dto.CategoryRequest;
+import com.monssef.productservice.config.SecurityConfig;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.context.annotation.Import;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(CategoryController.class)
+@Import(SecurityConfig.class) // @WebMvcTest does not load @Configuration classes
+class CategoryControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockBean
+    private CategoryService service;
+
+    @MockBean
+    private JwtService jwtService; // required by SecurityConfig (JWT filter)
+
+    @Test
+    void findAll_shouldReturnAllCategories() throws Exception {
+        CategoryDTO dto = new CategoryDTO(1L, "Electronics", "Phones and laptops");
+        when(service.findAll()).thenReturn(List.of(dto));
+
+        mockMvc.perform(get("/api/categories"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].id").value(1))
+                .andExpect(jsonPath("$[0].name").value("Electronics"))
+                .andExpect(jsonPath("$[0].description").value("Phones and laptops"));
+
+        verify(service).findAll();
+    }
+
+    @Test
+    void findById_shouldReturnCategory_whenExists() throws Exception {
+        CategoryDTO dto = new CategoryDTO(1L, "Electronics", "Phones and laptops");
+        when(service.findById(1L)).thenReturn(dto);
+
+        mockMvc.perform(get("/api/categories/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.name").value("Electronics"));
+
+        verify(service).findById(1L);
+    }
+
+    @Test
+    void findById_shouldReturn404_whenNotFound() throws Exception {
+        when(service.findById(999L))
+                .thenThrow(new com.monssef.productservice.common.ResourceNotFoundException("Category", 999L));
+
+        mockMvc.perform(get("/api/categories/999"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
+    void create_shouldReturn201_whenValid() throws Exception {
+        CategoryRequest request = new CategoryRequest("Electronics", "Phones and laptops");
+        CategoryDTO dto = new CategoryDTO(1L, "Electronics", "Phones and laptops");
+        when(service.create(any(CategoryRequest.class))).thenReturn(dto);
+
+        mockMvc.perform(post("/api/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.name").value("Electronics"));
+
+        verify(service).create(any(CategoryRequest.class));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
+    void create_shouldReturn400_whenBlankName() throws Exception {
+        CategoryRequest request = new CategoryRequest("", "description");
+
+        mockMvc.perform(post("/api/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
+    void update_shouldReturnUpdatedCategory_whenValid() throws Exception {
+        CategoryRequest request = new CategoryRequest("Electronics", "Updated description");
+        CategoryDTO dto = new CategoryDTO(1L, "Electronics", "Updated description");
+        when(service.update(eq(1L), any(CategoryRequest.class))).thenReturn(dto);
+
+        mockMvc.perform(put("/api/categories/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Electronics"))
+                .andExpect(jsonPath("$.description").value("Updated description"));
+
+        verify(service).update(eq(1L), any(CategoryRequest.class));
+    }
+
+    @Test
+    @WithMockUser(roles = "ADMIN") // write endpoints are ADMIN only
+    void delete_shouldReturn204() throws Exception {
+        doNothing().when(service).delete(1L);
+
+        mockMvc.perform(delete("/api/categories/1"))
+                .andExpect(status().isNoContent());
+
+        verify(service).delete(1L);
+    }
+
+    @Test
+    void create_shouldReturn401_whenAnonymous() throws Exception {
+        CategoryRequest request = new CategoryRequest("Electronics", "Phones and laptops");
+
+        mockMvc.perform(post("/api/categories")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.path").value("/api/categories"));
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    @WithMockUser(roles = "USER")
+    void update_shouldReturn403_whenUserRole() throws Exception {
+        CategoryRequest request = new CategoryRequest("Electronics", "Updated description");
+
+        mockMvc.perform(put("/api/categories/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+
+        verifyNoInteractions(service);
+    }
+}
