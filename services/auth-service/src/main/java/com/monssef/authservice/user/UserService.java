@@ -1,0 +1,38 @@
+package com.monssef.authservice.user;
+
+import com.monssef.authservice.user.dto.RegisterRequest;
+import com.monssef.authservice.user.dto.UserDTO;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpStatus;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.server.ResponseStatusException;
+
+import java.util.Locale;
+
+@Service
+@RequiredArgsConstructor
+@Transactional(readOnly = true)
+public class UserService {
+
+    private final UserRepository repository;
+    private final PasswordEncoder passwordEncoder;
+    private final UserMapper mapper;
+
+    @Transactional
+    public UserDTO register(RegisterRequest request) {
+        // Same email whatever the case or surrounding spaces
+        String email = request.getEmail().trim().toLowerCase(Locale.ROOT);
+        if (repository.existsByEmailIgnoreCase(email)) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Email already registered: " + email);
+        }
+        User user = new User();
+        user.setEmail(email);
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(Role.USER); // a client can never register as ADMIN
+        User saved = repository.save(user);
+        return mapper.toDto(saved);
+    }
+}

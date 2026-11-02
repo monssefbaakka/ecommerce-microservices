@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 started: Eureka, API gateway and auth-service run next to the monolith. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -15,9 +15,11 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
 | Containers | Docker, Docker Compose |
 | API docs | OpenAPI 3 / Swagger UI (springdoc) |
+| Security | Spring Security, JWT (jjwt) |
+| Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer |
 | Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info) |
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, JaCoCo |
-| Planned | Spring Security + JWT, Spring Cloud (Eureka, Gateway, OpenFeign), Resilience4j, GitHub Actions |
+| Planned | OpenFeign, Resilience4j, GitHub Actions |
 
 ## Getting started
 
@@ -51,17 +53,25 @@ To try the endpoints, open `docs/requests.http` in VS Code (REST Client extensio
 
 ### Run with Docker
 
-The whole stack (PostgreSQL + the application) can also run in containers, without Java on the machine:
+The whole stack (PostgreSQL, the monolith and the [microservices](#microservices)) can also run in containers, without Java on the machine:
 
 ```bash
 docker compose -f infra/docker-compose.yml --profile app up -d --build
 ```
 
-The API is then on the same `http://localhost:8080`. `docker ps` shows the app as `healthy` once it answers on `/actuator/health/readiness` (about 20 s). Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+| Container | URL | Role |
+|---|---|---|
+| `ecommerce-api-gateway` | `http://localhost:8090` | Single entry point: use this one |
+| `ecommerce-app` | `http://localhost:8080` | The monolith, still reachable directly |
+| `ecommerce-auth-service` | `http://localhost:8081` | Register and login |
+| `ecommerce-discovery-server` | `http://localhost:8761` | Eureka dashboard |
+| `ecommerce-postgres` | `localhost:5432` | PostgreSQL |
 
-To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git).
+`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. auth-service starts last (about 1 min): it waits for Eureka and for the monolith, which creates the shared tables. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
-The image is built by [monolith/Dockerfile](monolith/Dockerfile) in two stages: the JDK and Maven only exist in the build stage, the final image holds a JRE and the application, split into Spring Boot layers so that a code change only rebuilds the last one. It runs as a non-root user and sizes the heap from the container memory limit (`JAVA_TOOL_OPTIONS`).
+To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith and auth-service both read it, so they share the same secret.
+
+Each service has its own Dockerfile, built the same way. The monolith's image is built by [monolith/Dockerfile](monolith/Dockerfile) in two stages: the JDK and Maven only exist in the build stage, the final image holds a JRE and the application, split into Spring Boot layers so that a code change only rebuilds the last one. It runs as a non-root user and sizes the heap from the container memory limit (`JAVA_TOOL_OPTIONS`).
 
 To build and run the image alone:
 
@@ -87,11 +97,61 @@ cd monolith
 The integration tests start a `postgres:16-alpine` container with [Testcontainers](https://testcontainers.com/): Docker must be running, nothing else to set up. Without Docker they are skipped, not failed.
 Each test starts from empty tables. The coverage report of both runs is written to `monolith/target/site/jacoco/index.html`.
 
+Each microservice is a separate Maven project with its own tests, run the same way from its folder:
+
+```bash
+cd services/auth-service    # or discovery-server, api-gateway
+./mvnw verify
+```
+
+| Service | What the tests check |
+|---|---|
+| discovery-server | The registry starts, accepts registrations, serves the dashboard; only `health` and `info` are exposed |
+| auth-service | JWT, register / login rules, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (register then login, Actuator, OpenAPI) |
+| api-gateway | Routing to auth-service and to the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
+
 ### Stop
 
 ```bash
-docker compose -f infra/docker-compose.yml --profile app stop   # --profile app also stops the app container
+docker compose -f infra/docker-compose.yml --profile app stop   # --profile app also stops the app and service containers
 ```
+
+## Microservices
+
+Phase 5 extracts the monolith step by step. The first services are in [services/](services/):
+
+```mermaid
+flowchart LR
+    client([Client]) --> gateway["api-gateway :8090"]
+    gateway -- "/api/auth/**" --> auth["auth-service :8081"]
+    gateway -- "other /api/**" --> monolith["monolith :8080"]
+    auth -. registers .-> eureka["discovery-server :8761<br/>Eureka"]
+    gateway -. registers, finds auth-service .-> eureka
+    auth --> db[(PostgreSQL)]
+    monolith --> db
+```
+
+| Service | Port | Role |
+|---|---|---|
+| [discovery-server](services/discovery-server) | 8761 | Eureka registry: each service registers under its name, the gateway asks it where they are |
+| [auth-service](services/auth-service) | 8081 | `POST /api/auth/register` and `POST /api/auth/login`, extracted from the monolith with the same rules, errors and Swagger UI |
+| [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service (`lb://auth-service`, found through Eureka), every other `/api/**` to the monolith |
+
+- **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on the cart and orders. Set the same `JWT_SECRET` on both outside local dev.
+- **Shared database for now:** auth-service reads and writes the monolith's `users` table. Each service gets its own database in #46.
+- **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when auth-service is not registered in Eureka or does not answer.
+- **Health:** each service sends its Actuator status to Eureka. If auth-service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
+
+To run them without Docker, start PostgreSQL, then in this order, each in its own terminal:
+
+```bash
+cd services/discovery-server && ./mvnw spring-boot:run   # wait for "Started", dashboard on :8761
+cd monolith && ./mvnw spring-boot:run                    # creates the tables
+cd services/auth-service && ./mvnw spring-boot:run
+cd services/api-gateway && ./mvnw spring-boot:run        # then call http://localhost:8090/api/...
+```
+
+The requests in `docs/requests.http` (section *MICROSERVICES*) go through the gateway.
 
 ## API endpoints
 
@@ -397,8 +457,11 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │       │   ├── exceptions/  ResourceNotFoundException, GlobalExceptionHandler, ErrorResponse
 │       │   └── shared classes
 │       └── test/          Unit, MockMvc and Testcontainers integration tests (support/ holds the IT base)
-├── services/        microservices (Phase 5 and later)
-├── infra/           Docker Compose file (PostgreSQL, app profile) and .env.example
+├── services/        microservices (Phase 5 and later), each a Maven project with its Dockerfile
+│   ├── discovery-server/   Eureka registry
+│   ├── auth-service/       register, login, JWT
+│   └── api-gateway/        single entry point, routes to the services and the monolith
+├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices) and .env.example
 └── docs/            HTTP request examples, architecture notes
 ```
 
@@ -414,7 +477,7 @@ Controllers only ever receive and return DTOs, never entities. Each feature has 
 | 2 | Spring Security, JWT, roles (USER / ADMIN) | Done |
 | 3 | Cart, orders, stock management | Done |
 | 4 | Tests, Docker, Actuator | In progress |
-| 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | Planned |
+| 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | In progress |
 | 6 | OpenFeign, Resilience4j, advanced Docker Compose | Planned |
 | 7 | CI/CD with GitHub Actions | Planned |
 | 8 | Deployment and frontend (bonus) | Planned |

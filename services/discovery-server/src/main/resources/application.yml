@@ -1,0 +1,39 @@
+spring:
+  application:
+    name: discovery-server
+
+server:
+  port: ${PORT:8761}                    # the usual Eureka port
+
+eureka:
+  instance:
+    hostname: ${EUREKA_HOSTNAME:localhost}
+  client:
+    # A single server: it does not register with itself nor copy the registry of another server
+    register-with-eureka: false
+    fetch-registry: false
+  server:
+    # Dev: forget a stopped service after ~30 s instead of keeping it "just in case".
+    # Self-preservation protects against network splits between several Eureka servers, not useful with one
+    enable-self-preservation: false
+    eviction-interval-timer-in-ms: 10000
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info            # nothing else over HTTP
+  endpoint:
+    health:
+      probes:
+        enabled: true                   # /actuator/health/liveness and /actuator/health/readiness
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: Eureka discovery server (service registry)
