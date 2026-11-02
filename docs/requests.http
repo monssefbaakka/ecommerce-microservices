@@ -449,10 +449,11 @@ GET {{host}}/actuator/env
 
 
 ############################################################
-# MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, Eureka 8761)
+# MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, product-service 8082, Eureka 8761)
 ############################################################
 @gateway = http://localhost:8090
 @authService = http://localhost:8081
+@productService = http://localhost:8082
 @eureka = http://localhost:8761
 
 ### G1. Register through the gateway: routed to auth-service (expect 201, then 409 on a second run)
@@ -468,7 +469,7 @@ Content-Type: application/json
 
 { "email": "gateway@example.com", "password": "password123" }
 
-### G3. Catalog through the gateway: routed to the monolith (expect 200)
+### G3. Catalog through the gateway: routed to product-service (expect 200)
 GET {{gateway}}/api/products
 
 ### G4. Cart through the gateway with the auth-service token: the monolith accepts it (expect 200)
@@ -499,6 +500,12 @@ Content-Type: application/json
 ### S2. auth-service readiness: database included (expect 200)
 GET {{authService}}/actuator/health/readiness
 
-### R1. Instances registered in Eureka: API-GATEWAY and AUTH-SERVICE, status UP (expect 200)
+### S3. product-service directly, without the gateway (expect 200)
+GET {{productService}}/api/categories
+
+### S4. product-service readiness: database included (expect 200)
+GET {{productService}}/actuator/health/readiness
+
+### R1. Instances registered in Eureka: API-GATEWAY, AUTH-SERVICE and PRODUCT-SERVICE, status UP (expect 200)
 GET {{eureka}}/eureka/apps
 Accept: application/json
