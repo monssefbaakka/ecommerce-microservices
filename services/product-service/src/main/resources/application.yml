@@ -16,3 +16,8 @@ server:
   port: ${PORT:8082}
   error:
     include-message: always             # show error messages (dev only)
+
+jwt:
+  # Must be the same key as auth-service, which issues the tokens.
+  # dev only: override with the JWT_SECRET env variable outside local dev
+  secret: ${JWT_SECRET:urSFJ7E1nhn9jjr73kPXdYlWW9zKQeTdT2jhx+KVFI4=}   # Base64, at least 256 bits (HS256)
