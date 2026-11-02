@@ -12,6 +12,13 @@ spring:
       ddl-auto: update                  # dev: same mapping as the monolith, so the shared tables stay identical
     open-in-view: false
 
+springdoc:
+  default-produces-media-type: application/json   # instead of */* on every response
+  swagger-ui:
+    persist-authorization: true         # keeps the token after a page reload
+    tags-sorter: alpha
+    operations-sorter: method
+
 server:
   port: ${PORT:8082}
   error:
