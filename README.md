@@ -97,6 +97,19 @@ cd monolith
 The integration tests start a `postgres:16-alpine` container with [Testcontainers](https://testcontainers.com/): Docker must be running, nothing else to set up. Without Docker they are skipped, not failed.
 Each test starts from empty tables. The coverage report of both runs is written to `monolith/target/site/jacoco/index.html`.
 
+Each microservice is a separate Maven project with its own tests, run the same way from its folder:
+
+```bash
+cd services/auth-service    # or discovery-server, api-gateway
+./mvnw verify
+```
+
+| Service | What the tests check |
+|---|---|
+| discovery-server | The registry starts, accepts registrations, serves the dashboard; only `health` and `info` are exposed |
+| auth-service | JWT, register / login rules, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (register then login, Actuator, OpenAPI) |
+| api-gateway | Routing to auth-service and to the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
+
 ### Stop
 
 ```bash
