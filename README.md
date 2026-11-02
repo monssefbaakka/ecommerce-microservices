@@ -53,17 +53,25 @@ To try the endpoints, open `docs/requests.http` in VS Code (REST Client extensio
 
 ### Run with Docker
 
-The whole stack (PostgreSQL + the application) can also run in containers, without Java on the machine:
+The whole stack (PostgreSQL, the monolith and the [microservices](#microservices)) can also run in containers, without Java on the machine:
 
 ```bash
 docker compose -f infra/docker-compose.yml --profile app up -d --build
 ```
 
-The API is then on the same `http://localhost:8080`. `docker ps` shows the app as `healthy` once it answers on `/actuator/health/readiness` (about 20 s). Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+| Container | URL | Role |
+|---|---|---|
+| `ecommerce-api-gateway` | `http://localhost:8090` | Single entry point: use this one |
+| `ecommerce-app` | `http://localhost:8080` | The monolith, still reachable directly |
+| `ecommerce-auth-service` | `http://localhost:8081` | Register and login |
+| `ecommerce-discovery-server` | `http://localhost:8761` | Eureka dashboard |
+| `ecommerce-postgres` | `localhost:5432` | PostgreSQL |
 
-To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git).
+`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. auth-service starts last (about 1 min): it waits for Eureka and for the monolith, which creates the shared tables. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
-The image is built by [monolith/Dockerfile](monolith/Dockerfile) in two stages: the JDK and Maven only exist in the build stage, the final image holds a JRE and the application, split into Spring Boot layers so that a code change only rebuilds the last one. It runs as a non-root user and sizes the heap from the container memory limit (`JAVA_TOOL_OPTIONS`).
+To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith and auth-service both read it, so they share the same secret.
+
+Each service has its own Dockerfile, built the same way. The monolith's image is built by [monolith/Dockerfile](monolith/Dockerfile) in two stages: the JDK and Maven only exist in the build stage, the final image holds a JRE and the application, split into Spring Boot layers so that a code change only rebuilds the last one. It runs as a non-root user and sizes the heap from the container memory limit (`JAVA_TOOL_OPTIONS`).
 
 To build and run the image alone:
 
@@ -92,7 +100,7 @@ Each test starts from empty tables. The coverage report of both runs is written 
 ### Stop
 
 ```bash
-docker compose -f infra/docker-compose.yml --profile app stop   # --profile app also stops the app container
+docker compose -f infra/docker-compose.yml --profile app stop   # --profile app also stops the app and service containers
 ```
 
 ## API endpoints
