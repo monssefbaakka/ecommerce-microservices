@@ -1,6 +1,5 @@
 package com.monssef.orderservice.order;
 
-import com.monssef.orderservice.product.InsufficientStockException;
 import com.monssef.orderservice.support.IntegrationTest;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -21,8 +20,9 @@ import static org.assertj.core.api.Assertions.fail;
 
 /**
  * Orders placed at the same time, each in its own thread and transaction.
- * Only the row locks of OrderService (SELECT ... FOR UPDATE) keep the stock right here:
- * without them both orders would read the same stock and both succeed.
+ * product-service decides who gets the last unit (its own row locks, tested in its StockIT):
+ * here the losers must get its 409 and leave no order behind, and the cart lock of OrderService
+ * must stop a double click from ordering the same cart twice.
  */
 class OrderConcurrencyIT extends IntegrationTest {
 
@@ -43,7 +43,10 @@ class OrderConcurrencyIT extends IntegrationTest {
 
         List<Throwable> failures = placeAtTheSameTime(emails);
 
-        assertThat(failures).hasSize(BUYERS - 1).allMatch(InsufficientStockException.class::isInstance);
+        assertThat(failures).hasSize(BUYERS - 1).allSatisfy(ex -> assertThat(ex)
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(e -> ((ResponseStatusException) e).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT));
         assertThat(stockOf(iphone)).isZero();
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM orders", Integer.class)).isEqualTo(1);
     }
