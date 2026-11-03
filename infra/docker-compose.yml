@@ -38,7 +38,7 @@ services:
       - "8080:8080"
     restart: unless-stopped   # restarts after a crash or a Docker restart, not after "docker compose stop"
 
-  # Service registry: auth-service, product-service and the gateway register here and find each other by name
+  # Service registry: every service and the gateway register here and find each other by name
   discovery-server:
     profiles: ["app"]
     build: ../services/discovery-server
@@ -100,8 +100,59 @@ services:
       - "8082:8082"
     restart: unless-stopped
 
-  # Single entry point: /api/auth/** to auth-service, /api/products/** and /api/categories/** to product-service
-  # (both through Eureka), the rest of /api/** to the monolith
+  order-service:
+    profiles: ["app"]
+    build: ../services/order-service
+    image: ecommerce-order-service:latest
+    container_name: ecommerce-order-service
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      # Same "carts", "orders", "products" and "users" tables as the monolith: let it create the schema first
+      app:
+        condition: service_healthy
+    # Same JWT_SECRET as auth-service, or the tokens would be rejected here
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/ecommerce
+      DB_USER: ecommerce
+      DB_PASSWORD: ecommerce
+      EUREKA_URL: http://discovery-server:8761/eureka
+      INSTANCE_HOSTNAME: order-service   # address registered in Eureka, reachable by the gateway
+    ports:
+      - "8083:8083"
+    restart: unless-stopped
+
+  payment-service:
+    profiles: ["app"]
+    build: ../services/payment-service
+    image: ecommerce-payment-service:latest
+    container_name: ecommerce-payment-service
+    depends_on:
+      discovery-server:
+        condition: service_healthy
+      # Reads "users" and "orders", created by the monolith: let it create the schema first
+      app:
+        condition: service_healthy
+    # Same JWT_SECRET as auth-service, or the tokens would be rejected here
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/ecommerce
+      DB_USER: ecommerce
+      DB_PASSWORD: ecommerce
+      EUREKA_URL: http://discovery-server:8761/eureka
+      INSTANCE_HOSTNAME: payment-service   # address registered in Eureka, reachable by the gateway
+    ports:
+      - "8084:8084"
+    restart: unless-stopped
+
+  # Single entry point: /api/auth/** to auth-service, /api/products/** and /api/categories/** to product-service,
+  # /api/cart/** and /api/orders/** to order-service, /api/payments/** to payment-service (all through Eureka),
+  # the rest of /api/** to the monolith
   api-gateway:
     profiles: ["app"]
     build: ../services/api-gateway

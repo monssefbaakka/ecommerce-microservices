@@ -12,7 +12,7 @@ import java.io.IOException;
 import java.net.ServerSocket;
 
 /**
- * The gateway with nothing behind it: no auth-service instance known,
+ * The gateway with nothing behind it: no service instance known in the discovery client,
  * and a monolith URL on a free port where nothing listens.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
@@ -47,13 +47,23 @@ class GatewayErrorsTest {
     }
 
     @Test
-    void serviceNotAnswering_shouldReturn503WithoutItsAddress() {
+    void orderServiceNotRegistered_shouldReturn503() {
         client.get().uri("/api/cart")
                 .exchange()
                 .expectStatus().isEqualTo(503)
                 .expectBody()
-                .jsonPath("$.message").isEqualTo("Service unavailable")
+                .jsonPath("$.message").isEqualTo("Unable to find instance for order-service")
                 .jsonPath("$.path").isEqualTo("/api/cart");
+    }
+
+    @Test
+    void serviceNotAnswering_shouldReturn503WithoutItsAddress() {
+        client.get().uri("/api/something-else")
+                .exchange()
+                .expectStatus().isEqualTo(503)
+                .expectBody()
+                .jsonPath("$.message").isEqualTo("Service unavailable")
+                .jsonPath("$.path").isEqualTo("/api/something-else");
     }
 
     @Test

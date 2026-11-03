@@ -449,11 +449,14 @@ GET {{host}}/actuator/env
 
 
 ############################################################
-# MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, product-service 8082, Eureka 8761)
+# MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, product-service 8082,
+# order-service 8083, payment-service 8084, Eureka 8761)
 ############################################################
 @gateway = http://localhost:8090
 @authService = http://localhost:8081
 @productService = http://localhost:8082
+@orderService = http://localhost:8083
+@paymentService = http://localhost:8084
 @eureka = http://localhost:8761
 
 ### G1. Register through the gateway: routed to auth-service (expect 201, then 409 on a second run)
@@ -472,7 +475,7 @@ Content-Type: application/json
 ### G3. Catalog through the gateway: routed to product-service (expect 200)
 GET {{gateway}}/api/products
 
-### G4. Cart through the gateway with the auth-service token: the monolith accepts it (expect 200)
+### G4. Cart through the gateway with the auth-service token: routed to order-service (expect 200)
 GET {{gateway}}/api/cart
 Authorization: Bearer {{gatewayLogin.response.body.$.token}}
 
@@ -544,6 +547,91 @@ Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
 ### C9. Stop product-service first (docker stop ecommerce-product-service), wait ~30 s (expect 503, ErrorResponse)
 GET {{gateway}}/api/products
 
+### W1. Order and pay through the gateway: ADMIN creates a category for it (expect 201, needs C1)
+# @name shopCategory
+POST {{gateway}}/api/categories
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "Shop {{$timestamp}}", "description": "Order and payment scenario" }
+
+### W2. A product with 5 units (expect 201)
+# @name shopProduct
+POST {{gateway}}/api/products
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "name": "Shop phone", "price": 199.99, "categoryId": {{shopCategory.response.body.$.id}}, "stock": 5 }
+
+### W3. USER puts 2 in the cart: order-service reads the product written by product-service (expect 200, total 399.98)
+POST {{gateway}}/api/cart/items
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "productId": {{shopProduct.response.body.$.id}}, "quantity": 2 }
+
+### W4. Place the order (expect 201, status PENDING, total 399.98)
+# @name shopOrder
+POST {{gateway}}/api/orders
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### W5. product-service sees the new stock: same table (expect 200, stock 3)
+GET {{gateway}}/api/products/{{shopProduct.response.body.$.id}}
+
+### W6. Pay with a declined card (expect 201, status DECLINED)
+POST {{gateway}}/api/payments
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "orderId": {{shopOrder.response.body.$.id}}, "cardNumber": "4000000000000002" }
+
+### W7. The order is still PENDING (expect 200)
+GET {{gateway}}/api/orders/{{shopOrder.response.body.$.id}}
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### W8. Pay with another card (expect 201, status SUCCEEDED, amount 399.98, cardLast4 4242)
+POST {{gateway}}/api/payments
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "orderId": {{shopOrder.response.body.$.id}}, "cardNumber": "4242424242424242" }
+
+### W9. order-service now shows PAID: written by payment-service (expect 200)
+GET {{gateway}}/api/orders/{{shopOrder.response.body.$.id}}
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### W10. Pay it again (expect 409 "Order ... is PAID, only a PENDING order can be paid")
+POST {{gateway}}/api/payments
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "orderId": {{shopOrder.response.body.$.id}}, "cardNumber": "4242424242424242" }
+
+### W11. Pay the order of someone else: the ADMIN token has no such order (expect 404)
+POST {{gateway}}/api/payments
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "orderId": {{shopOrder.response.body.$.id}}, "cardNumber": "4242424242424242" }
+
+### W12. Card number of 15 digits (expect 400, errors[0].field cardNumber)
+POST {{gateway}}/api/payments
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "orderId": {{shopOrder.response.body.$.id}}, "cardNumber": "424242424242424" }
+
+### W13. My payments, newest first: the declined one is kept (expect 200, page.totalElements >= 2)
+GET {{gateway}}/api/payments
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### W14. Payments without a token (expect 401, ErrorResponse from payment-service)
+GET {{gateway}}/api/payments
+
+### W15. Stop order-service first (docker stop ecommerce-order-service), wait ~30 s (expect 503, ErrorResponse)
+GET {{gateway}}/api/cart
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
 ### S1. auth-service directly, without the gateway (expect 200)
 POST {{authService}}/api/auth/login
 Content-Type: application/json
@@ -559,6 +647,20 @@ GET {{productService}}/api/categories
 ### S4. product-service readiness: database included (expect 200)
 GET {{productService}}/actuator/health/readiness
 
-### R1. Instances registered in Eureka: API-GATEWAY, AUTH-SERVICE and PRODUCT-SERVICE, status UP (expect 200)
+### S5. order-service directly, without the gateway (expect 200)
+GET {{orderService}}/api/orders
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### S6. order-service readiness: database included (expect 200)
+GET {{orderService}}/actuator/health/readiness
+
+### S7. payment-service directly, without the gateway (expect 200)
+GET {{paymentService}}/api/payments
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### S8. payment-service readiness: database included (expect 200)
+GET {{paymentService}}/actuator/health/readiness
+
+### R1. Instances registered in Eureka: API-GATEWAY, AUTH-SERVICE, PRODUCT-SERVICE, ORDER-SERVICE and PAYMENT-SERVICE, status UP (expect 200)
 GET {{eureka}}/eureka/apps
 Accept: application/json

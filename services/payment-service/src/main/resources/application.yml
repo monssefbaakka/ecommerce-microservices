@@ -1,0 +1,79 @@
+spring:
+  application:
+    name: payment-service               # also the name it registers under in Eureka
+  datasource:
+    # Same database as the monolith for now: reads "users" and "orders", sets an order to PAID
+    # and owns the "payments" table. Each service gets its own database in #46
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/ecommerce}
+    username: ${DB_USER:ecommerce}
+    password: ${DB_PASSWORD:ecommerce}
+  jpa:
+    hibernate:
+      ddl-auto: update                  # dev: same mapping as the monolith, so the shared tables stay identical
+    open-in-view: false
+
+springdoc:
+  default-produces-media-type: application/json   # instead of */* on every response
+  swagger-ui:
+    persist-authorization: true         # keeps the token after a page reload
+    tags-sorter: alpha
+    operations-sorter: method
+
+server:
+  port: ${PORT:8084}
+  error:
+    include-message: always             # show error messages (dev only)
+
+jwt:
+  # Must be the same key as auth-service, which issues the tokens.
+  # dev only: override with the JWT_SECRET env variable outside local dev
+  secret: ${JWT_SECRET:urSFJ7E1nhn9jjr73kPXdYlWW9zKQeTdT2jhx+KVFI4=}   # Base64, at least 256 bits (HS256)
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+    healthcheck:
+      enabled: true                     # sends the Actuator status: DOWN (database lost) = no more traffic
+    instance-info-replication-interval-seconds: 10   # dev: status changes reach Eureka in 10 s (default 30 s)
+  instance:
+    # Address given to the others: localhost in dev, the service name in Docker
+    hostname: ${INSTANCE_HOSTNAME:localhost}
+    # Dev: a heartbeat every 10 s, removed 30 s after the last one (defaults: 30 s / 90 s)
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+
+management:
+  health:
+    eureka:
+      # This indicator reports the status Eureka holds for us, which itself comes from our health:
+      # once DOWN (e.g. at startup), the service would stay DOWN forever. Not needed in our own health
+      enabled: false
+  endpoints:
+    web:
+      exposure:
+        include: health,info            # nothing else over HTTP
+  endpoint:
+    health:
+      # Anyone sees {"status":"UP"}; only an ADMIN token sees each component (db, disk space...)
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: ADMIN
+      probes:
+        enabled: true                   # /actuator/health/liveness and /actuator/health/readiness
+      group:
+        # Liveness never checks the database (an outage must not restart the service), readiness does
+        liveness:
+          include: livenessState
+        readiness:
+          include: readinessState,db
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+
+info:
+  app:
+    name: ${spring.application.name}
+    description: Payment service (simulated card payments)

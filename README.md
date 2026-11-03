@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 started: Eureka, API gateway, auth-service and product-service run next to the monolith. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -65,12 +65,14 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build
 | `ecommerce-app` | `http://localhost:8080` | The monolith, still reachable directly |
 | `ecommerce-auth-service` | `http://localhost:8081` | Register and login |
 | `ecommerce-product-service` | `http://localhost:8082` | Categories and products |
+| `ecommerce-order-service` | `http://localhost:8083` | Cart and orders |
+| `ecommerce-payment-service` | `http://localhost:8084` | Payments |
 | `ecommerce-discovery-server` | `http://localhost:8761` | Eureka dashboard |
 | `ecommerce-postgres` | `localhost:5432` | PostgreSQL |
 
-`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. auth-service and product-service start last (about 1 min): they wait for Eureka and for the monolith, which creates the shared tables. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. The services start last (about 1 min): they wait for Eureka and for the monolith, which creates the shared tables. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
-To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith, auth-service and product-service all read it, so they share the same secret.
+To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith and every service read it, so they share the same secret.
 
 Each service has its own Dockerfile, built the same way. The monolith's image is built by [monolith/Dockerfile](monolith/Dockerfile) in two stages: the JDK and Maven only exist in the build stage, the final image holds a JRE and the application, split into Spring Boot layers so that a code change only rebuilds the last one. It runs as a non-root user and sizes the heap from the container memory limit (`JAVA_TOOL_OPTIONS`).
 
@@ -101,7 +103,7 @@ Each test starts from empty tables. The coverage report of both runs is written 
 Each microservice is a separate Maven project with its own tests, run the same way from its folder:
 
 ```bash
-cd services/auth-service    # or discovery-server, product-service, api-gateway
+cd services/auth-service    # or discovery-server, product-service, order-service, payment-service, api-gateway
 ./mvnw verify
 ```
 
@@ -110,7 +112,9 @@ cd services/auth-service    # or discovery-server, product-service, api-gateway
 | discovery-server | The registry starts, accepts registrations, serves the dashboard; only `health` and `info` are exposed |
 | auth-service | JWT, register / login rules, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (register then login, Actuator, OpenAPI) |
 | product-service | JWT check, category and product rules, paging and search, `ErrorResponse` bodies, security chain (401 / 403) with MockMvc; `*IT` on PostgreSQL with Testcontainers (catalog flow, Actuator, OpenAPI) |
-| api-gateway | Routing to auth-service, product-service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
+| order-service | JWT check, cart and order rules (stock, per-line maximum, locks in id order), mappers, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (cart and order flows, rollback on missing stock, concurrent orders, deleted products, Actuator, OpenAPI) |
+| payment-service | JWT check, simulated card, payment rules (`PAID` on success, declined attempts kept, 404 / 409), `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (payment flow, double payment under concurrency, Actuator, OpenAPI) |
+| api-gateway | Routing to every service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
 
 ### Stop
 
@@ -127,12 +131,18 @@ flowchart LR
     client([Client]) --> gateway["api-gateway :8090"]
     gateway -- "/api/auth/**" --> auth["auth-service :8081"]
     gateway -- "/api/products/**<br/>/api/categories/**" --> product["product-service :8082"]
+    gateway -- "/api/cart/**<br/>/api/orders/**" --> order["order-service :8083"]
+    gateway -- "/api/payments/**" --> payment["payment-service :8084"]
     gateway -- "other /api/**" --> monolith["monolith :8080"]
     auth -. registers .-> eureka["discovery-server :8761<br/>Eureka"]
     product -. registers .-> eureka
+    order -. registers .-> eureka
+    payment -. registers .-> eureka
     gateway -. registers, finds the services .-> eureka
     auth --> db[(PostgreSQL)]
     product --> db
+    order --> db
+    payment --> db
     monolith --> db
 ```
 
@@ -141,12 +151,14 @@ flowchart LR
 | [discovery-server](services/discovery-server) | 8761 | Eureka registry: each service registers under its name, the gateway asks it where they are |
 | [auth-service](services/auth-service) | 8081 | `POST /api/auth/register` and `POST /api/auth/login`, extracted from the monolith with the same rules, errors and Swagger UI |
 | [product-service](services/product-service) | 8082 | Catalog: CRUD on `/api/categories` and `/api/products` (paging, name search, category filter), extracted from the monolith with the same rules, errors, roles and Swagger UI |
-| [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service, `/api/products/**` and `/api/categories/**` to product-service (`lb://...`, found through Eureka), every other `/api/**` to the monolith |
+| [order-service](services/order-service) | 8083 | Cart and orders: `/api/cart` and `/api/orders`, extracted from the monolith with the same rules (stock checks, row locks, price copied at purchase time), errors and Swagger UI |
+| [payment-service](services/payment-service) | 8084 | New: `/api/payments` pays a `PENDING` order with a simulated card; a success sets the order to `PAID` |
+| [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service, `/api/products/**` and `/api/categories/**` to product-service, `/api/cart/**` and `/api/orders/**` to order-service, `/api/payments/**` to payment-service (`lb://...`, found through Eureka), every other `/api/**` to the monolith |
 
-- **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on the cart and orders. product-service checks them the same way, without a database call: only an `ADMIN` token can write the catalog. Set the same `JWT_SECRET` on all three outside local dev.
-- **Shared database for now:** auth-service reads and writes the monolith's `users` table, product-service its `categories` and `products` tables. The monolith still needs them for the cart, the orders and the stock, so a product created through the gateway is right away visible there. Each service gets its own database in #46.
+- **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on every service. product-service, order-service and payment-service check them the same way, without a database call: only an `ADMIN` token can write the catalog, and the email of the token picks the cart, orders and payments. Set the same `JWT_SECRET` everywhere outside local dev.
+- **Shared database for now:** auth-service reads and writes the monolith's `users` table, product-service its `categories` and `products` tables, order-service the `carts` and `orders` tables (and the `stock` of the products), payment-service the new `payments` table and the `status` of the orders. A product created through product-service can be put in the cart at once, an order removes its units from the same `products` rows, and a payment shows up as `PAID` in order-service. The services do not call each other yet (OpenFeign comes in #48) and each one gets its own database in #46.
 - **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when the target service is not registered in Eureka or does not answer.
-- **Health:** each service sends its Actuator status to Eureka. If auth-service or product-service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
+- **Health:** each service sends its Actuator status to Eureka. If a service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
 
 To run them without Docker, start PostgreSQL, then in this order, each in its own terminal:
 
@@ -155,6 +167,8 @@ cd services/discovery-server && ./mvnw spring-boot:run   # wait for "Started", d
 cd monolith && ./mvnw spring-boot:run                    # creates the tables
 cd services/auth-service && ./mvnw spring-boot:run
 cd services/product-service && ./mvnw spring-boot:run
+cd services/order-service && ./mvnw spring-boot:run
+cd services/payment-service && ./mvnw spring-boot:run
 cd services/api-gateway && ./mvnw spring-boot:run        # then call http://localhost:8090/api/...
 ```
 
@@ -203,7 +217,7 @@ L'API est stateless : pas de session ni de cookie. Un token absent, invalide ou 
 | `GET /api/categories/**`, `GET /api/products/**` | Public |
 | `POST`, `PUT`, `DELETE` sur `/api/categories/**` et `/api/products/**` | `ADMIN` |
 | Swagger UI, `/v3/api-docs` | Public |
-| `/api/cart/**`, `/api/orders/**` et tout le reste | Connecté (`USER` ou `ADMIN`) |
+| `/api/cart/**`, `/api/orders/**`, `/api/payments/**` et tout le reste | Connecté (`USER` ou `ADMIN`) |
 
 Sans token valide, un endpoint protégé renvoie **401**. Avec un token valide mais le mauvais rôle, il renvoie **403**.
 Les deux réponses ont le même format JSON que les autres erreurs (`status`, `error`, `message`, `path`).
@@ -270,6 +284,8 @@ Exemple :
 
 ### Cart
 
+> Via la gateway (port 8090), le panier et les commandes sont servis par [order-service](#microservices), avec les mêmes URLs, règles et codes que le monolithe. Son Swagger UI est sur `http://localhost:8083/swagger-ui.html`.
+
 Chaque utilisateur connecté a un seul panier, créé au premier ajout. L'email du token identifie le panier : on ne peut voir ou modifier que le sien.
 
 | Méthode | URL | Description | Codes |
@@ -326,6 +342,30 @@ Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'ex
 
 Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (`productId` devient `null` si le produit est supprimé).
 Deux commandes passées au même moment sont traitées l'une après l'autre : le panier et ses produits sont verrouillés (`SELECT ... FOR UPDATE`) jusqu'à la fin de la commande. La seconde attend, puis voit le stock laissé par la première : deux clients ne peuvent pas prendre la même dernière unité (**409** pour le second). Un double clic sur « Commander » crée une seule commande : la seconde requête trouve le panier déjà vidé (**400**).
+
+### Payments
+
+Servis par [payment-service](#microservices) via la gateway (Swagger UI sur `http://localhost:8084/swagger-ui.html`). Payer une de mes commandes `PENDING` débite son total ; un paiement accepté la passe `PAID`. Le paiement est **simulé** : aucune banque n'est appelée.
+
+| Méthode | URL | Description | Codes |
+|---|---|---|---|
+| POST | /api/payments | Payer une de mes commandes | 201, 400, 401, 404, 409 |
+| GET | /api/payments | Historique de mes paiements, refusés compris (paginé) | 200, 401 |
+| GET | /api/payments/{id} | Voir un de mes paiements | 200, 401, 404 |
+
+Corps de `POST` : `{ "orderId": 1, "cardNumber": "4242424242424242" }` (16 chiffres). Le montant n'est pas envoyé : c'est le total enregistré avec la commande.
+
+| Carte | Résultat |
+|---|---|
+| Se termine par `0002` (ex. `4000000000000002`) | **201**, `status: DECLINED` : la commande reste `PENDING`, un autre essai est possible |
+| Toute autre carte | **201**, `status: SUCCEEDED` : la commande passe `PAID` |
+
+```json
+{ "id": 1, "orderId": 1, "amount": 1999.98, "status": "SUCCEEDED", "cardLast4": "4242", "createdAt": "2026-11-03T10:00:00Z" }
+```
+
+Seuls les 4 derniers chiffres de la carte sont gardés. Une commande déjà `PAID` ou `CANCELLED` renvoie **409**, une commande d'un autre utilisateur **404**.
+La commande est verrouillée (`SELECT ... FOR UPDATE`) pendant le paiement : un double clic sur « Payer » ne débite qu'une fois, la seconde requête trouve la commande déjà `PAID` (**409**).
 
 ### Erreurs
 
@@ -399,6 +439,7 @@ erDiagram
     USERS ||--o{ ORDERS : places
     ORDERS ||--|{ ORDER_ITEMS : contains
     PRODUCTS |o--o{ ORDER_ITEMS : "ordered as"
+    ORDERS ||--o{ PAYMENTS : "paid by"
     CATEGORIES {
         bigint id PK
         varchar name UK
@@ -445,10 +486,19 @@ erDiagram
         numeric unit_price
         int quantity
     }
+    PAYMENTS {
+        bigint id PK
+        bigint order_id FK
+        numeric amount
+        varchar status
+        varchar card_last4
+        timestamp created_at
+    }
 ```
 
 Une commande garde une copie du nom et du prix de chaque produit au moment de l'achat : elle ne change pas si le produit est modifié ensuite.
 Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON DELETE SET NULL`) et la ligne reste dans l'historique.
+`payments` garde chaque tentative de paiement (acceptée ou refusée) ; elle est créée par payment-service, qui passe aussi `orders.status` à `PAID`.
 
 ## Project structure
 
@@ -470,6 +520,8 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │   ├── discovery-server/   Eureka registry
 │   ├── auth-service/       register, login, JWT
 │   ├── product-service/    categories and products, ADMIN writes checked from the JWT
+│   ├── order-service/      cart and orders of the logged-in user, stock removed on order
+│   ├── payment-service/    simulated card payments, sets the order to PAID
 │   └── api-gateway/        single entry point, routes to the services and the monolith
 ├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices) and .env.example
 └── docs/            HTTP request examples, architecture notes
