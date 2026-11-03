@@ -520,6 +520,8 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │   ├── discovery-server/   Eureka registry
 │   ├── auth-service/       register, login, JWT
 │   ├── product-service/    categories and products, ADMIN writes checked from the JWT
+│   ├── order-service/      cart and orders of the logged-in user, stock removed on order
+│   ├── payment-service/    simulated card payments, sets the order to PAID
 │   └── api-gateway/        single entry point, routes to the services and the monolith
 ├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices) and .env.example
 └── docs/            HTTP request examples, architecture notes
