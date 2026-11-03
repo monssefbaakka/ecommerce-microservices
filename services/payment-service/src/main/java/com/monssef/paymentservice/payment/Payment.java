@@ -1,6 +1,6 @@
 package com.monssef.paymentservice.payment;
 
-import com.monssef.paymentservice.order.Order;
+import com.monssef.paymentservice.order.OrderSummary;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
@@ -8,8 +8,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -31,10 +29,14 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
+    // Id of the order in order-service, without foreign key (another database).
     // An order can have several attempts, at most one SUCCEEDED (the order is then PAID)
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "order_id", nullable = false)
-    private Order order;
+    @Column(name = "order_id", nullable = false)
+    private Long orderId;
+
+    // Owner of the order, copied from order-service: the payment history is read without calling it
+    @Column(nullable = false, length = 150)
+    private String userEmail;
 
     // Copied from the order total at payment time, same precision
     @Column(nullable = false, precision = 12, scale = 2)
@@ -52,9 +54,10 @@ public class Payment {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
-    public Payment(Order order, String cardNumber, PaymentStatus status) {
-        this.order = order;
-        this.amount = order.getTotal();
+    public Payment(OrderSummary order, String cardNumber, PaymentStatus status) {
+        this.orderId = order.id();
+        this.userEmail = order.userEmail();
+        this.amount = order.total();
         this.cardLast4 = cardNumber.substring(cardNumber.length() - 4);
         this.status = status;
     }
