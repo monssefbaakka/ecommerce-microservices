@@ -520,7 +520,7 @@ Content-Type: application/json
 ### C4. Paging, search and filter like the monolith (expect 200, page.totalElements = 1)
 GET {{gateway}}/api/products?name=gateway&categoryId={{gatewayCategory.response.body.$.id}}&page=0&size=5&sort=price,desc
 
-### C5. Same product read by the monolith: the tables are shared (expect 200)
+### C5. Not in the monolith: product-service has its own product_db (expect 404, or another product with that id)
 GET {{host}}/api/products/{{gatewayProduct.response.body.$.id}}
 
 ### C6. Write without a token (expect 401, ErrorResponse from product-service)
@@ -563,7 +563,7 @@ Content-Type: application/json
 
 { "name": "Shop phone", "price": 199.99, "categoryId": {{shopCategory.response.body.$.id}}, "stock": 5 }
 
-### W3. USER puts 2 in the cart: order-service reads the product written by product-service (expect 200, total 399.98)
+### W3. USER puts 2 in the cart: order-service asks product-service for name, price and stock (expect 200, total 399.98)
 POST {{gateway}}/api/cart/items
 Authorization: Bearer {{gatewayLogin.response.body.$.token}}
 Content-Type: application/json
@@ -575,7 +575,7 @@ Content-Type: application/json
 POST {{gateway}}/api/orders
 Authorization: Bearer {{gatewayLogin.response.body.$.token}}
 
-### W5. product-service sees the new stock: same table (expect 200, stock 3)
+### W5. The units were reserved in product-service by order-service (expect 200, stock 3)
 GET {{gateway}}/api/products/{{shopProduct.response.body.$.id}}
 
 ### W6. Pay with a declined card (expect 201, status DECLINED)
@@ -596,7 +596,7 @@ Content-Type: application/json
 
 { "orderId": {{shopOrder.response.body.$.id}}, "cardNumber": "4242424242424242" }
 
-### W9. order-service now shows PAID: written by payment-service (expect 200)
+### W9. order-service now shows PAID: payment-service called its /internal endpoint (expect 200)
 GET {{gateway}}/api/orders/{{shopOrder.response.body.$.id}}
 Authorization: Bearer {{gatewayLogin.response.body.$.token}}
 
