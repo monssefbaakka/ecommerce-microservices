@@ -1,6 +1,6 @@
 package com.monssef.orderservice.order;
 
-import com.monssef.orderservice.product.Product;
+import com.monssef.orderservice.product.ReservedItem;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -13,8 +13,6 @@ import jakarta.validation.constraints.Min;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.OnDelete;
-import org.hibernate.annotations.OnDeleteAction;
 
 import java.math.BigDecimal;
 
@@ -33,12 +31,10 @@ public class OrderItem {
     @JoinColumn(name = "order_id", nullable = false)
     private Order order;
 
-    // ON DELETE SET NULL: an ADMIN can still delete a product in product-service, past orders keep the line
-    // with its copied name and price. Unlike the cart, the line must not disappear
-    @ManyToOne
-    @JoinColumn(name = "product_id")
-    @OnDelete(action = OnDeleteAction.SET_NULL)
-    private Product product;
+    // Id of the product in product-service, without foreign key (another database): kept as is
+    // when the product is deleted later, the line still has its copied name and price
+    @Column(name = "product_id", nullable = false)
+    private Long productId;
 
     // Copies taken at purchase time: the order never changes when the product does
     @Column(nullable = false, length = 150)
@@ -51,12 +47,12 @@ public class OrderItem {
     @Column(nullable = false)
     private int quantity;
 
-    public OrderItem(Order order, Product product, int quantity) {
+    public OrderItem(Order order, ReservedItem reserved) {
         this.order = order;
-        this.product = product;
-        this.productName = product.getName();
-        this.unitPrice = product.getPrice();
-        this.quantity = quantity;
+        this.productId = reserved.productId();
+        this.productName = reserved.name();
+        this.unitPrice = reserved.price();
+        this.quantity = reserved.quantity();
     }
 
     public BigDecimal getSubtotal() {

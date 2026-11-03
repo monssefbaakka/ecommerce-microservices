@@ -1,7 +1,6 @@
 package com.monssef.orderservice.order;
 
-import com.monssef.orderservice.product.Product;
-import com.monssef.orderservice.user.User;
+import com.monssef.orderservice.product.ReservedItem;
 import jakarta.persistence.CascadeType;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -10,8 +9,6 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
@@ -36,10 +33,9 @@ public class Order {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // A user can have many orders, unlike the cart
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+    // A user can have many orders, unlike the cart. The email of the JWT, not a foreign key
+    @Column(nullable = false, length = 150)
+    private String userEmail;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -59,13 +55,13 @@ public class Order {
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
 
-    public Order(User user) {
-        this.user = user;
+    public Order(String userEmail) {
+        this.userEmail = userEmail;
     }
 
-    // Copies the current name and price of the product and keeps the total up to date
-    public OrderItem addItem(Product product, int quantity) {
-        OrderItem item = new OrderItem(this, product, quantity);
+    // Copies the name and price product-service gave at reservation time and keeps the total up to date
+    public OrderItem addItem(ReservedItem reserved) {
+        OrderItem item = new OrderItem(this, reserved);
         items.add(item);
         total = total.add(item.getSubtotal());
         return item;
