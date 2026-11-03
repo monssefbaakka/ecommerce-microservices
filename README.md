@@ -164,11 +164,11 @@ flowchart LR
 - **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when the target service is not registered in Eureka or does not answer.
 - **Health:** each service sends its Actuator status to Eureka. If a service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
 
-To run them without Docker, start PostgreSQL, then in this order, each in its own terminal:
+To run them without Docker, start PostgreSQL and create the databases once (`psql -U ecommerce -d ecommerce -f infra/postgres/init-databases.sql`), then in this order, each in its own terminal:
 
 ```bash
 cd services/discovery-server && ./mvnw spring-boot:run   # wait for "Started", dashboard on :8761
-cd monolith && ./mvnw spring-boot:run                    # creates the tables
+cd monolith && ./mvnw spring-boot:run                    # the other /api/** routes of the gateway
 cd services/auth-service && ./mvnw spring-boot:run
 cd services/product-service && ./mvnw spring-boot:run
 cd services/order-service && ./mvnw spring-boot:run
