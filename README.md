@@ -501,6 +501,8 @@ erDiagram
     }
 ```
 
+Ce schéma est celui du monolithe (base `ecommerce`). Les microservices reprennent ces tables, chacun dans sa base : `users` dans `auth_db`, `categories` et `products` dans `product_db`, `carts`, `cart_items`, `orders` et `order_items` dans `order_db`, `payments` dans `payment_db`. Entre deux bases il n'y a pas de clé étrangère : `user_id` devient `user_email`, et `product_id` / `order_id` sont de simples colonnes.
+
 Une commande garde une copie du nom et du prix de chaque produit au moment de l'achat : elle ne change pas si le produit est modifié ensuite.
 Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON DELETE SET NULL`) et la ligne reste dans l'historique.
 `payments` garde chaque tentative de paiement (acceptée ou refusée) ; elle est créée par payment-service, qui passe aussi `orders.status` à `PAID`.
