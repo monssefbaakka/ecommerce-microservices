@@ -103,7 +103,7 @@ Each test starts from empty tables. The coverage report of both runs is written 
 Each microservice is a separate Maven project with its own tests, run the same way from its folder:
 
 ```bash
-cd services/auth-service    # or discovery-server, product-service, api-gateway
+cd services/auth-service    # or discovery-server, product-service, order-service, payment-service, api-gateway
 ./mvnw verify
 ```
 
@@ -112,7 +112,9 @@ cd services/auth-service    # or discovery-server, product-service, api-gateway
 | discovery-server | The registry starts, accepts registrations, serves the dashboard; only `health` and `info` are exposed |
 | auth-service | JWT, register / login rules, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (register then login, Actuator, OpenAPI) |
 | product-service | JWT check, category and product rules, paging and search, `ErrorResponse` bodies, security chain (401 / 403) with MockMvc; `*IT` on PostgreSQL with Testcontainers (catalog flow, Actuator, OpenAPI) |
-| api-gateway | Routing to auth-service, product-service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
+| order-service | JWT check, cart and order rules (stock, per-line maximum, locks in id order), mappers, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (cart and order flows, rollback on missing stock, concurrent orders, deleted products, Actuator, OpenAPI) |
+| payment-service | JWT check, simulated card, payment rules (`PAID` on success, declined attempts kept, 404 / 409), `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (payment flow, double payment under concurrency, Actuator, OpenAPI) |
+| api-gateway | Routing to every service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
 
 ### Stop
 
