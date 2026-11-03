@@ -1,0 +1,25 @@
+package com.monssef.orderservice.cart.dto;
+
+import com.monssef.orderservice.cart.CartService;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotNull;
+
+import io.swagger.v3.oas.annotations.media.Schema;
+
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+@Schema(description = "Nouvelle quantité d'un produit du panier")
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class UpdateCartItemRequest {
+
+    @NotNull(message = "La quantité est obligatoire")
+    @Min(value = 1, message = "La quantité doit être au moins 1")
+    @Max(value = CartService.MAX_QUANTITY, message = "La quantité ne doit pas dépasser " + CartService.MAX_QUANTITY)
+    @Schema(description = "Quantité qui remplace l'ancienne", example = "3")
+    private Integer quantity;
+}
