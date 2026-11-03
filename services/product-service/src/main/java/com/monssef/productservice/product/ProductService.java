@@ -13,6 +13,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Collection;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -63,6 +66,12 @@ public class ProductService {
     public void delete(Long id) {
         Product existing = findEntityById(id);
         productRepository.delete(existing);
+    }
+
+    // Several products in one call, for the cart of order-service. Unknown ids are left out, not a 404:
+    // a product deleted since it was put in a cart simply disappears from it
+    public List<ProductDTO> findAllById(Collection<Long> ids) {
+        return productRepository.findAllById(ids).stream().map(mapper::toDto).toList();
     }
 
     private Product findEntityById(Long id) {
