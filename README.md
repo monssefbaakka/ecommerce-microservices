@@ -217,7 +217,7 @@ L'API est stateless : pas de session ni de cookie. Un token absent, invalide ou 
 | `GET /api/categories/**`, `GET /api/products/**` | Public |
 | `POST`, `PUT`, `DELETE` sur `/api/categories/**` et `/api/products/**` | `ADMIN` |
 | Swagger UI, `/v3/api-docs` | Public |
-| `/api/cart/**`, `/api/orders/**` et tout le reste | Connecté (`USER` ou `ADMIN`) |
+| `/api/cart/**`, `/api/orders/**`, `/api/payments/**` et tout le reste | Connecté (`USER` ou `ADMIN`) |
 
 Sans token valide, un endpoint protégé renvoie **401**. Avec un token valide mais le mauvais rôle, il renvoie **403**.
 Les deux réponses ont le même format JSON que les autres erreurs (`status`, `error`, `message`, `path`).
@@ -283,6 +283,8 @@ Exemple :
     GET /api/products?name=phone&categoryId=1&page=0&size=5&sort=price,desc
 
 ### Cart
+
+> Via la gateway (port 8090), le panier et les commandes sont servis par [order-service](#microservices), avec les mêmes URLs, règles et codes que le monolithe. Son Swagger UI est sur `http://localhost:8083/swagger-ui.html`.
 
 Chaque utilisateur connecté a un seul panier, créé au premier ajout. L'email du token identifie le panier : on ne peut voir ou modifier que le sien.
 
