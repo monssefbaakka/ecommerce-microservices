@@ -153,8 +153,8 @@ flowchart LR
 | [discovery-server](services/discovery-server) | 8761 | Eureka registry: each service registers under its name, the gateway asks it where they are |
 | [auth-service](services/auth-service) | 8081 | `POST /api/auth/register` and `POST /api/auth/login`, extracted from the monolith with the same rules, errors and Swagger UI |
 | [product-service](services/product-service) | 8082 | Catalog: CRUD on `/api/categories` and `/api/products` (paging, name search, category filter), extracted from the monolith with the same rules, errors, roles and Swagger UI |
-| [order-service](services/order-service) | 8083 | Cart and orders: `/api/cart` and `/api/orders`, extracted from the monolith with the same rules (stock checks, row locks, price copied at purchase time), errors and Swagger UI |
-| [payment-service](services/payment-service) | 8084 | New: `/api/payments` pays a `PENDING` order with a simulated card; a success sets the order to `PAID` |
+| [order-service](services/order-service) | 8083 | Cart and orders: `/api/cart` and `/api/orders`, extracted from the monolith with the same rules (stock checks, price copied at purchase time), errors and Swagger UI. The stock is reserved in product-service |
+| [payment-service](services/payment-service) | 8084 | New: `/api/payments` pays a `PENDING` order with a simulated card; a success sets the order to `PAID` in order-service |
 | [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service, `/api/products/**` and `/api/categories/**` to product-service, `/api/cart/**` and `/api/orders/**` to order-service, `/api/payments/**` to payment-service (`lb://...`, found through Eureka), every other `/api/**` to the monolith |
 
 - **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on every service. product-service, order-service and payment-service check them the same way, without a database call: only an `ADMIN` token can write the catalog, and the email of the token picks the cart, orders and payments. Set the same `JWT_SECRET` everywhere outside local dev.
