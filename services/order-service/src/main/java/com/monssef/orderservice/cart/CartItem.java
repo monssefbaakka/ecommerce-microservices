@@ -1,6 +1,5 @@
 package com.monssef.orderservice.cart;
 
-import com.monssef.orderservice.product.Product;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
@@ -14,10 +13,6 @@ import jakarta.validation.constraints.Min;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.hibernate.annotations.OnDelete;
-import org.hibernate.annotations.OnDeleteAction;
-
-import java.math.BigDecimal;
 
 @Entity
 // A product appears at most once in a cart: adding it again increases the quantity
@@ -35,25 +30,18 @@ public class CartItem {
     @JoinColumn(name = "cart_id", nullable = false)
     private Cart cart;
 
-    // ON DELETE CASCADE: when an ADMIN deletes a product (in product-service), it simply leaves the carts
-    @ManyToOne(optional = false)
-    @JoinColumn(name = "product_id", nullable = false)
-    @OnDelete(action = OnDeleteAction.CASCADE)
-    private Product product;
+    // Id of a product of product-service, without foreign key (another database). No name or price here:
+    // the cart always shows the current ones, asked to product-service; a deleted product leaves the cart
+    @Column(name = "product_id", nullable = false)
+    private Long productId;
 
     @Min(1)
     @Column(nullable = false)
     private int quantity;
 
-    public CartItem(Cart cart, Product product, int quantity) {
+    public CartItem(Cart cart, Long productId, int quantity) {
         this.cart = cart;
-        this.product = product;
+        this.productId = productId;
         this.quantity = quantity;
-    }
-
-    // No price stored here: the cart always shows the current product price.
-    // The order keeps a copy of the price at purchase time.
-    public BigDecimal getSubtotal() {
-        return product.getPrice().multiply(BigDecimal.valueOf(quantity));
     }
 }
