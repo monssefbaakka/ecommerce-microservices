@@ -127,12 +127,18 @@ flowchart LR
     client([Client]) --> gateway["api-gateway :8090"]
     gateway -- "/api/auth/**" --> auth["auth-service :8081"]
     gateway -- "/api/products/**<br/>/api/categories/**" --> product["product-service :8082"]
+    gateway -- "/api/cart/**<br/>/api/orders/**" --> order["order-service :8083"]
+    gateway -- "/api/payments/**" --> payment["payment-service :8084"]
     gateway -- "other /api/**" --> monolith["monolith :8080"]
     auth -. registers .-> eureka["discovery-server :8761<br/>Eureka"]
     product -. registers .-> eureka
+    order -. registers .-> eureka
+    payment -. registers .-> eureka
     gateway -. registers, finds the services .-> eureka
     auth --> db[(PostgreSQL)]
     product --> db
+    order --> db
+    payment --> db
     monolith --> db
 ```
 
@@ -141,12 +147,14 @@ flowchart LR
 | [discovery-server](services/discovery-server) | 8761 | Eureka registry: each service registers under its name, the gateway asks it where they are |
 | [auth-service](services/auth-service) | 8081 | `POST /api/auth/register` and `POST /api/auth/login`, extracted from the monolith with the same rules, errors and Swagger UI |
 | [product-service](services/product-service) | 8082 | Catalog: CRUD on `/api/categories` and `/api/products` (paging, name search, category filter), extracted from the monolith with the same rules, errors, roles and Swagger UI |
-| [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service, `/api/products/**` and `/api/categories/**` to product-service (`lb://...`, found through Eureka), every other `/api/**` to the monolith |
+| [order-service](services/order-service) | 8083 | Cart and orders: `/api/cart` and `/api/orders`, extracted from the monolith with the same rules (stock checks, row locks, price copied at purchase time), errors and Swagger UI |
+| [payment-service](services/payment-service) | 8084 | New: `/api/payments` pays a `PENDING` order with a simulated card; a success sets the order to `PAID` |
+| [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service, `/api/products/**` and `/api/categories/**` to product-service, `/api/cart/**` and `/api/orders/**` to order-service, `/api/payments/**` to payment-service (`lb://...`, found through Eureka), every other `/api/**` to the monolith |
 
-- **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on the cart and orders. product-service checks them the same way, without a database call: only an `ADMIN` token can write the catalog. Set the same `JWT_SECRET` on all three outside local dev.
-- **Shared database for now:** auth-service reads and writes the monolith's `users` table, product-service its `categories` and `products` tables. The monolith still needs them for the cart, the orders and the stock, so a product created through the gateway is right away visible there. Each service gets its own database in #46.
+- **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on every service. product-service, order-service and payment-service check them the same way, without a database call: only an `ADMIN` token can write the catalog, and the email of the token picks the cart, orders and payments. Set the same `JWT_SECRET` everywhere outside local dev.
+- **Shared database for now:** auth-service reads and writes the monolith's `users` table, product-service its `categories` and `products` tables, order-service the `carts` and `orders` tables (and the `stock` of the products), payment-service the new `payments` table and the `status` of the orders. A product created through product-service can be put in the cart at once, an order removes its units from the same `products` rows, and a payment shows up as `PAID` in order-service. The services do not call each other yet (OpenFeign comes in #48) and each one gets its own database in #46.
 - **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when the target service is not registered in Eureka or does not answer.
-- **Health:** each service sends its Actuator status to Eureka. If auth-service or product-service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
+- **Health:** each service sends its Actuator status to Eureka. If a service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
 
 To run them without Docker, start PostgreSQL, then in this order, each in its own terminal:
 
@@ -155,6 +163,8 @@ cd services/discovery-server && ./mvnw spring-boot:run   # wait for "Started", d
 cd monolith && ./mvnw spring-boot:run                    # creates the tables
 cd services/auth-service && ./mvnw spring-boot:run
 cd services/product-service && ./mvnw spring-boot:run
+cd services/order-service && ./mvnw spring-boot:run
+cd services/payment-service && ./mvnw spring-boot:run
 cd services/api-gateway && ./mvnw spring-boot:run        # then call http://localhost:8090/api/...
 ```
 
