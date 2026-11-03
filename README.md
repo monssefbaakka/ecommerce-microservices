@@ -343,6 +343,30 @@ Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'ex
 Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (`productId` devient `null` si le produit est supprimé).
 Deux commandes passées au même moment sont traitées l'une après l'autre : le panier et ses produits sont verrouillés (`SELECT ... FOR UPDATE`) jusqu'à la fin de la commande. La seconde attend, puis voit le stock laissé par la première : deux clients ne peuvent pas prendre la même dernière unité (**409** pour le second). Un double clic sur « Commander » crée une seule commande : la seconde requête trouve le panier déjà vidé (**400**).
 
+### Payments
+
+Servis par [payment-service](#microservices) via la gateway (Swagger UI sur `http://localhost:8084/swagger-ui.html`). Payer une de mes commandes `PENDING` débite son total ; un paiement accepté la passe `PAID`. Le paiement est **simulé** : aucune banque n'est appelée.
+
+| Méthode | URL | Description | Codes |
+|---|---|---|---|
+| POST | /api/payments | Payer une de mes commandes | 201, 400, 401, 404, 409 |
+| GET | /api/payments | Historique de mes paiements, refusés compris (paginé) | 200, 401 |
+| GET | /api/payments/{id} | Voir un de mes paiements | 200, 401, 404 |
+
+Corps de `POST` : `{ "orderId": 1, "cardNumber": "4242424242424242" }` (16 chiffres). Le montant n'est pas envoyé : c'est le total enregistré avec la commande.
+
+| Carte | Résultat |
+|---|---|
+| Se termine par `0002` (ex. `4000000000000002`) | **201**, `status: DECLINED` : la commande reste `PENDING`, un autre essai est possible |
+| Toute autre carte | **201**, `status: SUCCEEDED` : la commande passe `PAID` |
+
+```json
+{ "id": 1, "orderId": 1, "amount": 1999.98, "status": "SUCCEEDED", "cardLast4": "4242", "createdAt": "2026-11-03T10:00:00Z" }
+```
+
+Seuls les 4 derniers chiffres de la carte sont gardés. Une commande déjà `PAID` ou `CANCELLED` renvoie **409**, une commande d'un autre utilisateur **404**.
+La commande est verrouillée (`SELECT ... FOR UPDATE`) pendant le paiement : un double clic sur « Payer » ne débite qu'une fois, la seconde requête trouve la commande déjà `PAID` (**409**).
+
 ### Erreurs
 
 Toutes les erreurs ont le même format JSON, qu'elles viennent d'un service, de Spring MVC ou de Spring Security :
