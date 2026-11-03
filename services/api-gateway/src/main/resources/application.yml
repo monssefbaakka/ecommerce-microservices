@@ -20,6 +20,10 @@ spring:
               uri: lb://order-service
               predicates:
                 - Path=/api/cart/**,/api/orders/**
+            - id: payment-service
+              uri: lb://payment-service
+              predicates:
+                - Path=/api/payments/**
             # Everything not extracted yet still lives in the monolith.
             # Fixed URL: the monolith does not register in Eureka. Must stay after the routes above
             - id: monolith
