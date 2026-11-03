@@ -2,14 +2,14 @@ spring:
   application:
     name: payment-service               # also the name it registers under in Eureka
   datasource:
-    # Same database as the monolith for now: reads "users" and "orders", sets an order to PAID
-    # and owns the "payments" table. Each service gets its own database in #46
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/ecommerce}
+    # Its own database: the payments only. The orders live in order-service, which is asked
+    # for the owner, status and total of an order and told when it is paid
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/payment_db}
     username: ${DB_USER:ecommerce}
     password: ${DB_PASSWORD:ecommerce}
   jpa:
     hibernate:
-      ddl-auto: update                  # dev: same mapping as the monolith, so the shared tables stay identical
+      ddl-auto: update                  # dev: Hibernate creates and updates the payments table
     open-in-view: false
 
 springdoc:
@@ -28,6 +28,12 @@ jwt:
   # Must be the same key as auth-service, which issues the tokens.
   # dev only: override with the JWT_SECRET env variable outside local dev
   secret: ${JWT_SECRET:urSFJ7E1nhn9jjr73kPXdYlWW9zKQeTdT2jhx+KVFI4=}   # Base64, at least 256 bits (HS256)
+  # Lifetime of the SERVICE token signed for each call to order-service
+  service-token-validity: 5m
+
+services:
+  # Eureka name, resolved by the load-balanced RestClient: no host or port to configure
+  order-service-url: ${ORDER_SERVICE_URL:http://order-service}
 
 eureka:
   client:
