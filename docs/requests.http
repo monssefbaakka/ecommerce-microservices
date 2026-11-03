@@ -449,11 +449,14 @@ GET {{host}}/actuator/env
 
 
 ############################################################
-# MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, product-service 8082, Eureka 8761)
+# MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, product-service 8082,
+# order-service 8083, payment-service 8084, Eureka 8761)
 ############################################################
 @gateway = http://localhost:8090
 @authService = http://localhost:8081
 @productService = http://localhost:8082
+@orderService = http://localhost:8083
+@paymentService = http://localhost:8084
 @eureka = http://localhost:8761
 
 ### G1. Register through the gateway: routed to auth-service (expect 201, then 409 on a second run)
@@ -472,7 +475,7 @@ Content-Type: application/json
 ### G3. Catalog through the gateway: routed to product-service (expect 200)
 GET {{gateway}}/api/products
 
-### G4. Cart through the gateway with the auth-service token: the monolith accepts it (expect 200)
+### G4. Cart through the gateway with the auth-service token: routed to order-service (expect 200)
 GET {{gateway}}/api/cart
 Authorization: Bearer {{gatewayLogin.response.body.$.token}}
 
