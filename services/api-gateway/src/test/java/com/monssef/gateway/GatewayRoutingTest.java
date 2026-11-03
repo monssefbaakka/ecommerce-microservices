@@ -22,6 +22,7 @@ class GatewayRoutingTest {
     private static final StubService AUTH_SERVICE = new StubService("auth");
     private static final StubService PRODUCT_SERVICE = new StubService("product");
     private static final StubService ORDER_SERVICE = new StubService("order");
+    private static final StubService PAYMENT_SERVICE = new StubService("payment");
     private static final StubService MONOLITH = new StubService("monolith");
 
     @Autowired
@@ -32,6 +33,7 @@ class GatewayRoutingTest {
         registry.add("spring.cloud.discovery.client.simple.instances.auth-service[0].uri", AUTH_SERVICE::url);
         registry.add("spring.cloud.discovery.client.simple.instances.product-service[0].uri", PRODUCT_SERVICE::url);
         registry.add("spring.cloud.discovery.client.simple.instances.order-service[0].uri", ORDER_SERVICE::url);
+        registry.add("spring.cloud.discovery.client.simple.instances.payment-service[0].uri", PAYMENT_SERVICE::url);
         registry.add("MONOLITH_URL", MONOLITH::url);
     }
 
@@ -40,6 +42,7 @@ class GatewayRoutingTest {
         AUTH_SERVICE.close();
         PRODUCT_SERVICE.close();
         ORDER_SERVICE.close();
+        PAYMENT_SERVICE.close();
         MONOLITH.close();
     }
 
@@ -125,6 +128,24 @@ class GatewayRoutingTest {
                 .expectBody()
                 .jsonPath("$.service").isEqualTo("order")
                 .jsonPath("$.path").isEqualTo("/api/orders/7");
+    }
+
+    @Test
+    void payments_shouldGoToPaymentServiceWithBodyUnchanged() {
+        client.post().uri("/api/payments")
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue("{\"orderId\":7}")
+                .exchange()
+                .expectStatus().isOk()
+                .expectBody()
+                .jsonPath("$.service").isEqualTo("payment")
+                .jsonPath("$.path").isEqualTo("/api/payments")
+                .jsonPath("$.body").isEqualTo("{\"orderId\":7}");
+        client.get().uri("/api/payments/3")
+                .exchange()
+                .expectBody()
+                .jsonPath("$.service").isEqualTo("payment")
+                .jsonPath("$.path").isEqualTo("/api/payments/3");
     }
 
     @Test
