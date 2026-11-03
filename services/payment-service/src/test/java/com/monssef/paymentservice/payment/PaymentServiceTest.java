@@ -1,15 +1,16 @@
 package com.monssef.paymentservice.payment;
 
 import com.monssef.paymentservice.common.ResourceNotFoundException;
-import com.monssef.paymentservice.order.Order;
-import com.monssef.paymentservice.order.OrderRepository;
+import com.monssef.paymentservice.order.OrderClient;
 import com.monssef.paymentservice.order.OrderStatus;
+import com.monssef.paymentservice.order.OrderSummary;
 import com.monssef.paymentservice.payment.dto.PaymentDTO;
 import com.monssef.paymentservice.payment.dto.PaymentRequest;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -30,14 +31,18 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class) // plain unit test: no Spring context, no database
+@ExtendWith(MockitoExtension.class) // plain unit test: no Spring context, no database, no order-service
 class PaymentServiceTest {
 
     private static final String EMAIL = "john@example.com";
     private static final String CARD = "4242424242424242";
+    private static final BigDecimal TOTAL = new BigDecimal("1999.98");
 
     @Mock
-    private OrderRepository orderRepository;
+    private OrderClient orderClient;
+
+    @Mock
+    private OrderPaymentLock orderPaymentLock;
 
     @Mock
     private PaymentRepository paymentRepository;
@@ -52,15 +57,14 @@ class PaymentServiceTest {
     private PaymentService service;
 
     @Test
-    void pay_shouldChargeOrderTotalAndSetOrderPaid_whenCardAccepted() {
-        Order order = order(OrderStatus.PENDING);
-        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL)).thenReturn(Optional.of(order));
-        when(cardProcessor.charge(CARD, order.getTotal())).thenReturn(PaymentStatus.SUCCEEDED);
+    void pay_shouldChargeOrderTotalAndMarkOrderPaid_whenCardAccepted() {
+        when(orderClient.find(7L)).thenReturn(order(EMAIL, OrderStatus.PENDING));
+        when(cardProcessor.charge(CARD, TOTAL)).thenReturn(PaymentStatus.SUCCEEDED);
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PaymentDTO result = service.pay(EMAIL, new PaymentRequest(7L, CARD));
 
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        verify(orderClient).markPaid(7L);
         assertThat(result.getStatus()).isEqualTo(PaymentStatus.SUCCEEDED);
         assertThat(result.getOrderId()).isEqualTo(7L);
         assertThat(result.getAmount()).isEqualByComparingTo("1999.98");
@@ -68,22 +72,35 @@ class PaymentServiceTest {
     }
 
     @Test
+    void pay_shouldLockTheOrderBeforeReadingIt() {
+        when(orderClient.find(7L)).thenReturn(order(EMAIL, OrderStatus.PENDING));
+        when(cardProcessor.charge(CARD, TOTAL)).thenReturn(PaymentStatus.SUCCEEDED);
+        when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.pay(EMAIL, new PaymentRequest(7L, CARD));
+
+        // a second payment waits for the first commit, then reads the order already PAID
+        InOrder inOrder = inOrder(orderPaymentLock, orderClient);
+        inOrder.verify(orderPaymentLock).lock(7L);
+        inOrder.verify(orderClient).find(7L);
+    }
+
+    @Test
     void pay_shouldRecordDeclinedAttemptAndKeepOrderPending_whenCardDeclined() {
-        Order order = order(OrderStatus.PENDING);
-        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL)).thenReturn(Optional.of(order));
-        when(cardProcessor.charge("4000000000000002", order.getTotal())).thenReturn(PaymentStatus.DECLINED);
+        when(orderClient.find(7L)).thenReturn(order(EMAIL, OrderStatus.PENDING));
+        when(cardProcessor.charge("4000000000000002", TOTAL)).thenReturn(PaymentStatus.DECLINED);
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         PaymentDTO result = service.pay(EMAIL, new PaymentRequest(7L, "4000000000000002"));
 
-        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        verify(orderClient, never()).markPaid(any());
         assertThat(result.getStatus()).isEqualTo(PaymentStatus.DECLINED);
         verify(paymentRepository).save(any(Payment.class)); // the failed attempt is kept
     }
 
     @Test
     void pay_shouldNeverStoreTheFullCardNumber() {
-        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL)).thenReturn(Optional.of(order(OrderStatus.PENDING)));
+        when(orderClient.find(7L)).thenReturn(order(EMAIL, OrderStatus.PENDING));
         when(cardProcessor.charge(any(), any())).thenReturn(PaymentStatus.SUCCEEDED);
         when(paymentRepository.save(any(Payment.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
@@ -92,11 +109,12 @@ class PaymentServiceTest {
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
         verify(paymentRepository).save(captor.capture());
         assertThat(captor.getValue().getCardLast4()).isEqualTo("4242");
+        assertThat(captor.getValue().getUserEmail()).isEqualTo(EMAIL);
     }
 
     @Test
     void pay_shouldThrow409_whenOrderAlreadyPaid() {
-        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL)).thenReturn(Optional.of(order(OrderStatus.PAID)));
+        when(orderClient.find(7L)).thenReturn(order(EMAIL, OrderStatus.PAID));
 
         assertThatThrownBy(() -> service.pay(EMAIL, new PaymentRequest(7L, CARD)))
                 .isInstanceOf(ResponseStatusException.class)
@@ -109,8 +127,7 @@ class PaymentServiceTest {
 
     @Test
     void pay_shouldThrow409_whenOrderCancelled() {
-        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL))
-                .thenReturn(Optional.of(order(OrderStatus.CANCELLED)));
+        when(orderClient.find(7L)).thenReturn(order(EMAIL, OrderStatus.CANCELLED));
 
         assertThatThrownBy(() -> service.pay(EMAIL, new PaymentRequest(7L, CARD)))
                 .isInstanceOf(ResponseStatusException.class)
@@ -120,22 +137,63 @@ class PaymentServiceTest {
     }
 
     @Test
-    void pay_shouldThrow404_whenOrderMissingOrOfAnotherUser() {
-        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL)).thenReturn(Optional.empty());
+    void pay_shouldThrow404_whenOrderOfAnotherUser() {
+        when(orderClient.find(7L)).thenReturn(order("jane@example.com", OrderStatus.PENDING));
 
         assertThatThrownBy(() -> service.pay(EMAIL, new PaymentRequest(7L, CARD)))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Order with id 7 not found");
 
         verifyNoInteractions(cardProcessor, paymentRepository);
+        verify(orderClient, never()).markPaid(any());
+    }
+
+    @Test
+    void pay_shouldPassOn404_whenOrderUnknownInOrderService() {
+        when(orderClient.find(7L))
+                .thenThrow(new ResponseStatusException(HttpStatus.NOT_FOUND, "Order with id 7 not found"));
+
+        assertThatThrownBy(() -> service.pay(EMAIL, new PaymentRequest(7L, CARD)))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+
+        verifyNoInteractions(cardProcessor, paymentRepository);
+    }
+
+    @Test
+    void pay_shouldPassOn503AndChargeNothing_whenOrderServiceIsDown() {
+        when(orderClient.find(7L))
+                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Order service unavailable"));
+
+        assertThatThrownBy(() -> service.pay(EMAIL, new PaymentRequest(7L, CARD)))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+
+        verifyNoInteractions(cardProcessor, paymentRepository);
+    }
+
+    @Test
+    void pay_shouldSaveNothing_whenOrderServiceRefusesToMarkTheOrderPaid() {
+        when(orderClient.find(7L)).thenReturn(order(EMAIL, OrderStatus.PENDING));
+        when(cardProcessor.charge(CARD, TOTAL)).thenReturn(PaymentStatus.SUCCEEDED);
+        when(orderClient.markPaid(7L)).thenThrow(new ResponseStatusException(HttpStatus.CONFLICT,
+                "Order 7 is CANCELLED, only a PENDING order can be paid"));
+
+        assertThatThrownBy(() -> service.pay(EMAIL, new PaymentRequest(7L, CARD)))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("is CANCELLED");
+
+        verify(paymentRepository, never()).save(any());
     }
 
     @Test
     void findAll_shouldReturnPaymentsOfUserOnly() {
-        Payment payment = new Payment(order(OrderStatus.PENDING), CARD, PaymentStatus.SUCCEEDED);
+        Payment payment = new Payment(order(EMAIL, OrderStatus.PENDING), CARD, PaymentStatus.SUCCEEDED);
         payment.setId(3L);
         Pageable pageable = PageRequest.of(0, 10);
-        when(paymentRepository.findByOrderUserEmail(EMAIL, pageable))
+        when(paymentRepository.findByUserEmail(EMAIL, pageable))
                 .thenReturn(new PageImpl<>(List.of(payment), pageable, 1));
 
         Page<PaymentDTO> result = service.findAll(EMAIL, pageable);
@@ -143,13 +201,14 @@ class PaymentServiceTest {
         assertThat(result.getTotalElements()).isEqualTo(1);
         assertThat(result.getContent().get(0).getId()).isEqualTo(3L);
         assertThat(result.getContent().get(0).getOrderId()).isEqualTo(7L);
+        verifyNoInteractions(orderClient); // the history needs no call to order-service
     }
 
     @Test
     void findById_shouldReturnPaymentOfUser() {
-        Payment payment = new Payment(order(OrderStatus.PENDING), CARD, PaymentStatus.DECLINED);
+        Payment payment = new Payment(order(EMAIL, OrderStatus.PENDING), CARD, PaymentStatus.DECLINED);
         payment.setId(3L);
-        when(paymentRepository.findByIdAndOrderUserEmail(3L, EMAIL)).thenReturn(Optional.of(payment));
+        when(paymentRepository.findByIdAndUserEmail(3L, EMAIL)).thenReturn(Optional.of(payment));
 
         PaymentDTO result = service.findById(EMAIL, 3L);
 
@@ -159,18 +218,14 @@ class PaymentServiceTest {
 
     @Test
     void findById_shouldThrow404_whenPaymentMissingOrOfAnotherUser() {
-        when(paymentRepository.findByIdAndOrderUserEmail(3L, EMAIL)).thenReturn(Optional.empty());
+        when(paymentRepository.findByIdAndUserEmail(3L, EMAIL)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.findById(EMAIL, 3L))
                 .isInstanceOf(ResourceNotFoundException.class)
                 .hasMessage("Payment with id 3 not found");
     }
 
-    private Order order(OrderStatus status) {
-        Order order = new Order();
-        order.setId(7L);
-        order.setStatus(status);
-        order.setTotal(new BigDecimal("1999.98"));
-        return order;
+    private OrderSummary order(String owner, OrderStatus status) {
+        return new OrderSummary(7L, owner, status, TOTAL);
     }
 }
