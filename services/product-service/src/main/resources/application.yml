@@ -2,14 +2,13 @@ spring:
   application:
     name: product-service               # also the name it registers under in Eureka
   datasource:
-    # Same database as the monolith for now: both read and write "categories" and "products"
-    # (the monolith still needs them for the cart and the orders). Each service gets its own database in #46
-    url: ${DB_URL:jdbc:postgresql://localhost:5432/ecommerce}
+    # Its own database: the catalog and the stock live only here. order-service asks for them over HTTP
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/product_db}
     username: ${DB_USER:ecommerce}
     password: ${DB_PASSWORD:ecommerce}
   jpa:
     hibernate:
-      ddl-auto: update                  # dev: same mapping as the monolith, so the shared tables stay identical
+      ddl-auto: update                  # dev: Hibernate creates and updates the "categories" and "products" tables
     open-in-view: false
 
 springdoc:
