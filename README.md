@@ -70,7 +70,7 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build
 | `ecommerce-discovery-server` | `http://localhost:8761` | Eureka dashboard |
 | `ecommerce-postgres` | `localhost:5432` | PostgreSQL |
 
-`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. The services start last (about 1 min): they wait for Eureka and for the monolith, which creates the shared tables. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. The services start last (about 1 min): they wait for Eureka and PostgreSQL. Each one has its own database (`auth_db`, `product_db`, `order_db`, `payment_db`, next to the monolith's `ecommerce`), created by `infra/postgres/init-databases.sql` the first time the volume starts. With a volume created before, run `docker compose -f infra/docker-compose.yml down -v` once: it deletes the data and the databases are created on the next `up`. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
 To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith and every service read it, so they share the same secret.
 
