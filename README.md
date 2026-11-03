@@ -439,6 +439,7 @@ erDiagram
     USERS ||--o{ ORDERS : places
     ORDERS ||--|{ ORDER_ITEMS : contains
     PRODUCTS |o--o{ ORDER_ITEMS : "ordered as"
+    ORDERS ||--o{ PAYMENTS : "paid by"
     CATEGORIES {
         bigint id PK
         varchar name UK
@@ -485,10 +486,19 @@ erDiagram
         numeric unit_price
         int quantity
     }
+    PAYMENTS {
+        bigint id PK
+        bigint order_id FK
+        numeric amount
+        varchar status
+        varchar card_last4
+        timestamp created_at
+    }
 ```
 
 Une commande garde une copie du nom et du prix de chaque produit au moment de l'achat : elle ne change pas si le produit est modifié ensuite.
 Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON DELETE SET NULL`) et la ligne reste dans l'historique.
+`payments` garde chaque tentative de paiement (acceptée ou refusée) ; elle est créée par payment-service, qui passe aussi `orders.status` à `PAID`.
 
 ## Project structure
 
