@@ -41,7 +41,7 @@ public class AdminInitializer implements ApplicationRunner {
             throw new IllegalStateException("ADMIN_PASSWORD must be between 8 and 72 characters");
         }
         String normalizedEmail = email.trim().toLowerCase(Locale.ROOT);
-        // Also true when the monolith created it first: the users table is shared
+        // Also true after a restart: the account was created on a previous start
         if (repository.existsByEmailIgnoreCase(normalizedEmail)) {
             // Never promote an existing account: someone else may have registered this email
             log.info("Admin account not created: {} already exists", normalizedEmail);
