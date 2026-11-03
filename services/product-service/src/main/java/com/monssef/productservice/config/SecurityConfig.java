@@ -29,6 +29,9 @@ public class SecurityConfig {
                 // Health checks come from Docker, Eureka or the gateway, without a token
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                 .requestMatchers("/actuator/**").hasRole("ADMIN")
+                // Calls from the other services (order-service), with a token they sign themselves (role SERVICE).
+                // auth-service never gives this role to an account, and the gateway only routes /api/**
+                .requestMatchers("/internal/**").hasRole("SERVICE")
                 // Catalog: anyone can read, only ADMIN can write (same rules as the monolith)
                 .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**").permitAll()
                 .requestMatchers("/api/products/**", "/api/categories/**").hasRole("ADMIN")
