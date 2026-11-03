@@ -345,8 +345,8 @@ Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'ex
 }
 ```
 
-Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (`productId` devient `null` si le produit est supprimé).
-Deux commandes passées au même moment sont traitées l'une après l'autre : le panier et ses produits sont verrouillés (`SELECT ... FOR UPDATE`) jusqu'à la fin de la commande. La seconde attend, puis voit le stock laissé par la première : deux clients ne peuvent pas prendre la même dernière unité (**409** pour le second). Un double clic sur « Commander » crée une seule commande : la seconde requête trouve le panier déjà vidé (**400**).
+Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (dans le monolithe, `productId` devient `null` si le produit est supprimé ; dans order-service, il est gardé). Un produit supprimé disparaît du panier et n'est pas commandé.
+Deux commandes passées au même moment sont traitées l'une après l'autre : les produits sont verrouillés (`SELECT ... FOR UPDATE`, dans product-service pour order-service) le temps de retirer le stock. La seconde voit le stock laissé par la première : deux clients ne peuvent pas prendre la même dernière unité (**409** pour le second). Un double clic sur « Commander » crée une seule commande : le panier est verrouillé, la seconde requête le trouve déjà vidé (**400**). Via order-service, **503** si product-service ne répond pas : rien n'est modifié.
 
 ### Payments
 
