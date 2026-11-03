@@ -4,6 +4,7 @@ import com.monssef.orderservice.cart.Cart;
 import com.monssef.orderservice.cart.CartRepository;
 import com.monssef.orderservice.common.ResourceNotFoundException;
 import com.monssef.orderservice.order.dto.OrderDTO;
+import com.monssef.orderservice.order.dto.OrderSummaryDTO;
 import com.monssef.orderservice.product.ProductClient;
 import com.monssef.orderservice.product.ProductInfo;
 import com.monssef.orderservice.product.ReservedItem;
@@ -70,6 +71,27 @@ public class OrderService {
         return orderRepository.findByIdAndUserEmail(id, email)
                 .map(mapper::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("Order", id));
+    }
+
+    // For payment-service, which checks the owner itself (the call carries a SERVICE token, not the user's)
+    public OrderSummaryDTO findSummary(Long id) {
+        return orderRepository.findById(id)
+                .map(mapper::toSummary)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", id));
+    }
+
+    // Called by payment-service once the card is accepted. The row is locked until the commit:
+    // an order can only go from PENDING to PAID once (409 otherwise)
+    @Transactional
+    public OrderSummaryDTO markPaid(Long id) {
+        Order order = orderRepository.findForUpdateById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", id));
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Order %d is %s, only a PENDING order can be paid".formatted(id, order.getStatus()));
+        }
+        order.setStatus(OrderStatus.PAID); // saved by dirty checking
+        return mapper.toSummary(order);
     }
 
     // A product deleted in product-service since it was added simply leaves the cart, as the cart shows it
