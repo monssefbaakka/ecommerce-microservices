@@ -370,7 +370,7 @@ Corps de `POST` : `{ "orderId": 1, "cardNumber": "4242424242424242" }` (16 chiff
 ```
 
 Seuls les 4 derniers chiffres de la carte sont gardés. Une commande déjà `PAID` ou `CANCELLED` renvoie **409**, une commande d'un autre utilisateur **404**.
-La commande est verrouillée (`SELECT ... FOR UPDATE`) pendant le paiement : un double clic sur « Payer » ne débite qu'une fois, la seconde requête trouve la commande déjà `PAID` (**409**).
+Les paiements d'une même commande passent l'un après l'autre (verrou PostgreSQL `pg_advisory_xact_lock` sur l'id de la commande) : un double clic sur « Payer » ne débite qu'une fois, la seconde requête trouve la commande déjà `PAID` (**409**). **503** si order-service ne répond pas : rien n'est débité.
 
 ### Erreurs
 
