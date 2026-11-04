@@ -4,15 +4,19 @@ import com.monssef.orderservice.support.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.web.server.ResponseStatusException;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-// Cart -> order in one transaction: stock, cart and price snapshot checked in the database
+// Cart -> order: stock reserved in product-service (in memory here), cart emptied and prices copied in the database
 class OrderFlowIT extends IntegrationTest {
 
     private String user;
@@ -40,7 +44,7 @@ class OrderFlowIT extends IntegrationTest {
         long orderId = body(result).get("id").asLong();
         assertThat(result.getResponse().getHeader(HttpHeaders.LOCATION)).endsWith("/api/orders/" + orderId);
 
-        // the shared products table: product-service sees the new stock at once
+        // taken in product-service
         assertThat(stockOf(iphone)).isEqualTo(3);
         assertThat(stockOf(caseId)).isEqualTo(49);
         mockMvc.perform(auth(get("/api/cart"), user))
@@ -66,7 +70,7 @@ class OrderFlowIT extends IntegrationTest {
                 .andExpect(jsonPath("$.message").value("Not enough stock for product %d (iPhone 15): 1 left"
                         .formatted(iphone)));
 
-        // rolled back: the case stock is untouched, the cart is still full, no order row
+        // all or nothing: the case stock is untouched, the cart is still full, no order row
         assertThat(stockOf(caseId)).isEqualTo(50);
         assertThat(stockOf(iphone)).isEqualTo(1);
         mockMvc.perform(auth(get("/api/cart"), user))
@@ -88,15 +92,44 @@ class OrderFlowIT extends IntegrationTest {
     }
 
     @Test
-    void order_shouldShowTheStatusWrittenByPaymentService() throws Exception {
+    void placeOrder_shouldReturn503AndKeepTheCart_whenProductServiceIsDown() throws Exception {
+        addToCart(user, iphone, 1);
+        when(productClient.reserve(anyList()))
+                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Product service unavailable"));
+
+        mockMvc.perform(auth(post("/api/orders"), user))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("Product service unavailable"));
+
+        assertThat(stockOf(iphone)).isEqualTo(5);
+        mockMvc.perform(auth(get("/api/cart"), user))
+                .andExpect(jsonPath("$.items.length()").value(1));
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM orders", Integer.class)).isZero();
+    }
+
+    @Test
+    void order_shouldBePaidOnlyOnce_throughTheInternalEndpoint() throws Exception {
         addToCart(user, iphone, 1);
         long orderId = placeOrder(user);
+        String paymentService = token("payment-service", "SERVICE");
 
-        // what payment-service does once the payment succeeds (same table)
-        jdbcTemplate.update("UPDATE orders SET status = 'PAID' WHERE id = ?", orderId);
+        // what payment-service calls once the card is accepted
+        mockMvc.perform(auth(get("/internal/orders/{id}", orderId), paymentService))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userEmail").value("john@example.com"))
+                .andExpect(jsonPath("$.status").value("PENDING"))
+                .andExpect(jsonPath("$.total").value(999.99));
+        mockMvc.perform(auth(post("/internal/orders/{id}/paid", orderId), paymentService))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("PAID"));
 
         mockMvc.perform(auth(get("/api/orders/{id}", orderId), user))
                 .andExpect(jsonPath("$.status").value("PAID"));
+        mockMvc.perform(auth(post("/internal/orders/{id}/paid", orderId), paymentService))
+                .andExpect(status().isConflict());
+        // the user cannot mark their order as paid themselves
+        mockMvc.perform(auth(post("/internal/orders/{id}/paid", orderId), user))
+                .andExpect(status().isForbidden());
     }
 
     @Test

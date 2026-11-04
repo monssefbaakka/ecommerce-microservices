@@ -1,21 +1,26 @@
 package com.monssef.paymentservice.payment;
 
+import com.monssef.paymentservice.order.OrderStatus;
 import com.monssef.paymentservice.support.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-// Payment of an order placed in order-service: status written in the shared orders table
+// Payment of an order placed in order-service (in memory here): set to PAID through its internal endpoint
 class PaymentFlowIT extends IntegrationTest {
 
     private String user;
@@ -39,7 +44,7 @@ class PaymentFlowIT extends IntegrationTest {
         long paymentId = body(result).get("id").asLong();
         assertThat(result.getResponse().getHeader(HttpHeaders.LOCATION)).endsWith("/api/payments/" + paymentId);
 
-        // order-service reads the same row: GET /api/orders/{id} now shows PAID
+        // order-service was told: GET /api/orders/{id} now shows PAID
         assertThat(statusOf(orderId)).isEqualTo("PAID");
     }
 
@@ -78,7 +83,7 @@ class PaymentFlowIT extends IntegrationTest {
 
     @Test
     void pay_shouldReturn409_whenOrderCancelled() throws Exception {
-        jdbcTemplate.update("UPDATE orders SET status = 'CANCELLED' WHERE id = ?", orderId);
+        orders.setStatus(orderId, OrderStatus.CANCELLED);
 
         mockMvc.perform(pay(user, orderId, CARD))
                 .andExpect(status().isConflict());
@@ -93,6 +98,25 @@ class PaymentFlowIT extends IntegrationTest {
                 .andExpect(jsonPath("$.message").value("Order with id %d not found".formatted(orderId)));
 
         assertThat(statusOf(orderId)).isEqualTo("PENDING");
+    }
+
+    @Test
+    void pay_shouldReturn404_whenOrderUnknownInOrderService() throws Exception {
+        mockMvc.perform(pay(user, 99L, CARD))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Order with id 99 not found"));
+    }
+
+    @Test
+    void pay_shouldReturn503AndSaveNothing_whenOrderServiceIsDown() throws Exception {
+        when(orderClient.find(anyLong()))
+                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Order service unavailable"));
+
+        mockMvc.perform(pay(user, orderId, CARD))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("Order service unavailable"));
+
+        assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM payments", Integer.class)).isZero();
     }
 
     @Test

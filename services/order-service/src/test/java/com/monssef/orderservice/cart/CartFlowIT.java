@@ -3,9 +3,12 @@ package com.monssef.orderservice.cart;
 import com.monssef.orderservice.support.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -61,12 +64,13 @@ class CartFlowIT extends IntegrationTest {
     }
 
     @Test
-    void addItem_shouldReturn401_whenAccountNoLongerExists() throws Exception {
-        String deleted = tokenWithoutAccount("ghost@example.com", "USER");
+    void addItem_shouldReturn503_whenProductServiceIsDown() throws Exception {
+        when(productClient.find(iphone))
+                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Product service unavailable"));
 
-        mockMvc.perform(auth(json(post("/api/cart/items"), Map.of("productId", iphone, "quantity", 1)), deleted))
-                .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.message").value("User not found"));
+        mockMvc.perform(auth(json(post("/api/cart/items"), Map.of("productId", iphone, "quantity", 1)), user))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("Product service unavailable"));
     }
 
     @Test

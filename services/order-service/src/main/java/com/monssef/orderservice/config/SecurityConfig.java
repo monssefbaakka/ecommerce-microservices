@@ -28,6 +28,9 @@ public class SecurityConfig {
                 // Health checks come from Docker, Eureka or the gateway, without a token
                 .requestMatchers("/actuator/health", "/actuator/health/**", "/actuator/info").permitAll()
                 .requestMatchers("/actuator/**").hasRole("ADMIN")
+                // Calls from payment-service, with a token it signs itself (role SERVICE).
+                // auth-service never gives this role to an account, and the gateway only routes /api/**
+                .requestMatchers("/internal/**").hasRole("SERVICE")
                 // Cart and orders: any logged-in user (USER or ADMIN), each only sees their own.
                 // Anything not listed above needs a token: nothing is open by mistake
                 .anyRequest().authenticated())

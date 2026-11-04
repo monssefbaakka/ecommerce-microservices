@@ -51,7 +51,7 @@ public class Product {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
-    // Units left. Orders still decrease it in the monolith (same table, row lock while ordering).
+    // Units left. order-service reserves units through /internal/stock when an order is placed.
     // The default fills existing rows when Hibernate adds the column
     @Min(0)
     @ColumnDefault("0")
@@ -68,4 +68,21 @@ public class Product {
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
+
+    public boolean hasStock(int quantity) {
+        return stock >= quantity;
+    }
+
+    // Called when order-service places an order: 409 if fewer units are left than ordered
+    public void removeStock(int quantity) {
+        if (!hasStock(quantity)) {
+            throw new InsufficientStockException(this);
+        }
+        stock -= quantity;
+    }
+
+    // Gives back the units of an order that could not be saved after its reservation
+    public void addStock(int quantity) {
+        stock += quantity;
+    }
 }

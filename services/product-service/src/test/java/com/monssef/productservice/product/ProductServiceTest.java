@@ -115,6 +115,17 @@ class ProductServiceTest {
                 .hasMessage("Product with id 99 not found");
     }
 
+    @Test
+    void findAllById_shouldReturnKnownProductsOnly() {
+        when(productRepository.findAllById(List.of(1L, 99L))).thenReturn(List.of(product(1L)));
+
+        List<ProductDTO> result = service.findAllById(List.of(1L, 99L));
+
+        // 99 was deleted since: left out, not a 404
+        assertThat(result).extracting(ProductDTO::getId).containsExactly(1L);
+        assertThat(result.get(0).getStock()).isEqualTo(10);
+    }
+
     // --- Writes ---
 
     @Test

@@ -10,6 +10,9 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      # Creates auth_db, product_db, order_db and payment_db next to "ecommerce" (the monolith) on the
+      # first start only: on an existing volume, run "docker compose down -v" once (deletes the data)
+      - ./postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ecommerce -d ecommerce"]
       interval: 5s
@@ -58,15 +61,15 @@ services:
     depends_on:
       discovery-server:
         condition: service_healthy
-      # Same "users" table as the monolith: let it create the schema first, so both do not race on it
-      app:
+      # Its own database on the shared PostgreSQL server (created by init-databases.sql)
+      postgres:
         condition: service_healthy
     # Same JWT_SECRET as the monolith, or the monolith would reject the tokens issued here
     env_file:
       - path: .env
         required: false
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/ecommerce
+      DB_URL: jdbc:postgresql://postgres:5432/auth_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
@@ -83,15 +86,15 @@ services:
     depends_on:
       discovery-server:
         condition: service_healthy
-      # Same "categories" and "products" tables as the monolith: let it create the schema first
-      app:
+      # Its own database on the shared PostgreSQL server (created by init-databases.sql)
+      postgres:
         condition: service_healthy
     # Same JWT_SECRET as auth-service, or the ADMIN tokens would be rejected here
     env_file:
       - path: .env
         required: false
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/ecommerce
+      DB_URL: jdbc:postgresql://postgres:5432/product_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
@@ -108,15 +111,15 @@ services:
     depends_on:
       discovery-server:
         condition: service_healthy
-      # Same "carts", "orders", "products" and "users" tables as the monolith: let it create the schema first
-      app:
+      # Its own database on the shared PostgreSQL server (created by init-databases.sql)
+      postgres:
         condition: service_healthy
     # Same JWT_SECRET as auth-service, or the tokens would be rejected here
     env_file:
       - path: .env
         required: false
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/ecommerce
+      DB_URL: jdbc:postgresql://postgres:5432/order_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
@@ -133,15 +136,15 @@ services:
     depends_on:
       discovery-server:
         condition: service_healthy
-      # Reads "users" and "orders", created by the monolith: let it create the schema first
-      app:
+      # Its own database on the shared PostgreSQL server (created by init-databases.sql)
+      postgres:
         condition: service_healthy
     # Same JWT_SECRET as auth-service, or the tokens would be rejected here
     env_file:
       - path: .env
         required: false
     environment:
-      DB_URL: jdbc:postgresql://postgres:5432/ecommerce
+      DB_URL: jdbc:postgresql://postgres:5432/payment_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka

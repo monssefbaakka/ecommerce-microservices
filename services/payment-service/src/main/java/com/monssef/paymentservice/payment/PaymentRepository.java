@@ -8,8 +8,8 @@ import java.util.Optional;
 
 public interface PaymentRepository extends JpaRepository<Payment, Long> {
 
-    // Derived queries joined on orders and users: only the payments of the user's own orders
-    Page<Payment> findByOrderUserEmail(String email, Pageable pageable);
+    // Only the payments of the user's own orders, by the email copied at payment time
+    Page<Payment> findByUserEmail(String email, Pageable pageable);
 
-    Optional<Payment> findByIdAndOrderUserEmail(Long id, String email);
+    Optional<Payment> findByIdAndUserEmail(Long id, String email);
 }

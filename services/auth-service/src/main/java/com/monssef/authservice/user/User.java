@@ -11,7 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 
-// Same table and columns as the monolith's User: both write the shared "users" table until #46
+// Same table and columns as the monolith's User, now in auth_db: the monolith keeps its own copy
 @Entity
 @Table(name = "users")
 @Getter

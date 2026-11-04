@@ -14,8 +14,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class OrderItemDTO {
 
-    @Schema(description = "Identifiant du produit, null s'il a été supprimé depuis", example = "1")
-    private Long productId; // null if the product was deleted since
+    @Schema(description = "Identifiant du produit dans product-service, gardé même s'il a été supprimé depuis", example = "1")
+    private Long productId;
 
     @Schema(description = "Nom au moment de l'achat", example = "iPhone 15")
     private String productName;

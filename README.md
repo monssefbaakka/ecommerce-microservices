@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -70,7 +70,7 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build
 | `ecommerce-discovery-server` | `http://localhost:8761` | Eureka dashboard |
 | `ecommerce-postgres` | `localhost:5432` | PostgreSQL |
 
-`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. The services start last (about 1 min): they wait for Eureka and for the monolith, which creates the shared tables. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. The services start last (about 1 min): they wait for Eureka and PostgreSQL. Each one has its own database (`auth_db`, `product_db`, `order_db`, `payment_db`, next to the monolith's `ecommerce`), created by `infra/postgres/init-databases.sql` the first time the volume starts. With a volume created before, run `docker compose -f infra/docker-compose.yml down -v` once: it deletes the data and the databases are created on the next `up`. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
 To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith and every service read it, so they share the same secret.
 
@@ -112,8 +112,9 @@ cd services/auth-service    # or discovery-server, product-service, order-servic
 | discovery-server | The registry starts, accepts registrations, serves the dashboard; only `health` and `info` are exposed |
 | auth-service | JWT, register / login rules, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (register then login, Actuator, OpenAPI) |
 | product-service | JWT check, category and product rules, paging and search, `ErrorResponse` bodies, security chain (401 / 403) with MockMvc; `*IT` on PostgreSQL with Testcontainers (catalog flow, Actuator, OpenAPI) |
-| order-service | JWT check, cart and order rules (stock, per-line maximum, locks in id order), mappers, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (cart and order flows, rollback on missing stock, concurrent orders, deleted products, Actuator, OpenAPI) |
-| payment-service | JWT check, simulated card, payment rules (`PAID` on success, declined attempts kept, 404 / 409), `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (payment flow, double payment under concurrency, Actuator, OpenAPI) |
+| product-service (stock) | Reservations all or nothing, release, `/internal/**` only for the `SERVICE` role; `StockIT` on PostgreSQL (rollback, last unit under concurrency) |
+| order-service | JWT check, cart and order rules (stock, per-line maximum, stock given back if the order cannot be saved), product-service client against a fake HTTP server (404 / 409 passed on, 503), `/internal/orders` for the `SERVICE` role only, mappers, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory product-service (cart and order flows, concurrent orders, deleted products, Actuator, OpenAPI) |
+| payment-service | JWT check, simulated card, payment rules (`PAID` set in order-service on success, declined attempts kept, owner checked, 404 / 409 / 503), order-service client against a fake HTTP server, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory order-service (payment flow, double payment stopped by the advisory lock, Actuator, OpenAPI) |
 | api-gateway | Routing to every service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
 
 ### Stop
@@ -139,11 +140,13 @@ flowchart LR
     order -. registers .-> eureka
     payment -. registers .-> eureka
     gateway -. registers, finds the services .-> eureka
-    auth --> db[(PostgreSQL)]
-    product --> db
-    order --> db
-    payment --> db
-    monolith --> db
+    order -- "/internal/products<br/>/internal/stock/**" --> product
+    payment -- "/internal/orders/**" --> order
+    auth --> authdb[(auth_db)]
+    product --> productdb[(product_db)]
+    order --> orderdb[(order_db)]
+    payment --> paymentdb[(payment_db)]
+    monolith --> monolithdb[(ecommerce)]
 ```
 
 | Service | Port | Role |
@@ -151,20 +154,22 @@ flowchart LR
 | [discovery-server](services/discovery-server) | 8761 | Eureka registry: each service registers under its name, the gateway asks it where they are |
 | [auth-service](services/auth-service) | 8081 | `POST /api/auth/register` and `POST /api/auth/login`, extracted from the monolith with the same rules, errors and Swagger UI |
 | [product-service](services/product-service) | 8082 | Catalog: CRUD on `/api/categories` and `/api/products` (paging, name search, category filter), extracted from the monolith with the same rules, errors, roles and Swagger UI |
-| [order-service](services/order-service) | 8083 | Cart and orders: `/api/cart` and `/api/orders`, extracted from the monolith with the same rules (stock checks, row locks, price copied at purchase time), errors and Swagger UI |
-| [payment-service](services/payment-service) | 8084 | New: `/api/payments` pays a `PENDING` order with a simulated card; a success sets the order to `PAID` |
+| [order-service](services/order-service) | 8083 | Cart and orders: `/api/cart` and `/api/orders`, extracted from the monolith with the same rules (stock checks, price copied at purchase time), errors and Swagger UI. The stock is reserved in product-service |
+| [payment-service](services/payment-service) | 8084 | New: `/api/payments` pays a `PENDING` order with a simulated card; a success sets the order to `PAID` in order-service |
 | [api-gateway](services/api-gateway) | 8090 | Single entry point: `/api/auth/**` to auth-service, `/api/products/**` and `/api/categories/**` to product-service, `/api/cart/**` and `/api/orders/**` to order-service, `/api/payments/**` to payment-service (`lb://...`, found through Eureka), every other `/api/**` to the monolith |
 
 - **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on every service. product-service, order-service and payment-service check them the same way, without a database call: only an `ADMIN` token can write the catalog, and the email of the token picks the cart, orders and payments. Set the same `JWT_SECRET` everywhere outside local dev.
-- **Shared database for now:** auth-service reads and writes the monolith's `users` table, product-service its `categories` and `products` tables, order-service the `carts` and `orders` tables (and the `stock` of the products), payment-service the new `payments` table and the `status` of the orders. A product created through product-service can be put in the cart at once, an order removes its units from the same `products` rows, and a payment shows up as `PAID` in order-service. The services do not call each other yet (OpenFeign comes in #48) and each one gets its own database in #46.
+- **A database per service:** auth-service owns `users` in `auth_db`, product-service `categories` and `products` in `product_db`, order-service `carts` and `orders` in `order_db`, payment-service `payments` in `payment_db`. No service reads the tables of another one, and there is no foreign key between databases: a cart line or an order keeps the `productId`, a cart, an order or a payment keeps the email of the token. The monolith keeps its own `ecommerce` database: an account created through auth-service does not exist there.
+- **Calls between services:** what used to be a join is now an HTTP call, with a `@LoadBalanced` `RestClient` that finds the other service by name in Eureka (OpenFeign replaces it in #48). order-service reads names, prices and stock from product-service and reserves the stock when an order is placed (all lines or none, **409** if one is short); payment-service reads the owner, status and total of an order and sets it `PAID` in order-service. These endpoints are under `/internal/**`: the gateway does not route them, and they only accept a short-lived token with the `SERVICE` role, which the calling service signs itself with the shared JWT key (no account ever gets this role). A **404** or **409** of the other service is passed on with its message; if it is down or not registered, the answer is **503**.
+- **No distributed transaction:** if the order cannot be saved after the stock was reserved, order-service gives the units back. A crash between the two, or a failure of the `PAID` call after the card was accepted, is not compensated yet (the card is simulated). A saga or an outbox would cover these cases.
 - **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when the target service is not registered in Eureka or does not answer.
 - **Health:** each service sends its Actuator status to Eureka. If a service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
 
-To run them without Docker, start PostgreSQL, then in this order, each in its own terminal:
+To run them without Docker, start PostgreSQL and create the databases once (`psql -U ecommerce -d ecommerce -f infra/postgres/init-databases.sql`), then in this order, each in its own terminal:
 
 ```bash
 cd services/discovery-server && ./mvnw spring-boot:run   # wait for "Started", dashboard on :8761
-cd monolith && ./mvnw spring-boot:run                    # creates the tables
+cd monolith && ./mvnw spring-boot:run                    # the other /api/** routes of the gateway
 cd services/auth-service && ./mvnw spring-boot:run
 cd services/product-service && ./mvnw spring-boot:run
 cd services/order-service && ./mvnw spring-boot:run
@@ -340,8 +345,8 @@ Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'ex
 }
 ```
 
-Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (`productId` devient `null` si le produit est supprimé).
-Deux commandes passées au même moment sont traitées l'une après l'autre : le panier et ses produits sont verrouillés (`SELECT ... FOR UPDATE`) jusqu'à la fin de la commande. La seconde attend, puis voit le stock laissé par la première : deux clients ne peuvent pas prendre la même dernière unité (**409** pour le second). Un double clic sur « Commander » crée une seule commande : la seconde requête trouve le panier déjà vidé (**400**).
+Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (dans le monolithe, `productId` devient `null` si le produit est supprimé ; dans order-service, il est gardé). Un produit supprimé disparaît du panier et n'est pas commandé.
+Deux commandes passées au même moment sont traitées l'une après l'autre : les produits sont verrouillés (`SELECT ... FOR UPDATE`, dans product-service pour order-service) le temps de retirer le stock. La seconde voit le stock laissé par la première : deux clients ne peuvent pas prendre la même dernière unité (**409** pour le second). Un double clic sur « Commander » crée une seule commande : le panier est verrouillé, la seconde requête le trouve déjà vidé (**400**). Via order-service, **503** si product-service ne répond pas : rien n'est modifié.
 
 ### Payments
 
@@ -365,7 +370,7 @@ Corps de `POST` : `{ "orderId": 1, "cardNumber": "4242424242424242" }` (16 chiff
 ```
 
 Seuls les 4 derniers chiffres de la carte sont gardés. Une commande déjà `PAID` ou `CANCELLED` renvoie **409**, une commande d'un autre utilisateur **404**.
-La commande est verrouillée (`SELECT ... FOR UPDATE`) pendant le paiement : un double clic sur « Payer » ne débite qu'une fois, la seconde requête trouve la commande déjà `PAID` (**409**).
+Les paiements d'une même commande passent l'un après l'autre (verrou PostgreSQL `pg_advisory_xact_lock` sur l'id de la commande) : un double clic sur « Payer » ne débite qu'une fois, la seconde requête trouve la commande déjà `PAID` (**409**). **503** si order-service ne répond pas : rien n'est débité.
 
 ### Erreurs
 
@@ -496,6 +501,8 @@ erDiagram
     }
 ```
 
+Ce schéma est celui du monolithe (base `ecommerce`). Les microservices reprennent ces tables, chacun dans sa base : `users` dans `auth_db`, `categories` et `products` dans `product_db`, `carts`, `cart_items`, `orders` et `order_items` dans `order_db`, `payments` dans `payment_db`. Entre deux bases il n'y a pas de clé étrangère : `user_id` devient `user_email`, et `product_id` / `order_id` sont de simples colonnes.
+
 Une commande garde une copie du nom et du prix de chaque produit au moment de l'achat : elle ne change pas si le produit est modifié ensuite.
 Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON DELETE SET NULL`) et la ligne reste dans l'historique.
 `payments` garde chaque tentative de paiement (acceptée ou refusée) ; elle est créée par payment-service, qui passe aussi `orders.status` à `PAID`.
@@ -520,10 +527,11 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │   ├── discovery-server/   Eureka registry
 │   ├── auth-service/       register, login, JWT
 │   ├── product-service/    categories and products, ADMIN writes checked from the JWT
-│   ├── order-service/      cart and orders of the logged-in user, stock removed on order
+│   ├── order-service/      cart and orders of the logged-in user, stock reserved in product-service
 │   ├── payment-service/    simulated card payments, sets the order to PAID
 │   └── api-gateway/        single entry point, routes to the services and the monolith
-├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices) and .env.example
+├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices), .env.example
+│   └── postgres/    init-databases.sql: one database per service
 └── docs/            HTTP request examples, architecture notes
 ```
 
