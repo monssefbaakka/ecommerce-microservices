@@ -59,6 +59,11 @@ public abstract class IntegrationTest {
         return "Bearer " + TestTokens.create(jwtSecret, "john@example.com", "USER", Duration.ofHours(1));
     }
 
+    // What order-service sends to /internal: a token it signs itself with the shared key
+    protected String serviceToken() {
+        return "Bearer " + TestTokens.create(jwtSecret, "order-service", "SERVICE", Duration.ofMinutes(5));
+    }
+
     protected long createCategory(String adminToken, String name) throws Exception {
         MvcResult result = mockMvc.perform(auth(json(post("/api/categories"), Map.of("name", name)), adminToken))
                 .andExpect(status().isCreated())
