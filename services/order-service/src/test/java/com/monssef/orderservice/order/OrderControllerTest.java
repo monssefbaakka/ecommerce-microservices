@@ -5,8 +5,6 @@ import com.monssef.orderservice.common.ResourceNotFoundException;
 import com.monssef.orderservice.config.SecurityConfig;
 import com.monssef.orderservice.order.dto.OrderDTO;
 import com.monssef.orderservice.order.dto.OrderItemDTO;
-import com.monssef.orderservice.product.InsufficientStockException;
-import com.monssef.orderservice.product.Product;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -82,11 +80,23 @@ class OrderControllerTest {
     @Test
     @WithMockUser(username = EMAIL)
     void placeOrder_shouldReturn409_whenNotEnoughStock() throws Exception {
-        when(orderService.placeOrder(EMAIL)).thenThrow(new InsufficientStockException(product()));
+        when(orderService.placeOrder(EMAIL)).thenThrow(new ResponseStatusException(HttpStatus.CONFLICT,
+                "Not enough stock for product 1 (iPhone 15): 1 left")); // passed on from product-service
 
         mockMvc.perform(post("/api/orders"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value("Not enough stock for product 1 (iPhone 15): 1 left"));
+    }
+
+    @Test
+    @WithMockUser(username = EMAIL)
+    void placeOrder_shouldReturn503_whenProductServiceIsDown() throws Exception {
+        when(orderService.placeOrder(EMAIL)).thenThrow(
+                new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Product service unavailable"));
+
+        mockMvc.perform(post("/api/orders"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("Product service unavailable"));
     }
 
     @Test
@@ -173,14 +183,6 @@ class OrderControllerTest {
                 .andExpect(status().isUnauthorized());
 
         verifyNoInteractions(orderService);
-    }
-
-    private Product product() {
-        Product product = new Product();
-        product.setId(1L);
-        product.setName("iPhone 15");
-        product.setStock(1);
-        return product;
     }
 
     private OrderDTO order() {

@@ -1,7 +1,7 @@
 package com.monssef.orderservice.common.exception;
 
 import com.monssef.orderservice.common.ResourceNotFoundException;
-import com.monssef.orderservice.product.Product;
+import com.monssef.orderservice.order.Order;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.BeforeEach;
@@ -223,7 +223,7 @@ class GlobalExceptionHandlerTest {
         }
 
         private PropertyReferenceException invalidSort() {
-            return new PropertyReferenceException("foo", TypeInformation.of(Product.class), List.of());
+            return new PropertyReferenceException("foo", TypeInformation.of(Order.class), List.of());
         }
     }
 }
