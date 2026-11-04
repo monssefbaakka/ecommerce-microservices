@@ -16,7 +16,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @Configuration
 public class SecurityConfig {
 
-    // Same encoder as the monolith: the hashes of the shared users table must stay readable by both
+    // Same encoder as the monolith: a hash copied from its users table stays readable here
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
