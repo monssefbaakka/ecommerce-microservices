@@ -51,7 +51,7 @@ public class Product {
     @Column(nullable = false, precision = 10, scale = 2)
     private BigDecimal price;
 
-    // Units left. Orders still decrease it in the monolith (same table, row lock while ordering).
+    // Units left. order-service reserves units through /internal/stock when an order is placed.
     // The default fills existing rows when Hibernate adds the column
     @Min(0)
     @ColumnDefault("0")
