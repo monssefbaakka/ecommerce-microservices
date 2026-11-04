@@ -1,7 +1,6 @@
 package com.monssef.orderservice.order;
 
-import com.monssef.orderservice.product.Product;
-import com.monssef.orderservice.user.User;
+import com.monssef.orderservice.product.ReservedItem;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
@@ -13,8 +12,9 @@ class OrderTest {
 
     @Test
     void newOrder_shouldBePendingAndEmpty() {
-        Order order = new Order(new User());
+        Order order = new Order("alice@example.com");
 
+        assertThat(order.getUserEmail()).isEqualTo("alice@example.com");
         assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
         assertThat(order.getItems()).isEmpty();
         assertThat(order.getTotal()).isEqualByComparingTo("0");
@@ -23,10 +23,10 @@ class OrderTest {
 
     @Test
     void addItem_shouldLinkItemToOrderAndUpdateTotal() {
-        Order order = new Order(new User());
+        Order order = new Order("alice@example.com");
 
-        OrderItem item = order.addItem(product(1L, "iPhone 15", "999.99"), 2);
-        order.addItem(product(2L, "Case", "19.90"), 1);
+        OrderItem item = order.addItem(reserved(1L, "iPhone 15", "999.99", 2));
+        order.addItem(reserved(2L, "Case", "19.90", 1));
 
         assertThat(item.getOrder()).isSameAs(order);
         assertThat(item.getSubtotal()).isEqualByComparingTo("1999.98");
@@ -36,24 +36,16 @@ class OrderTest {
     }
 
     @Test
-    void addItem_shouldCopyNameAndPrice_soLaterProductChangesDoNotAffectTheOrder() {
-        Product product = product(1L, "iPhone 15", "999.99");
-        Order order = new Order(new User());
-        OrderItem item = order.addItem(product, 1);
+    void addItem_shouldCopyWhatProductServiceReserved() {
+        OrderItem item = new Order("alice@example.com").addItem(reserved(1L, "iPhone 15", "999.99", 2));
 
-        product.setName("iPhone 15 (renamed)");
-        product.setPrice(new BigDecimal("1299.00"));
-
+        assertThat(item.getProductId()).isEqualTo(1L);
         assertThat(item.getProductName()).isEqualTo("iPhone 15");
         assertThat(item.getUnitPrice()).isEqualByComparingTo("999.99");
-        assertThat(order.getTotal()).isEqualByComparingTo("999.99");
+        assertThat(item.getQuantity()).isEqualTo(2);
     }
 
-    private Product product(Long id, String name, String price) {
-        Product product = new Product();
-        product.setId(id);
-        product.setName(name);
-        product.setPrice(new BigDecimal(price));
-        return product;
+    private ReservedItem reserved(Long productId, String name, String price, int quantity) {
+        return new ReservedItem(productId, name, new BigDecimal(price), quantity);
     }
 }
