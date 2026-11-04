@@ -4,10 +4,12 @@ import com.monssef.orderservice.auth.JwtService;
 import com.monssef.orderservice.cart.CartController;
 import com.monssef.orderservice.cart.CartService;
 import com.monssef.orderservice.cart.dto.CartDTO;
+import com.monssef.orderservice.order.InternalOrderController;
 import com.monssef.orderservice.order.OrderController;
 import com.monssef.orderservice.order.OrderService;
 import com.monssef.orderservice.order.OrderStatus;
 import com.monssef.orderservice.order.dto.OrderDTO;
+import com.monssef.orderservice.order.dto.OrderSummaryDTO;
 import com.monssef.orderservice.support.TestTokens;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
@@ -37,7 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * The controller tests use @WithMockUser, which skips the JWT filter: here the token
  * goes through the whole chain (header -> JwtAuthenticationFilter -> SecurityConfig rules).
  */
-@WebMvcTest({CartController.class, OrderController.class})
+@WebMvcTest({CartController.class, OrderController.class, InternalOrderController.class})
 @Import({SecurityConfig.class, JwtService.class}) // real JwtService, not a mock
 @TestPropertySource(properties = "jwt.secret=" + TestTokens.SECRET)
 class SecurityConfigTest {
@@ -146,6 +148,47 @@ class SecurityConfigTest {
         mockMvc.perform(get("/api/unknown"))
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.path").value("/api/unknown"));
+    }
+
+    // --- /internal/**: only the SERVICE token of another service ---
+
+    @Test
+    void internalOrder_shouldReturn200_whenServiceToken() throws Exception {
+        when(orderService.findSummary(7L)).thenReturn(
+                new OrderSummaryDTO(7L, "john@example.com", OrderStatus.PENDING, new BigDecimal("1999.98")));
+
+        mockMvc.perform(get("/internal/orders/7")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("payment-service", "SERVICE")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.userEmail").value("john@example.com"));
+    }
+
+    @Test
+    void markPaid_shouldReturn403_whenUserToken() throws Exception {
+        // A user must not be able to mark their own order as paid without paying
+        mockMvc.perform(post("/internal/orders/7/paid")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("john@example.com", "USER")))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.message").value("Access denied"));
+
+        verifyNoInteractions(orderService);
+    }
+
+    @Test
+    void internalOrder_shouldReturn403_whenAdminToken() throws Exception {
+        mockMvc.perform(get("/internal/orders/7")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + tokenFor("admin@example.com", "ADMIN")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(orderService);
+    }
+
+    @Test
+    void internalOrder_shouldReturn401_whenAnonymous() throws Exception {
+        mockMvc.perform(get("/internal/orders/7"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(orderService);
     }
 
     // --- Stateless ---
