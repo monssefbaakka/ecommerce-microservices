@@ -1,22 +1,18 @@
 package com.monssef.orderservice.cart;
 
-import com.monssef.orderservice.product.Product;
-import com.monssef.orderservice.user.User;
 import jakarta.persistence.CascadeType;
+import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.OneToOne;
 import jakarta.persistence.OrderBy;
 import jakarta.persistence.Table;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
-import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -32,40 +28,32 @@ public class Cart {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    // One cart per user: the unique constraint is on user_id
-    @OneToOne(optional = false)
-    @JoinColumn(name = "user_id", nullable = false, unique = true)
-    private User user;
+    // One cart per user. The email of the JWT, not a foreign key: the accounts live in auth-service
+    @Column(nullable = false, unique = true, length = 150)
+    private String userEmail;
 
     // The cart owns its items: saving the cart saves them, removing one from the list deletes it
     @OneToMany(mappedBy = "cart", cascade = CascadeType.ALL, orphanRemoval = true)
     @OrderBy("id")
     private List<CartItem> items = new ArrayList<>();
 
-    public Cart(User user) {
-        this.user = user;
+    public Cart(String userEmail) {
+        this.userEmail = userEmail;
     }
 
     public Optional<CartItem> findItem(Long productId) {
         return items.stream()
-                .filter(item -> item.getProduct().getId().equals(productId))
+                .filter(item -> item.getProductId().equals(productId))
                 .findFirst();
     }
 
-    public CartItem addItem(Product product, int quantity) {
-        CartItem item = new CartItem(this, product, quantity);
+    public CartItem addItem(Long productId, int quantity) {
+        CartItem item = new CartItem(this, productId, quantity);
         items.add(item);
         return item;
     }
 
-    public int getTotalQuantity() {
-        return items.stream().mapToInt(CartItem::getQuantity).sum();
-    }
-
-    // Computed, not stored: follows the current product prices
-    public BigDecimal getTotal() {
-        return items.stream()
-                .map(CartItem::getSubtotal)
-                .reduce(BigDecimal.ZERO, BigDecimal::add);
+    public List<Long> getProductIds() {
+        return items.stream().map(CartItem::getProductId).toList();
     }
 }
