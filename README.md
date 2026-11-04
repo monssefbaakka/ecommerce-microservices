@@ -139,11 +139,13 @@ flowchart LR
     order -. registers .-> eureka
     payment -. registers .-> eureka
     gateway -. registers, finds the services .-> eureka
-    auth --> db[(PostgreSQL)]
-    product --> db
-    order --> db
-    payment --> db
-    monolith --> db
+    order -- "/internal/products<br/>/internal/stock/**" --> product
+    payment -- "/internal/orders/**" --> order
+    auth --> authdb[(auth_db)]
+    product --> productdb[(product_db)]
+    order --> orderdb[(order_db)]
+    payment --> paymentdb[(payment_db)]
+    monolith --> monolithdb[(ecommerce)]
 ```
 
 | Service | Port | Role |
