@@ -112,8 +112,9 @@ cd services/auth-service    # or discovery-server, product-service, order-servic
 | discovery-server | The registry starts, accepts registrations, serves the dashboard; only `health` and `info` are exposed |
 | auth-service | JWT, register / login rules, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (register then login, Actuator, OpenAPI) |
 | product-service | JWT check, category and product rules, paging and search, `ErrorResponse` bodies, security chain (401 / 403) with MockMvc; `*IT` on PostgreSQL with Testcontainers (catalog flow, Actuator, OpenAPI) |
-| order-service | JWT check, cart and order rules (stock, per-line maximum, locks in id order), mappers, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (cart and order flows, rollback on missing stock, concurrent orders, deleted products, Actuator, OpenAPI) |
-| payment-service | JWT check, simulated card, payment rules (`PAID` on success, declined attempts kept, 404 / 409), `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (payment flow, double payment under concurrency, Actuator, OpenAPI) |
+| product-service (stock) | Reservations all or nothing, release, `/internal/**` only for the `SERVICE` role; `StockIT` on PostgreSQL (rollback, last unit under concurrency) |
+| order-service | JWT check, cart and order rules (stock, per-line maximum, stock given back if the order cannot be saved), product-service client against a fake HTTP server (404 / 409 passed on, 503), `/internal/orders` for the `SERVICE` role only, mappers, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory product-service (cart and order flows, concurrent orders, deleted products, Actuator, OpenAPI) |
+| payment-service | JWT check, simulated card, payment rules (`PAID` set in order-service on success, declined attempts kept, owner checked, 404 / 409 / 503), order-service client against a fake HTTP server, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory order-service (payment flow, double payment stopped by the advisory lock, Actuator, OpenAPI) |
 | api-gateway | Routing to every service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
 
 ### Stop
