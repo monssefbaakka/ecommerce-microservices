@@ -2,8 +2,8 @@ package com.monssef.orderservice.order;
 
 import com.monssef.orderservice.order.dto.OrderDTO;
 import com.monssef.orderservice.order.dto.OrderItemDTO;
-import com.monssef.orderservice.product.Product;
-import com.monssef.orderservice.user.User;
+import com.monssef.orderservice.order.dto.OrderSummaryDTO;
+import com.monssef.orderservice.product.ReservedItem;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 
@@ -19,11 +19,7 @@ class OrderMapperTest {
 
     @Test
     void toDto_shouldMapOrderAndItems() {
-        Order order = new Order(new User());
-        order.setId(7L);
-        order.setCreatedAt(Instant.parse("2026-10-01T10:00:00Z"));
-        order.addItem(product(1L, "iPhone 15", "999.99"), 2);
-        order.addItem(product(2L, "Case", "19.90"), 1);
+        Order order = order();
 
         OrderDTO dto = mapper.toDto(order);
 
@@ -36,35 +32,35 @@ class OrderMapperTest {
     }
 
     @Test
-    void toDto_shouldKeepPriceCopiedAtPurchaseTime() {
-        Product product = product(1L, "iPhone 15", "999.99");
-        OrderItem item = new Order(new User()).addItem(product, 2);
-        product.setName("iPhone 15 Pro");
-        product.setPrice(new BigDecimal("1099.99"));
+    void toDto_shouldMapCopiedNameAndPrice() {
+        OrderItem item = new Order("alice@example.com")
+                .addItem(new ReservedItem(1L, "iPhone 15", new BigDecimal("999.99"), 2));
 
         OrderItemDTO dto = mapper.toDto(item);
 
+        assertThat(dto.getProductId()).isEqualTo(1L);
         assertThat(dto.getProductName()).isEqualTo("iPhone 15");
         assertThat(dto.getUnitPrice()).isEqualByComparingTo("999.99");
+        assertThat(dto.getQuantity()).isEqualTo(2);
         assertThat(dto.getSubtotal()).isEqualByComparingTo("1999.98");
     }
 
     @Test
-    void toDto_shouldLeaveProductIdNull_whenProductDeleted() {
-        OrderItem item = new Order(new User()).addItem(product(1L, "iPhone 15", "999.99"), 1);
-        item.setProduct(null); // ON DELETE SET NULL
+    void toSummary_shouldMapOwnerStatusAndTotal() {
+        OrderSummaryDTO dto = mapper.toSummary(order());
 
-        OrderItemDTO dto = mapper.toDto(item);
-
-        assertThat(dto.getProductId()).isNull();
-        assertThat(dto.getProductName()).isEqualTo("iPhone 15");
+        assertThat(dto.getId()).isEqualTo(7L);
+        assertThat(dto.getUserEmail()).isEqualTo("alice@example.com");
+        assertThat(dto.getStatus()).isEqualTo(OrderStatus.PENDING);
+        assertThat(dto.getTotal()).isEqualByComparingTo("2019.88");
     }
 
-    private Product product(Long id, String name, String price) {
-        Product product = new Product();
-        product.setId(id);
-        product.setName(name);
-        product.setPrice(new BigDecimal(price));
-        return product;
+    private Order order() {
+        Order order = new Order("alice@example.com");
+        order.setId(7L);
+        order.setCreatedAt(Instant.parse("2026-10-01T10:00:00Z"));
+        order.addItem(new ReservedItem(1L, "iPhone 15", new BigDecimal("999.99"), 2));
+        order.addItem(new ReservedItem(2L, "Case", new BigDecimal("19.90"), 1));
+        return order;
     }
 }
