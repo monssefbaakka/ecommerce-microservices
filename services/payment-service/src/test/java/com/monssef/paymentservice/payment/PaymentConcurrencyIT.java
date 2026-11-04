@@ -21,8 +21,8 @@ import static org.assertj.core.api.Assertions.fail;
 
 /**
  * Payments of the same order at the same time, each in its own thread and transaction.
- * Only the row lock of PaymentService (SELECT ... FOR UPDATE) prevents a double charge here:
- * without it every payment would read the order as PENDING and succeed.
+ * Only the advisory lock of PaymentService (pg_advisory_xact_lock on the order id) prevents a double
+ * charge here: without it every payment would read the order as PENDING and charge the card.
  */
 class PaymentConcurrencyIT extends IntegrationTest {
 
@@ -33,7 +33,6 @@ class PaymentConcurrencyIT extends IntegrationTest {
 
     @Test
     void sameOrder_shouldBeChargedOnlyOnce() throws Exception {
-        userToken("john@example.com");
         long orderId = createOrder("john@example.com", "1999.98");
 
         List<Throwable> failures = payAtTheSameTime(orderId, CLICKS);
@@ -44,6 +43,8 @@ class PaymentConcurrencyIT extends IntegrationTest {
                         .isEqualTo(HttpStatus.CONFLICT));
         assertThat(statusOf(orderId)).isEqualTo("PAID");
         assertThat(jdbcTemplate.queryForObject("SELECT count(*) FROM payments", Integer.class)).isEqualTo(1);
+        // the others stopped at the PAID status, before charging the card
+        assertThat(orders.markPaidCalls()).isEqualTo(1);
     }
 
     // Starts every payment together and returns the exceptions of the ones that failed
