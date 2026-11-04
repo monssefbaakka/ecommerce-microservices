@@ -1,9 +1,8 @@
 package com.monssef.paymentservice.payment;
 
 import com.monssef.paymentservice.common.ResourceNotFoundException;
-import com.monssef.paymentservice.order.Order;
-import com.monssef.paymentservice.order.OrderRepository;
-import com.monssef.paymentservice.order.OrderStatus;
+import com.monssef.paymentservice.order.OrderClient;
+import com.monssef.paymentservice.order.OrderSummary;
 import com.monssef.paymentservice.payment.dto.PaymentDTO;
 import com.monssef.paymentservice.payment.dto.PaymentRequest;
 import lombok.RequiredArgsConstructor;
@@ -23,37 +22,44 @@ import org.springframework.web.server.ResponseStatusException;
 @Transactional(readOnly = true)
 public class PaymentService {
 
-    private final OrderRepository orderRepository;
+    private final OrderClient orderClient;
+    private final OrderPaymentLock orderPaymentLock;
     private final PaymentRepository paymentRepository;
     private final CardProcessor cardProcessor;
     private final PaymentMapper mapper;
 
-    // Charges the order total and records the attempt; a success sets the order to PAID, in the same
-    // transaction. The order row is locked until the commit: a double click on "pay" runs the two
+    // Charges the order total and records the attempt; a success sets the order to PAID in order-service.
+    // The advisory lock on the order id is held until the commit: a double click on "pay" runs the two
     // payments one after the other, and the second one finds the order already PAID (409)
     @Transactional
     public PaymentDTO pay(String email, PaymentRequest request) {
-        Order order = orderRepository.findForUpdateByIdAndUserEmail(request.getOrderId(), email)
-                .orElseThrow(() -> new ResourceNotFoundException("Order", request.getOrderId()));
+        Long orderId = request.getOrderId();
+        orderPaymentLock.lock(orderId);
+        OrderSummary order = orderClient.find(orderId); // 404 if unknown, 503 if order-service is down
+        if (!order.belongsTo(email)) {
+            throw new ResourceNotFoundException("Order", orderId); // someone else's order looks unknown
+        }
         if (!order.isPending()) {
             throw new ResponseStatusException(HttpStatus.CONFLICT,
-                    "Order %d is %s, only a PENDING order can be paid".formatted(order.getId(), order.getStatus()));
+                    "Order %d is %s, only a PENDING order can be paid".formatted(orderId, order.status()));
         }
-        PaymentStatus status = cardProcessor.charge(request.getCardNumber(), order.getTotal());
+        PaymentStatus status = cardProcessor.charge(request.getCardNumber(), order.total());
         if (status == PaymentStatus.SUCCEEDED) {
-            order.setStatus(OrderStatus.PAID); // saved by dirty checking
+            // 409 if the order changed meanwhile: nothing is saved here. The card is simulated,
+            // a real one would have to be refunded
+            orderClient.markPaid(orderId);
         }
         Payment payment = paymentRepository.save(new Payment(order, request.getCardNumber(), status));
         return mapper.toDto(payment);
     }
 
     public Page<PaymentDTO> findAll(String email, Pageable pageable) {
-        return paymentRepository.findByOrderUserEmail(email, pageable).map(mapper::toDto);
+        return paymentRepository.findByUserEmail(email, pageable).map(mapper::toDto);
     }
 
     // 404 also when the payment exists but belongs to someone else: no way to probe other ids
     public PaymentDTO findById(String email, Long id) {
-        return paymentRepository.findByIdAndOrderUserEmail(id, email)
+        return paymentRepository.findByIdAndUserEmail(id, email)
                 .map(mapper::toDto)
                 .orElseThrow(() -> new ResourceNotFoundException("Payment", id));
     }
