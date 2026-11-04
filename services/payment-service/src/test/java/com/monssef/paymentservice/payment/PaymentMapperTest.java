@@ -1,7 +1,7 @@
 package com.monssef.paymentservice.payment;
 
-import com.monssef.paymentservice.order.Order;
 import com.monssef.paymentservice.order.OrderStatus;
+import com.monssef.paymentservice.order.OrderSummary;
 import com.monssef.paymentservice.payment.dto.PaymentDTO;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
@@ -18,10 +18,7 @@ class PaymentMapperTest {
 
     @Test
     void toDto_shouldMapPaymentAndOrderId() {
-        Order order = new Order();
-        order.setId(7L);
-        order.setStatus(OrderStatus.PENDING);
-        order.setTotal(new BigDecimal("1999.98"));
+        OrderSummary order = new OrderSummary(7L, "john@example.com", OrderStatus.PENDING, new BigDecimal("1999.98"));
         Payment payment = new Payment(order, "4242424242424242", PaymentStatus.SUCCEEDED);
         payment.setId(3L);
         payment.setCreatedAt(Instant.parse("2026-11-03T10:00:00Z"));
