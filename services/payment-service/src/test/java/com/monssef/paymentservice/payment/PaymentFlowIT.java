@@ -1,14 +1,13 @@
 package com.monssef.paymentservice.payment;
 
+import com.monssef.paymentservice.client.ServiceUnavailableException;
 import com.monssef.paymentservice.order.OrderStatus;
 import com.monssef.paymentservice.support.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
 
@@ -110,7 +109,7 @@ class PaymentFlowIT extends IntegrationTest {
     @Test
     void pay_shouldReturn503AndSaveNothing_whenOrderServiceIsDown() throws Exception {
         // doThrow: when(orderClient.find(...)) would run the FakeOrderService answer, which throws a 404 for id 0
-        doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Order service unavailable"))
+        doThrow(new ServiceUnavailableException("Order service"))
                 .when(orderClient).find(anyLong());
 
         mockMvc.perform(pay(user, orderId, CARD))
