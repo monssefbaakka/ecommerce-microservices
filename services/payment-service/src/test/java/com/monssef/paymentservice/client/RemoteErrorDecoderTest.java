@@ -54,6 +54,31 @@ class RemoteErrorDecoderTest {
         assertThat(((ResponseStatusException) decoded).getReason()).isNull();
     }
 
+    @Test
+    void decode_shouldGive503_whenTheOtherServiceFails() {
+        assertUnavailable(decoder.decode("find", response(500, "{\"status\":500}")));
+    }
+
+    @Test
+    void decode_shouldGive503_whenTheServiceTokenIsRejected() {
+        // A 401 / 403 is a configuration problem between services, not something the user can fix
+        assertUnavailable(decoder.decode("find", response(401, null)));
+        assertUnavailable(decoder.decode("find", response(403, null)));
+    }
+
+    @Test
+    void decode_shouldGive503_whenTheLoadBalancerHasNoInstance() {
+        // The answer of the Feign LoadBalancer client when nothing is registered under the name
+        assertUnavailable(decoder.decode("find", response(503,
+                "Load balancer does not contain an instance for the service order-service")));
+    }
+
+    private static void assertUnavailable(Exception decoded) {
+        assertThat(decoded).isInstanceOf(ServiceUnavailableException.class)
+                .hasMessageContaining("Order service unavailable");
+        assertThat(((ResponseStatusException) decoded).getStatusCode()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    }
+
     private static Response response(int status, String body) {
         Request request = Request.create(Request.HttpMethod.POST, "http://order-service/internal/orders/7/paid",
                 Map.of(), null, StandardCharsets.UTF_8, null);
