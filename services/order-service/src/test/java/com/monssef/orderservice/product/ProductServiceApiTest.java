@@ -13,6 +13,7 @@ import org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfigurat
 import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.openfeign.EnableFeignClients;
+import org.springframework.cloud.openfeign.FeignClientProperties;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpStatus;
@@ -61,6 +62,9 @@ class ProductServiceApiTest {
     static void registerProductService(DynamicPropertyRegistry registry) {
         registry.add("spring.cloud.discovery.client.simple.instances.product-service[0].uri", productService::baseUrl);
     }
+
+    @Autowired
+    private FeignClientProperties feignProperties;
 
     @Autowired
     private ProductServiceApi api;
@@ -155,6 +159,15 @@ class ProductServiceApiTest {
         assertThatThrownBy(() -> client.findAll(List.of(1L)))
                 .isInstanceOf(ServiceUnavailableException.class)
                 .hasMessageContaining("Product service unavailable");
+    }
+
+    @Test
+    void timeouts_shouldComeFromApplicationYml_insteadOfTheFeignDefaults() {
+        FeignClientProperties.FeignClientConfiguration defaults = feignProperties.getConfig().get("default");
+
+        // 10 s / 60 s without them: a hanging product-service would hold the request for a minute
+        assertThat(defaults.getConnectTimeout()).isEqualTo(2000);
+        assertThat(defaults.getReadTimeout()).isEqualTo(5000);
     }
 
     private static com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder jsonError(int status, String body) {
