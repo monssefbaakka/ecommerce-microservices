@@ -152,6 +152,16 @@ class ProductServiceApiTest {
     }
 
     @Test
+    void findAllById_shouldThrow503_whenProductServiceRejectsTheToken() {
+        // A 401 / 403 is a configuration problem between services (different JWT keys), not the user's
+        productService.stubFor(get(urlPathEqualTo("/internal/products")).willReturn(forbidden()));
+
+        assertThatThrownBy(() -> api.findAllById(List.of(1L)))
+                .isInstanceOf(ServiceUnavailableException.class)
+                .hasMessageContaining("Product service unavailable");
+    }
+
+    @Test
     void findAll_shouldThrow503_whenTheConnectionDrops() {
         productService.stubFor(get(urlPathEqualTo("/internal/products"))
                 .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
