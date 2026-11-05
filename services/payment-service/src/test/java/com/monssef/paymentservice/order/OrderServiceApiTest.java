@@ -4,6 +4,7 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.monssef.paymentservice.auth.ServiceTokenProvider;
 import com.monssef.paymentservice.client.ServiceUnavailableException;
+import feign.Logger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -158,6 +159,12 @@ class OrderServiceApiTest {
         // 10 s / 60 s without them: a hanging order-service would hold the request for a minute
         assertThat(defaults.getConnectTimeout()).isEqualTo(2000);
         assertThat(defaults.getReadTimeout()).isEqualTo(5000);
+    }
+
+    @Test
+    void loggerLevel_shouldBeBasic_soTheServiceTokenIsNeverLogged() {
+        // HEADERS or FULL would write the Authorization header of every call to the logs
+        assertThat(feignProperties.getConfig().get("default").getLoggerLevel()).isEqualTo(Logger.Level.BASIC);
     }
 
     private static com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder jsonError(int status, String body) {
