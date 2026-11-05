@@ -1,7 +1,9 @@
 package com.monssef.paymentservice.order;
 
+import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.monssef.paymentservice.auth.ServiceTokenProvider;
+import com.monssef.paymentservice.client.ServiceUnavailableException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -115,6 +117,34 @@ class OrderServiceApiTest {
                 .hasMessageContaining("Order 7 is PAID, only a PENDING order can be paid")
                 .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
                 .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    @Test
+    void find_shouldThrow503_whenOrderServiceFails() {
+        orderService.stubFor(get("/internal/orders/7").willReturn(serverError()));
+
+        assertThatThrownBy(() -> api.find(7L))
+                .isInstanceOf(ServiceUnavailableException.class)
+                .hasMessageContaining("Order service unavailable");
+    }
+
+    @Test
+    void find_shouldThrow503_whenOrderServiceRejectsTheToken() {
+        orderService.stubFor(get("/internal/orders/7").willReturn(forbidden()));
+
+        assertThatThrownBy(() -> api.find(7L))
+                .isInstanceOf(ServiceUnavailableException.class)
+                .hasMessageContaining("Order service unavailable");
+    }
+
+    @Test
+    void markPaid_shouldThrow503_whenTheConnectionDrops() {
+        orderService.stubFor(post("/internal/orders/7/paid")
+                .willReturn(aResponse().withFault(Fault.CONNECTION_RESET_BY_PEER)));
+
+        assertThatThrownBy(() -> client.markPaid(7L))
+                .isInstanceOf(ServiceUnavailableException.class)
+                .hasMessageContaining("Order service unavailable");
     }
 
     private static com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder jsonError(int status, String body) {
