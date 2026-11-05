@@ -11,6 +11,15 @@ spring:
     hibernate:
       ddl-auto: update                  # dev: Hibernate creates and updates the cart and order tables
     open-in-view: false
+  cloud:
+    openfeign:
+      client:
+        config:
+          # Every Feign client of the service. The defaults (10 s to connect, 60 s to read) would hold
+          # the request of the user for a minute when product-service hangs: a 503 comes much sooner
+          default:
+            connect-timeout: ${FEIGN_CONNECT_TIMEOUT:2000}   # ms
+            read-timeout: ${FEIGN_READ_TIMEOUT:5000}         # ms
 
 springdoc:
   default-produces-media-type: application/json   # instead of */* on every response
