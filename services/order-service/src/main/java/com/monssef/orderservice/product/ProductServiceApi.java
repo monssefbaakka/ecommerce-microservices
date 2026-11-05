@@ -14,7 +14,7 @@ import java.util.List;
  * the Eureka name, resolved by the LoadBalancer on each call and spread over the instances.
  * Used through ProductClient, which turns a failed call into a 503.
  */
-@FeignClient(name = "product-service", path = "/internal")
+@FeignClient(name = "product-service", path = "/internal", configuration = ProductServiceFeignConfig.class)
 public interface ProductServiceApi {
 
     // Sent as ?ids=1&ids=2: one call for the whole cart
