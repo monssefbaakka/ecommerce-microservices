@@ -14,7 +14,7 @@ import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.doThrow;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -109,8 +109,9 @@ class PaymentFlowIT extends IntegrationTest {
 
     @Test
     void pay_shouldReturn503AndSaveNothing_whenOrderServiceIsDown() throws Exception {
-        when(orderClient.find(anyLong()))
-                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Order service unavailable"));
+        // doThrow: when(orderClient.find(...)) would run the FakeOrderService answer, which throws a 404 for id 0
+        doThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Order service unavailable"))
+                .when(orderClient).find(anyLong());
 
         mockMvc.perform(pay(user, orderId, CARD))
                 .andExpect(status().isServiceUnavailable())
