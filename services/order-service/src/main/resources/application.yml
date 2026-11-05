@@ -20,6 +20,8 @@ spring:
           default:
             connect-timeout: ${FEIGN_CONNECT_TIMEOUT:2000}   # ms
             read-timeout: ${FEIGN_READ_TIMEOUT:5000}         # ms
+            # Method, URL, status and time of each call; never the headers, so never the SERVICE token
+            logger-level: basic
 
 springdoc:
   default-produces-media-type: application/json   # instead of */* on every response
@@ -56,6 +58,11 @@ eureka:
     # Dev: a heartbeat every 10 s, removed 30 s after the last one (defaults: 30 s / 90 s)
     lease-renewal-interval-in-seconds: 10
     lease-expiration-duration-in-seconds: 30
+
+logging:
+  level:
+    # Feign logs at DEBUG only: one line per call to the other service and one per answer
+    com.monssef.orderservice.product.ProductServiceApi: DEBUG
 
 management:
   health:
