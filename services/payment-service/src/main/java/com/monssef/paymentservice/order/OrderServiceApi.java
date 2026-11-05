@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.PostMapping;
  * the Eureka name, resolved by the LoadBalancer on each call and spread over the instances.
  * Used through OrderClient, which turns a failed call into a 503.
  */
-@FeignClient(name = "order-service", path = "/internal/orders")
+@FeignClient(name = "order-service", path = "/internal/orders", configuration = OrderServiceFeignConfig.class)
 public interface OrderServiceApi {
 
     @GetMapping("/{id}")
