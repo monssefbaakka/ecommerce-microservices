@@ -549,7 +549,7 @@ Controllers only ever receive and return DTOs, never entities. Each feature has 
 | 3 | Cart, orders, stock management | Done |
 | 4 | Tests, Docker, Actuator | In progress |
 | 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | In progress |
-| 6 | OpenFeign, Resilience4j, advanced Docker Compose | Planned |
+| 6 | OpenFeign, Resilience4j, advanced Docker Compose | In progress |
 | 7 | CI/CD with GitHub Actions | Planned |
 | 8 | Deployment and frontend (bonus) | Planned |
 
