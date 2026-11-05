@@ -35,4 +35,17 @@ class ServiceTokenInterceptorTest {
         assertThat(claims.getSubject()).isEqualTo("order-service");
         assertThat(claims.get("role", String.class)).isEqualTo("SERVICE");
     }
+
+    @Test
+    void apply_shouldSetOneAuthorizationHeaderPerCall() {
+        RequestTemplate first = new RequestTemplate();
+        RequestTemplate second = new RequestTemplate();
+
+        interceptor.apply(first);
+        interceptor.apply(second);
+
+        // One header per call, never piled up on a reused template
+        assertThat(first.headers().get(HttpHeaders.AUTHORIZATION)).hasSize(1);
+        assertThat(second.headers().get(HttpHeaders.AUTHORIZATION)).hasSize(1);
+    }
 }
