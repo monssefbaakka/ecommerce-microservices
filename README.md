@@ -16,10 +16,10 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Containers | Docker, Docker Compose |
 | API docs | OpenAPI 3 / Swagger UI (springdoc) |
 | Security | Spring Security, JWT (jjwt) |
-| Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer |
+| Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
 | Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info) |
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, JaCoCo |
-| Planned | OpenFeign, Resilience4j, GitHub Actions |
+| Planned | Resilience4j, GitHub Actions |
 
 ## Getting started
 
