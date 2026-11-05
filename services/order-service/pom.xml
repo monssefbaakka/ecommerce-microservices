@@ -126,6 +126,12 @@
             <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Fake product-service over real HTTP for the Feign client tests (standalone: its Jetty stays out of the way) -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Integration tests against a real PostgreSQL started in Docker (versions from the Spring Boot BOM) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
