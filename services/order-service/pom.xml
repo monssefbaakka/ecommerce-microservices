@@ -68,6 +68,11 @@
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
+        <!-- Declarative HTTP clients for the calls to product-service, found by name through the LoadBalancer -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
         <!-- Health and info endpoints under /actuator -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
