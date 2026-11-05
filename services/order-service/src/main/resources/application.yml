@@ -31,9 +31,8 @@ jwt:
   # Lifetime of the SERVICE token signed for each call to product-service
   service-token-validity: 5m
 
-services:
-  # Eureka name, resolved by the load-balanced RestClient: no host or port to configure
-  product-service-url: ${PRODUCT_SERVICE_URL:http://product-service}
+# No address for product-service: its Feign client is resolved by name through Eureka.
+# A fixed address (no Eureka) can be set with spring.cloud.openfeign.client.config.product-service.url
 
 eureka:
   client:
