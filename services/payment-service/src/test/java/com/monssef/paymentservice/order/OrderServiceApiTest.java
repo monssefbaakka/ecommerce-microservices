@@ -13,14 +13,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.cloud.openfeign.EnableFeignClients;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 /**
  * The Feign client over real HTTP, against a fake order-service (WireMock). "order-service" is
@@ -83,5 +86,38 @@ class OrderServiceApiTest {
         assertThat(api.markPaid(7L).status()).isEqualTo(OrderStatus.PAID);
         orderService.verify(postRequestedFor(urlEqualTo("/internal/orders/7/paid"))
                 .withHeader("Authorization", matching("Bearer ey.+")));
+    }
+
+    @Test
+    void find_shouldPassOn404WithTheMessageOfOrderService() {
+        orderService.stubFor(get("/internal/orders/99")
+                .willReturn(jsonError(404, """
+                        {"status":404,"error":"Not Found",
+                         "message":"Order with id 99 not found","path":"/internal/orders/99"}
+                        """)));
+
+        assertThatThrownBy(() -> api.find(99L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Order with id 99 not found")
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
+    void markPaid_shouldPassOn409_whenOrderNotPending() {
+        orderService.stubFor(post("/internal/orders/7/paid")
+                .willReturn(jsonError(409,
+                        "{\"status\":409,\"message\":\"Order 7 is PAID, only a PENDING order can be paid\"}")));
+
+        // Through OrderClient: the decoder's answer must not be turned into a 503 on the way
+        assertThatThrownBy(() -> client.markPaid(7L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Order 7 is PAID, only a PENDING order can be paid")
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+    }
+
+    private static com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder jsonError(int status, String body) {
+        return aResponse().withStatus(status).withHeader("Content-Type", "application/json").withBody(body);
     }
 }
