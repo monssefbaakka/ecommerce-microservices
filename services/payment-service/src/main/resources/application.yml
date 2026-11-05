@@ -31,9 +31,8 @@ jwt:
   # Lifetime of the SERVICE token signed for each call to order-service
   service-token-validity: 5m
 
-services:
-  # Eureka name, resolved by the load-balanced RestClient: no host or port to configure
-  order-service-url: ${ORDER_SERVICE_URL:http://order-service}
+# No address for order-service: its Feign client is resolved by name through Eureka.
+# A fixed address (no Eureka) can be set with spring.cloud.openfeign.client.config.order-service.url
 
 eureka:
   client:
