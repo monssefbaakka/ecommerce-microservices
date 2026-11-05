@@ -1,12 +1,11 @@
 package com.monssef.orderservice.order;
 
+import com.monssef.orderservice.client.ServiceUnavailableException;
 import com.monssef.orderservice.support.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.test.web.servlet.MvcResult;
-import org.springframework.web.server.ResponseStatusException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -95,7 +94,7 @@ class OrderFlowIT extends IntegrationTest {
     void placeOrder_shouldReturn503AndKeepTheCart_whenProductServiceIsDown() throws Exception {
         addToCart(user, iphone, 1);
         when(productClient.reserve(anyList()))
-                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Product service unavailable"));
+                .thenThrow(new ServiceUnavailableException("Product service"));
 
         mockMvc.perform(auth(post("/api/orders"), user))
                 .andExpect(status().isServiceUnavailable())

@@ -1,6 +1,7 @@
 package com.monssef.orderservice.order;
 
 import com.monssef.orderservice.auth.JwtService;
+import com.monssef.orderservice.client.ServiceUnavailableException;
 import com.monssef.orderservice.common.ResourceNotFoundException;
 import com.monssef.orderservice.config.SecurityConfig;
 import com.monssef.orderservice.order.dto.OrderDTO;
@@ -92,7 +93,7 @@ class OrderControllerTest {
     @WithMockUser(username = EMAIL)
     void placeOrder_shouldReturn503_whenProductServiceIsDown() throws Exception {
         when(orderService.placeOrder(EMAIL)).thenThrow(
-                new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Product service unavailable"));
+                new ServiceUnavailableException("Product service"));
 
         mockMvc.perform(post("/api/orders"))
                 .andExpect(status().isServiceUnavailable())

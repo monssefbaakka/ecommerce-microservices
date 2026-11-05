@@ -68,6 +68,11 @@
             <groupId>com.github.ben-manes.caffeine</groupId>
             <artifactId>caffeine</artifactId>
         </dependency>
+        <!-- Declarative HTTP clients for the calls to order-service, found by name through the LoadBalancer -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-openfeign</artifactId>
+        </dependency>
         <!-- Health and info endpoints under /actuator -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -119,6 +124,12 @@
         <dependency>
             <groupId>org.springframework.security</groupId>
             <artifactId>spring-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- Fake order-service over real HTTP for the Feign client tests (standalone: its Jetty stays out of the way) -->
+        <dependency>
+            <groupId>org.wiremock</groupId>
+            <artifactId>wiremock-standalone</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- Integration tests against a real PostgreSQL started in Docker (versions from the Spring Boot BOM) -->

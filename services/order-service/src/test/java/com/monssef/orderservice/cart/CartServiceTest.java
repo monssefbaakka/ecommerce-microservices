@@ -3,6 +3,7 @@ package com.monssef.orderservice.cart;
 import com.monssef.orderservice.cart.dto.AddCartItemRequest;
 import com.monssef.orderservice.cart.dto.CartDTO;
 import com.monssef.orderservice.cart.dto.UpdateCartItemRequest;
+import com.monssef.orderservice.client.ServiceUnavailableException;
 import com.monssef.orderservice.common.ResourceNotFoundException;
 import com.monssef.orderservice.product.InsufficientStockException;
 import com.monssef.orderservice.product.ProductClient;
@@ -182,7 +183,7 @@ class CartServiceTest {
     @Test
     void addItem_shouldPassOn503_whenProductServiceIsDown() {
         when(productClient.find(1L))
-                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Product service unavailable"));
+                .thenThrow(new ServiceUnavailableException("Product service"));
 
         assertThatThrownBy(() -> service.addItem(EMAIL, new AddCartItemRequest(1L, 1)))
                 .isInstanceOf(ResponseStatusException.class)

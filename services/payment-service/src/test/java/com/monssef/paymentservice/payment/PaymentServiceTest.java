@@ -1,5 +1,6 @@
 package com.monssef.paymentservice.payment;
 
+import com.monssef.paymentservice.client.ServiceUnavailableException;
 import com.monssef.paymentservice.common.ResourceNotFoundException;
 import com.monssef.paymentservice.order.OrderClient;
 import com.monssef.paymentservice.order.OrderStatus;
@@ -164,7 +165,7 @@ class PaymentServiceTest {
     @Test
     void pay_shouldPassOn503AndChargeNothing_whenOrderServiceIsDown() {
         when(orderClient.find(7L))
-                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Order service unavailable"));
+                .thenThrow(new ServiceUnavailableException("Order service"));
 
         assertThatThrownBy(() -> service.pay(EMAIL, new PaymentRequest(7L, CARD)))
                 .isInstanceOf(ResponseStatusException.class)

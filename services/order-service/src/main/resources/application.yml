@@ -11,6 +11,17 @@ spring:
     hibernate:
       ddl-auto: update                  # dev: Hibernate creates and updates the cart and order tables
     open-in-view: false
+  cloud:
+    openfeign:
+      client:
+        config:
+          # Every Feign client of the service. The defaults (10 s to connect, 60 s to read) would hold
+          # the request of the user for a minute when product-service hangs: a 503 comes much sooner
+          default:
+            connect-timeout: ${FEIGN_CONNECT_TIMEOUT:2000}   # ms
+            read-timeout: ${FEIGN_READ_TIMEOUT:5000}         # ms
+            # Method, URL, status and time of each call; never the headers, so never the SERVICE token
+            logger-level: basic
 
 springdoc:
   default-produces-media-type: application/json   # instead of */* on every response
@@ -31,9 +42,8 @@ jwt:
   # Lifetime of the SERVICE token signed for each call to product-service
   service-token-validity: 5m
 
-services:
-  # Eureka name, resolved by the load-balanced RestClient: no host or port to configure
-  product-service-url: ${PRODUCT_SERVICE_URL:http://product-service}
+# No address for product-service: its Feign client is resolved by name through Eureka.
+# A fixed address (no Eureka) can be set with spring.cloud.openfeign.client.config.product-service.url
 
 eureka:
   client:
@@ -48,6 +58,11 @@ eureka:
     # Dev: a heartbeat every 10 s, removed 30 s after the last one (defaults: 30 s / 90 s)
     lease-renewal-interval-in-seconds: 10
     lease-expiration-duration-in-seconds: 30
+
+logging:
+  level:
+    # Feign logs at DEBUG only: one line per call to the other service and one per answer
+    com.monssef.orderservice.product.ProductServiceApi: DEBUG
 
 management:
   health:

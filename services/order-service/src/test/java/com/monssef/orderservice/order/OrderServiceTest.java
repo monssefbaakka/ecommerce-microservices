@@ -2,6 +2,7 @@ package com.monssef.orderservice.order;
 
 import com.monssef.orderservice.cart.Cart;
 import com.monssef.orderservice.cart.CartRepository;
+import com.monssef.orderservice.client.ServiceUnavailableException;
 import com.monssef.orderservice.common.ResourceNotFoundException;
 import com.monssef.orderservice.order.dto.OrderDTO;
 import com.monssef.orderservice.order.dto.OrderSummaryDTO;
@@ -152,7 +153,7 @@ class OrderServiceTest {
         Cart cart = cartWithPhoneAndCase();
         when(cartRepository.findForUpdateByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
         when(productClient.findAll(any()))
-                .thenThrow(new ResponseStatusException(HttpStatus.SERVICE_UNAVAILABLE, "Product service unavailable"));
+                .thenThrow(new ServiceUnavailableException("Product service"));
 
         assertThatThrownBy(() -> service.placeOrder(EMAIL))
                 .isInstanceOf(ResponseStatusException.class)
