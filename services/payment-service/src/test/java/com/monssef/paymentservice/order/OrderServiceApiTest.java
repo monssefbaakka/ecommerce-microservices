@@ -4,6 +4,7 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.monssef.paymentservice.auth.ServiceTokenProvider;
 import com.monssef.paymentservice.client.ServiceUnavailableException;
+import com.monssef.paymentservice.config.ResilienceConfig;
 import feign.Logger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
@@ -40,14 +41,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class OrderServiceApiTest {
 
     /**
-     * Just the Feign client of order-service and what it needs (Jackson, LoadBalancer, discovery):
-     * no database, no web server, no Eureka. Nested in a test class, so the integration tests never scan it.
+     * Just the Feign client of order-service and what it needs (Jackson, LoadBalancer, discovery,
+     * the circuit breaker and retries of application.yml): no database, no web server, no Eureka. Nested in a test class, so the integration tests never scan it.
      */
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
             UserDetailsServiceAutoConfiguration.class})
     @EnableFeignClients(clients = OrderServiceApi.class)
-    @Import({OrderClient.class, ServiceTokenProvider.class})
+    @Import({OrderClient.class, ServiceTokenProvider.class, ResilienceConfig.class})
     static class FeignClientOnly {
     }
 
