@@ -141,8 +141,8 @@ flowchart LR
     order -. registers .-> eureka
     payment -. registers .-> eureka
     gateway -. registers, finds the services .-> eureka
-    order -- "Feign: /internal/products<br/>/internal/stock/**" --> product
-    payment -- "Feign: /internal/orders/**" --> order
+    order -- "Feign + circuit breaker: /internal/products<br/>/internal/stock/**" --> product
+    payment -- "Feign + circuit breaker: /internal/orders/**" --> order
     auth --> authdb[(auth_db)]
     product --> productdb[(product_db)]
     order --> orderdb[(order_db)]
