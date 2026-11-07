@@ -404,6 +404,8 @@ Toutes les erreurs ont le même format JSON, qu'elles viennent d'un service, de 
 | 409 | Conflit : nom déjà pris, stock insuffisant, contrainte de base de données |
 | 415 | `Content-Type` non supporté (le JSON est attendu) |
 | 500 | Erreur inattendue |
+| 503 | Service appelé arrêté, non enregistré dans Eureka, en erreur, trop lent, ou circuit breaker ouvert |
+| 504 | La gateway n'a pas reçu la réponse du service en 15 s |
 
 Les détails internes (message SQL, stack trace) ne sont jamais renvoyés au client : ils sont écrits dans les logs de l'application.
 
