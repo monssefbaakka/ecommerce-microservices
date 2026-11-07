@@ -32,6 +32,7 @@ public class RemoteCalls {
         this.breaker = breaker;
         this.readRetry = readRetry;
         this.writeRetry = writeRetry;
+        logEvents();
     }
 
     // A GET: asking twice changes nothing on the other side
@@ -42,6 +43,17 @@ public class RemoteCalls {
     // A POST: sent again only if it never left, so the other side never does it twice
     public <T> T write(Supplier<T> call) {
         return run(writeRetry, call);
+    }
+
+    // One line when the circuit breaker opens or closes, one per attempt sent again
+    private void logEvents() {
+        breaker.getEventPublisher().onStateTransition(event -> log.warn("Circuit breaker of {}: {}",
+                event.getCircuitBreakerName(), event.getStateTransition()));
+        for (Retry retry : new Retry[]{readRetry, writeRetry}) {
+            retry.getEventPublisher().onRetry(event -> log.info("{}: attempt {} failed, sent again in {} ms ({})",
+                    event.getName(), event.getNumberOfRetryAttempts(), event.getWaitInterval().toMillis(),
+                    event.getLastThrowable().getMessage()));
+        }
     }
 
     private <T> T run(Retry retry, Supplier<T> call) {
