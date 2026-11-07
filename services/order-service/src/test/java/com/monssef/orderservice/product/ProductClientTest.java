@@ -1,20 +1,21 @@
 package com.monssef.orderservice.product;
 
+import com.monssef.orderservice.client.RemoteCalls;
 import com.monssef.orderservice.client.ServiceUnavailableException;
 import com.monssef.orderservice.common.ResourceNotFoundException;
-import feign.FeignException;
-import feign.Request;
-import feign.RetryableException;
+import com.monssef.orderservice.support.FeignFailures;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryConfig;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
@@ -26,7 +27,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-// The Feign client is mocked: what goes over HTTP is tested in ProductServiceApiTest
+// The Feign client is mocked: what goes over HTTP is tested in ProductServiceApiTest,
+// the circuit breaker and the retries in RemoteCallsTest (here: one attempt, never opened)
 @ExtendWith(MockitoExtension.class)
 class ProductClientTest {
 
@@ -36,8 +38,14 @@ class ProductClientTest {
     @Mock
     private ProductServiceApi api;
 
-    @InjectMocks
     private ProductClient client;
+
+    @BeforeEach
+    void setUp() {
+        Retry once = Retry.of("once", RetryConfig.custom().maxAttempts(1).build());
+        client = new ProductClient(api, new RemoteCalls("Product service", CircuitBreaker.ofDefaults("product-service"),
+                once, once));
+    }
 
     @Test
     void findAll_shouldAskForEveryIdInOneCall_andIndexByTheId() {
@@ -102,23 +110,16 @@ class ProductClientTest {
 
     @Test
     void findAll_shouldThrow503_whenProductServiceIsUnreachable() {
-        when(api.findAllById(any())).thenThrow(connectionRefused());
+        when(api.findAllById(any())).thenThrow(FeignFailures.connectionRefused());
 
         assertUnavailable(() -> client.findAll(List.of(1L)));
     }
 
     @Test
     void release_shouldThrow503_whenProductServiceIsUnreachable() {
-        doThrow(connectionRefused()).when(api).release(any());
+        doThrow(FeignFailures.connectionRefused()).when(api).release(any());
 
         assertUnavailable(() -> client.release(List.of(new StockLine(1L, 2))));
-    }
-
-    // What Feign throws when the connection fails
-    private static FeignException connectionRefused() {
-        Request request = Request.create(Request.HttpMethod.GET, "http://product-service/internal/products",
-                Map.of(), null, StandardCharsets.UTF_8, null);
-        return new RetryableException(-1, "Connection refused", Request.HttpMethod.GET, (Long) null, request);
     }
 
     private void assertUnavailable(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
