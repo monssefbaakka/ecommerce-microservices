@@ -122,14 +122,33 @@ class RemoteCallsTest {
     }
 
     @Test
-    void circuitBreaker_shouldCountEveryAttempt_andNotRetryOnceOpen() {
+    void circuitBreaker_shouldCountACallOnce_afterItsRetries() {
         when(call.get()).thenThrow(FeignFailures.connectionRefused());
 
-        assertUnavailable(() -> calls.read(call));   // 3 attempts, 3 failures
-        assertUnavailable(() -> calls.read(call));   // 4th failure opens it: the next attempt is refused
+        for (int i = 0; i < 3; i++) {
+            assertUnavailable(() -> calls.read(call));
+        }
+        // 9 failed attempts, but only 3 failed calls: not enough to judge yet
+        assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
 
+        assertUnavailable(() -> calls.read(call));
         assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.OPEN);
-        verify(call, times(4)).get();
+        verify(call, times(12)).get();
+    }
+
+    @Test
+    void circuitBreaker_shouldStayClosed_whenTheRetriesSucceed() {
+        // One instance down out of two: every other attempt is refused, every call succeeds
+        when(call.get()).thenThrow(FeignFailures.connectionRefused()).thenReturn("answer")
+                .thenThrow(FeignFailures.connectionRefused()).thenReturn("answer")
+                .thenThrow(FeignFailures.connectionRefused()).thenReturn("answer")
+                .thenThrow(FeignFailures.connectionRefused()).thenReturn("answer");
+
+        for (int i = 0; i < 4; i++) {
+            assertThat(calls.read(call)).isEqualTo("answer");
+        }
+
+        assertThat(breaker.getState()).isEqualTo(CircuitBreaker.State.CLOSED);
     }
 
     @Test
