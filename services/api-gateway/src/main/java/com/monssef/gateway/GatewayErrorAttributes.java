@@ -15,7 +15,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Errors raised by the gateway itself (no route, service down) get the same JSON as the errors
+ * Errors raised by the gateway itself (no route, service down or too slow) get the same JSON as the errors
  * of the services: {status, error, message, path, errors}. Errors returned by a service pass through as is.
  */
 @Component
@@ -61,6 +61,10 @@ public class GatewayErrorAttributes extends DefaultErrorAttributes {
             return error instanceof ResponseStatusException statusError && statusError.getReason() != null
                     ? statusError.getReason()
                     : "Service unavailable";
+        }
+        if (status == HttpStatus.GATEWAY_TIMEOUT) {
+            // Past the response-timeout of application.yml: the service is up but did not answer
+            return "Service did not answer in time";
         }
         if (status.is5xxServerError()) {
             // The exception message may reveal internal addresses: logs only
