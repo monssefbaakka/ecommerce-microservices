@@ -45,6 +45,25 @@ jwt:
 # No address for product-service: its Feign client is resolved by name through Eureka.
 # A fixed address (no Eureka) can be set with spring.cloud.openfeign.client.config.product-service.url
 
+resilience4j:
+  circuitbreaker:
+    instances:
+      # Every call to product-service, reads and writes (RemoteCalls). Once half of the last calls
+      # failed or were slow, it opens: the calls give a 503 at once instead of waiting for the timeouts
+      product-service:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10                     # judged on the last 10 calls...
+        minimum-number-of-calls: 5                  # ...once there are at least 5
+        failure-rate-threshold: 50                  # % of failed calls that opens it
+        slow-call-duration-threshold: 3s            # a call slower than this counts as slow...
+        slow-call-rate-threshold: 50                # ...and half of them slow opens it too
+        wait-duration-in-open-state: 10s            # then lets a few calls through to test product-service
+        permitted-number-of-calls-in-half-open-state: 3
+        # Only what says product-service is unwell. A 404 / 409 is an answer: it counts as a success
+        record-exceptions:
+          - feign.FeignException                                         # refused, dropped, timeout
+          - com.monssef.orderservice.client.ServiceUnavailableException  # 5xx, not in Eureka
+
 eureka:
   client:
     service-url:
