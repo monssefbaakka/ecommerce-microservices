@@ -9,9 +9,11 @@ import lombok.extern.slf4j.Slf4j;
 import java.util.function.Supplier;
 
 /**
- * Every call to another service goes through here: a retry around a circuit breaker around the call.
- * - Each attempt counts for the circuit breaker. Once it is open, the calls fail at once with a 503,
- *   without waiting for any timeout, until it lets a few calls through to test the service again.
+ * Every call to another service goes through here: a circuit breaker around a retry around the call.
+ * - The circuit breaker counts a call once, after its retries: with one instance down out of two,
+ *   half the attempts fail but every call succeeds on the other one, and it must stay closed.
+ *   Once it is open, the calls fail at once with a 503, without any attempt or timeout, until it
+ *   lets a few calls through to test the service again.
  * - Reads and writes have their own retry: a read is sent again after any short-lived failure,
  *   a write only when it never reached the service (RetryableReadFailure, RequestNeverSent).
  * A 404 / 409 of the other service goes through untouched; any other failure ends as a 503.
@@ -55,7 +57,7 @@ public class RemoteCalls {
     }
 
     private <T> T run(Retry retry, Supplier<T> call) {
-        Supplier<T> guarded = Retry.decorateSupplier(retry, CircuitBreaker.decorateSupplier(breaker, call));
+        Supplier<T> guarded = CircuitBreaker.decorateSupplier(breaker, Retry.decorateSupplier(retry, call));
         try {
             return guarded.get();
         } catch (CallNotPermittedException e) {

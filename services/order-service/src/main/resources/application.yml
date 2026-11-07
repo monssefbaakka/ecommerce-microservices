@@ -48,8 +48,9 @@ jwt:
 resilience4j:
   circuitbreaker:
     instances:
-      # Every call to product-service, reads and writes (RemoteCalls). Once half of the last calls
-      # failed or were slow, it opens: the calls give a 503 at once instead of waiting for the timeouts
+      # Every call to product-service, reads and writes (RemoteCalls), counted once after its retries.
+      # Once half of the last calls failed or were slow, it opens: the calls give a 503 at once
+      # instead of waiting for the timeouts
       product-service:
         sliding-window-type: COUNT_BASED
         sliding-window-size: 10                     # judged on the last 10 calls...
