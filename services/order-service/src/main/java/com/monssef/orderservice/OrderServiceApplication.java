@@ -12,6 +12,10 @@ import org.springframework.data.web.config.EnableSpringDataWebSupport;
 public class OrderServiceApplication {
 
     public static void main(String[] args) {
+        // The HttpURLConnection under Feign sends a POST again by itself when the connection drops,
+        // behind the retries of RemoteCalls: a POST must never reach product-service twice.
+        // Read once, on the first HTTP call: set before anything starts
+        System.setProperty("sun.net.http.retryPost", "false");
         SpringApplication.run(OrderServiceApplication.class, args);
     }
 }
