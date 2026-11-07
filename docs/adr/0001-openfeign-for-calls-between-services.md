@@ -1,6 +1,6 @@
 # ADR 0001: OpenFeign for the calls between services
 
-- **Status:** accepted
+- **Status:** accepted; retries and circuit breaker added by [ADR 0002](0002-circuit-breaker-and-retries-around-feign-calls.md)
 - **Date:** 2026-11-05
 - **Issue:** #48
 
