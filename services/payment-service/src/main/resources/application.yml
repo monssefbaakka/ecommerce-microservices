@@ -45,6 +45,44 @@ jwt:
 # No address for order-service: its Feign client is resolved by name through Eureka.
 # A fixed address (no Eureka) can be set with spring.cloud.openfeign.client.config.order-service.url
 
+resilience4j:
+  circuitbreaker:
+    instances:
+      # Every call to order-service, reads and writes (RemoteCalls), counted once after its retries.
+      # Once half of the last calls failed or were slow, it opens: the calls give a 503 at once
+      # instead of waiting for the timeouts
+      order-service:
+        sliding-window-type: COUNT_BASED
+        sliding-window-size: 10                     # judged on the last 10 calls...
+        minimum-number-of-calls: 5                  # ...once there are at least 5
+        failure-rate-threshold: 50                  # % of failed calls that opens it
+        slow-call-duration-threshold: 3s            # a call slower than this counts as slow...
+        slow-call-rate-threshold: 50                # ...and half of them slow opens it too
+        wait-duration-in-open-state: 10s            # then lets a few calls through to test order-service
+        permitted-number-of-calls-in-half-open-state: 3
+        # Only what says order-service is unwell. A 404 / 409 is an answer: it counts as a success
+        record-exceptions:
+          - feign.FeignException                                         # refused, dropped, timeout
+          - com.monssef.paymentservice.client.ServiceUnavailableException  # 5xx, not in Eureka
+  retry:
+    instances:
+      # 3 attempts at most, 200 ms then 400 ms apart. Worst case for a read: 3 quick failures + 0.6 s.
+      # A timeout is never retried, so a hanging order-service still costs one read timeout (5 s)
+      order-service-reads:
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        # Refused, dropped, 5xx, not in Eureka yet: never a timeout, a 404 or a 409
+        retry-exception-predicate: com.monssef.paymentservice.client.RetryableReadFailure
+      order-service-writes:
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        # Only when the request never reached order-service: an order is never marked paid twice
+        retry-exception-predicate: com.monssef.paymentservice.client.RequestNeverSent
+
 eureka:
   client:
     service-url:

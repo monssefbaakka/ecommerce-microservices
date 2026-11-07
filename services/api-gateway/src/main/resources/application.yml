@@ -5,6 +5,12 @@ spring:
     gateway:
       server:
         webflux:
+          httpclient:
+            # Without them, a service that hangs holds the request (and a connection) forever
+            connect-timeout: ${GATEWAY_CONNECT_TIMEOUT:2000}   # ms: nothing answers = 503
+            # Longer than two calls between services in a row (5 s read timeout each, e.g. find the
+            # order then mark it paid): their own 503 comes first. Past it, the gateway gives a 504
+            response-timeout: ${GATEWAY_RESPONSE_TIMEOUT:15s}
           # Checked in this order, the first matching route wins
           routes:
             # lb:// = the address comes from Eureka, with load balancing between the instances

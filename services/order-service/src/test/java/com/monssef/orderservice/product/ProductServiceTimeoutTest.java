@@ -49,5 +49,17 @@ class ProductServiceTimeoutTest {
                 .isInstanceOf(ServiceUnavailableException.class)
                 .hasMessageContaining("Product service unavailable");
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofMillis(1500));
+        // A timeout is not retried: a hanging product-service would hang again
+        productService.verify(1, getRequestedFor(urlPathEqualTo("/internal/products")));
+    }
+
+    @Test
+    void reserve_shouldNotSendAgain_whenProductServiceAnswersTooLate() {
+        // The stock may be reserved by the time the answer comes: a second request could reserve it twice
+        productService.stubFor(post("/internal/stock/reservations").willReturn(okJson("[]").withFixedDelay(2000)));
+
+        assertThatThrownBy(() -> client.reserve(List.of(new StockLine(1L, 2))))
+                .isInstanceOf(ServiceUnavailableException.class);
+        productService.verify(1, postRequestedFor(urlEqualTo("/internal/stock/reservations")));
     }
 }

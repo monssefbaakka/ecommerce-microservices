@@ -1,26 +1,27 @@
 package com.monssef.paymentservice.order;
 
+import com.monssef.paymentservice.client.RemoteCalls;
 import com.monssef.paymentservice.client.ServiceUnavailableException;
-import feign.FeignException;
-import feign.Request;
-import feign.RetryableException;
+import com.monssef.paymentservice.support.FeignFailures;
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
+import io.github.resilience4j.retry.Retry;
+import io.github.resilience4j.retry.RetryConfig;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
-import java.nio.charset.StandardCharsets;
-import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
-// The Feign client is mocked: what goes over HTTP is tested in OrderServiceApiTest
+// The Feign client is mocked: what goes over HTTP is tested in OrderServiceApiTest,
+// the circuit breaker and the retries in RemoteCallsTest (here: one attempt, never opened)
 @ExtendWith(MockitoExtension.class)
 class OrderClientTest {
 
@@ -30,8 +31,14 @@ class OrderClientTest {
     @Mock
     private OrderServiceApi api;
 
-    @InjectMocks
     private OrderClient client;
+
+    @BeforeEach
+    void setUp() {
+        Retry once = Retry.of("once", RetryConfig.custom().maxAttempts(1).build());
+        client = new OrderClient(api, new RemoteCalls("Order service", CircuitBreaker.ofDefaults("order-service"),
+                once, once));
+    }
 
     @Test
     void find_shouldReturnOwnerStatusAndTotal() {
@@ -67,23 +74,16 @@ class OrderClientTest {
 
     @Test
     void find_shouldThrow503_whenOrderServiceIsUnreachable() {
-        when(api.find(7L)).thenThrow(connectionRefused());
+        when(api.find(7L)).thenThrow(FeignFailures.connectionRefused());
 
         assertUnavailable(() -> client.find(7L));
     }
 
     @Test
     void markPaid_shouldThrow503_whenOrderServiceIsUnreachable() {
-        when(api.markPaid(7L)).thenThrow(connectionRefused());
+        when(api.markPaid(7L)).thenThrow(FeignFailures.connectionRefused());
 
         assertUnavailable(() -> client.markPaid(7L));
-    }
-
-    // What Feign throws when the connection fails
-    private static FeignException connectionRefused() {
-        Request request = Request.create(Request.HttpMethod.GET, "http://order-service/internal/orders/7",
-                Map.of(), null, StandardCharsets.UTF_8, null);
-        return new RetryableException(-1, "Connection refused", Request.HttpMethod.GET, (Long) null, request);
     }
 
     private void assertUnavailable(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {

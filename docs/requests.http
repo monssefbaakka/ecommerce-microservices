@@ -639,6 +639,14 @@ Content-Type: application/json
 
 { "productId": {{shopProduct.response.body.$.id}}, "quantity": 1 }
 
+### W17. product-service still stopped: send W16 five times, then this one (expect 503 at once, no Feign call in the logs:
+### "product-service not called: its circuit breaker is OPEN"). Start product-service again: 10 s later it is added
+POST {{gateway}}/api/cart/items
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "productId": {{shopProduct.response.body.$.id}}, "quantity": 1 }
+
 ### I1. /internal/** is not routed by the gateway (expect 404)
 GET {{gateway}}/internal/orders/{{shopOrder.response.body.$.id}}
 Authorization: Bearer {{gatewayLogin.response.body.$.token}}

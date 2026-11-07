@@ -48,5 +48,16 @@ class OrderServiceTimeoutTest {
                 .isInstanceOf(ServiceUnavailableException.class)
                 .hasMessageContaining("Order service unavailable");
         assertThat(Duration.ofNanos(System.nanoTime() - start)).isLessThan(Duration.ofMillis(1500));
+        // A timeout is not retried: a hanging order-service would hang again
+        orderService.verify(1, getRequestedFor(urlEqualTo("/internal/orders/7")));
+    }
+
+    @Test
+    void markPaid_shouldNotSendAgain_whenOrderServiceAnswersTooLate() {
+        // The order may be PAID by the time the answer comes: a second request would answer 409
+        orderService.stubFor(post("/internal/orders/7/paid").willReturn(okJson("{\"id\":7}").withFixedDelay(2000)));
+
+        assertThatThrownBy(() -> client.markPaid(7L)).isInstanceOf(ServiceUnavailableException.class);
+        orderService.verify(1, postRequestedFor(urlEqualTo("/internal/orders/7/paid")));
     }
 }

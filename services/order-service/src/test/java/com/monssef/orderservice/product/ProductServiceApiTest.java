@@ -4,7 +4,14 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.monssef.orderservice.client.ServiceUnavailableException;
 import com.monssef.orderservice.auth.ServiceTokenProvider;
+import com.monssef.orderservice.config.ResilienceConfig;
+import com.monssef.orderservice.support.FeignFailures;
 import feign.Logger;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerConfig;
+import io.github.resilience4j.circuitbreaker.CircuitBreakerRegistry;
+import io.github.resilience4j.retry.RetryConfig;
+import io.github.resilience4j.retry.RetryRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +30,7 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 
 import static com.github.tomakehurst.wiremock.client.WireMock.*;
@@ -41,14 +49,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class ProductServiceApiTest {
 
     /**
-     * Just the Feign client of product-service and what it needs (Jackson, LoadBalancer, discovery):
-     * no database, no web server, no Eureka. Nested in a test class, so the integration tests never scan it.
+     * Just the Feign client of product-service and what it needs (Jackson, LoadBalancer, discovery,
+     * the circuit breaker and retries of application.yml): no database, no web server, no Eureka. Nested in a test class, so the integration tests never scan it.
      */
     @Configuration(proxyBeanMethods = false)
     @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
             UserDetailsServiceAutoConfiguration.class})
     @EnableFeignClients(clients = ProductServiceApi.class)
-    @Import({ProductClient.class, ServiceTokenProvider.class})
+    @Import({ProductClient.class, ServiceTokenProvider.class, ResilienceConfig.class})
     static class FeignClientOnly {
     }
 
@@ -72,6 +80,18 @@ class ProductServiceApiTest {
 
     @Autowired
     private ProductClient client;
+
+    @Autowired
+    private CircuitBreakerRegistry breakers;
+
+    @Autowired
+    private RetryRegistry retries;
+
+    @BeforeEach
+    void closeTheCircuitBreaker() {
+        // Shared by the tests of this class: the failures of one must not open it for the next
+        breakers.circuitBreaker("product-service").reset();
+    }
 
     @Test
     void findAllById_shouldAskForEveryIdInOneCall_withServiceToken() {
@@ -185,6 +205,39 @@ class ProductServiceApiTest {
     void loggerLevel_shouldBeBasic_soTheServiceTokenIsNeverLogged() {
         // HEADERS or FULL would write the Authorization header of every call to the logs
         assertThat(feignProperties.getConfig().get("default").getLoggerLevel()).isEqualTo(Logger.Level.BASIC);
+    }
+
+    @Test
+    void circuitBreaker_shouldComeFromApplicationYml() {
+        CircuitBreakerConfig config = breakers.circuitBreaker("product-service").getCircuitBreakerConfig();
+
+        assertThat(config.getSlidingWindowSize()).isEqualTo(10);
+        assertThat(config.getMinimumNumberOfCalls()).isEqualTo(5);
+        assertThat(config.getFailureRateThreshold()).isEqualTo(50f);
+        assertThat(config.getSlowCallDurationThreshold()).isEqualTo(Duration.ofSeconds(3));
+        assertThat(config.getWaitIntervalFunctionInOpenState().apply(1)).isEqualTo(10_000L);
+        assertThat(config.getPermittedNumberOfCallsInHalfOpenState()).isEqualTo(3);
+        // Recorded: product-service unwell. Not recorded: its 404 / 409 answers
+        assertThat(config.getRecordExceptionPredicate().test(FeignFailures.readTimeout())).isTrue();
+        assertThat(config.getRecordExceptionPredicate().test(new ServiceUnavailableException("Product service"))).isTrue();
+        assertThat(config.getRecordExceptionPredicate()
+                .test(new ResponseStatusException(HttpStatus.CONFLICT, "Not enough stock"))).isFalse();
+    }
+
+    @Test
+    void retries_shouldComeFromApplicationYml_withTheirOwnRuleForReadsAndWrites() {
+        RetryConfig reads = retries.retry("product-service-reads").getRetryConfig();
+        RetryConfig writes = retries.retry("product-service-writes").getRetryConfig();
+
+        for (RetryConfig config : List.of(reads, writes)) {
+            assertThat(config.getMaxAttempts()).isEqualTo(3);
+            // 200 ms before the 2nd attempt, 400 ms before the 3rd
+            assertThat(config.getIntervalBiFunction().apply(1, null)).isEqualTo(200L);
+            assertThat(config.getIntervalBiFunction().apply(2, null)).isEqualTo(400L);
+        }
+        assertThat(reads.getExceptionPredicate().test(FeignFailures.connectionReset())).isTrue();
+        assertThat(writes.getExceptionPredicate().test(FeignFailures.connectionReset())).isFalse();
+        assertThat(writes.getExceptionPredicate().test(FeignFailures.connectionRefused())).isTrue();
     }
 
     private static com.github.tomakehurst.wiremock.client.ResponseDefinitionBuilder jsonError(int status, String body) {

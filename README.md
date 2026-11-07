@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 started: the services call each other through OpenFeign clients. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 in progress: the services call each other through OpenFeign clients, behind a circuit breaker and retries, and the gateway has timeouts. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -19,7 +19,8 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
 | Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info) |
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, WireMock (fake services for the Feign clients), JaCoCo |
-| Planned | Resilience4j, GitHub Actions |
+| Resilience | Resilience4j 2.2: circuit breaker and retries around the Feign calls |
+| Planned | GitHub Actions |
 
 ## Getting started
 
@@ -113,9 +114,9 @@ cd services/auth-service    # or discovery-server, product-service, order-servic
 | auth-service | JWT, register / login rules, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (register then login, Actuator, OpenAPI) |
 | product-service | JWT check, category and product rules, paging and search, `ErrorResponse` bodies, security chain (401 / 403) with MockMvc; `*IT` on PostgreSQL with Testcontainers (catalog flow, Actuator, OpenAPI) |
 | product-service (stock) | Reservations all or nothing, release, `/internal/**` only for the `SERVICE` role; `StockIT` on PostgreSQL (rollback, last unit under concurrency) |
-| order-service | JWT check, cart and order rules (stock, per-line maximum, stock given back if the order cannot be saved), product-service Feign client against a fake product-service in WireMock, found through the LoadBalancer (`SERVICE` token sent, 404 / 409 passed on, 503 when it fails, rejects the token, drops the connection, answers after the read timeout or is not registered), error decoder, `/internal/orders` for the `SERVICE` role only, mappers, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory product-service (cart and order flows, concurrent orders, deleted products, Actuator, OpenAPI) |
-| payment-service | JWT check, simulated card, payment rules (`PAID` set in order-service on success, declined attempts kept, owner checked, 404 / 409 / 503), order-service Feign client against a fake order-service in WireMock (`SERVICE` token sent, 404 / 409 passed on, 503 when it fails, rejects the token, drops the connection, answers after the read timeout or is not registered), error decoder, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory order-service (payment flow, double payment stopped by the advisory lock, Actuator, OpenAPI) |
-| api-gateway | Routing to every service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, Actuator |
+| order-service | JWT check, cart and order rules (stock, per-line maximum, stock given back if the order cannot be saved), product-service Feign client against a fake product-service in WireMock, found through the LoadBalancer (`SERVICE` token sent, 404 / 409 passed on, 503 when it fails, rejects the token, drops the connection, answers after the read timeout or is not registered), retries (reads up to 3 times, a reservation never twice, not after a timeout, the live instance reached when the other one is down), circuit breaker (opens after 5 failed calls, ignores 409, closes again, read from `application.yml`), error decoder, `/internal/orders` for the `SERVICE` role only, mappers, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory product-service (cart and order flows, concurrent orders, deleted products, Actuator, OpenAPI) |
+| payment-service | JWT check, simulated card, payment rules (`PAID` set in order-service on success, declined attempts kept, owner checked, 404 / 409 / 503), order-service Feign client against a fake order-service in WireMock (`SERVICE` token sent, 404 / 409 passed on, 503 when it fails, rejects the token, drops the connection, answers after the read timeout or is not registered), retries (reads up to 3 times, "mark paid" never twice, not after a timeout, the live instance reached when the other one is down), circuit breaker (opens after 5 failed calls, ignores 409, closes again, read from `application.yml`), error decoder, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory order-service (payment flow, double payment stopped by the advisory lock, Actuator, OpenAPI) |
+| api-gateway | Routing to every service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, 504 when it answers after the response timeout, Actuator |
 
 ### Stop
 
@@ -140,8 +141,8 @@ flowchart LR
     order -. registers .-> eureka
     payment -. registers .-> eureka
     gateway -. registers, finds the services .-> eureka
-    order -- "Feign: /internal/products<br/>/internal/stock/**" --> product
-    payment -- "Feign: /internal/orders/**" --> order
+    order -- "Feign + circuit breaker: /internal/products<br/>/internal/stock/**" --> product
+    payment -- "Feign + circuit breaker: /internal/orders/**" --> order
     auth --> authdb[(auth_db)]
     product --> productdb[(product_db)]
     order --> orderdb[(order_db)]
@@ -161,9 +162,12 @@ flowchart LR
 - **Same tokens everywhere:** auth-service signs the JWTs with the same key and claims as the monolith, so a token from `/api/auth/login` works on every service. product-service, order-service and payment-service check them the same way, without a database call: only an `ADMIN` token can write the catalog, and the email of the token picks the cart, orders and payments. Set the same `JWT_SECRET` everywhere outside local dev.
 - **A database per service:** auth-service owns `users` in `auth_db`, product-service `categories` and `products` in `product_db`, order-service `carts` and `orders` in `order_db`, payment-service `payments` in `payment_db`. No service reads the tables of another one, and there is no foreign key between databases: a cart line or an order keeps the `productId`, a cart, an order or a payment keeps the email of the token. The monolith keeps its own `ecommerce` database: an account created through auth-service does not exist there.
 - **Calls between services:** what used to be a join is now an HTTP call, through an OpenFeign client: an interface (`ProductServiceApi`, `OrderServiceApi`) whose `@FeignClient` name is the Eureka name of the other service, resolved by the LoadBalancer on each call (no host or port to configure). order-service reads names, prices and stock from product-service and reserves the stock when an order is placed (all lines or none, **409** if one is short); payment-service reads the owner, status and total of an order and sets it `PAID` in order-service. These endpoints are under `/internal/**`: the gateway does not route them, and they only accept a short-lived token with the `SERVICE` role, which the calling service signs itself with the shared JWT key (no account ever gets this role). A **404** or **409** of the other service is passed on with its message (a Feign `ErrorDecoder`); if it is down, not registered, rejects the token or answers too late, the answer is **503**.
+- **Circuit breaker:** each call to another service goes through a Resilience4j circuit breaker named after it (`product-service`, `order-service`), counted once per call after its retries. When half of the last 10 calls failed or took more than 3 s (5 calls at least), it opens: for 10 s the calls answer **503** at once, without any request or timeout, then 3 calls are let through to test the service again. A **404** or **409** is an answer, it counts as a success. Each change of state is logged (`Circuit breaker of product-service: State transition from CLOSED to OPEN`).
+- **Retries:** at most 3 attempts, 200 ms then 400 ms apart. A read (`GET`) is sent again after a refused or dropped connection, a 5xx or no instance in Eureka yet, never after a timeout: a hanging service would hang again. A write (`POST`: reserve or release the stock, mark an order paid) is sent again only when it never left (connection refused, unknown host), so the other service never does it twice. With an instance down out of two, the LoadBalancer sends the next attempt to the other one and the user sees nothing. The JDK client under Feign never resends a `POST` by itself either (`sun.net.http.retryPost=false`).
 - **Timeouts and logs of the Feign clients:** 2 s to connect and 5 s to read (`FEIGN_CONNECT_TIMEOUT`, `FEIGN_READ_TIMEOUT`, in ms) instead of the Feign defaults of 10 s and 60 s, so a hanging service gives a quick **503**. Each call and its answer is logged at `DEBUG` (method, URL, status, time), never the headers, so never the `SERVICE` token.
 - **No distributed transaction:** if the order cannot be saved after the stock was reserved, order-service gives the units back. A crash between the two, or a failure of the `PAID` call after the card was accepted, is not compensated yet (the card is simulated). A saga or an outbox would cover these cases.
-- **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when the target service is not registered in Eureka or does not answer.
+- **Errors from the gateway** use the same `ErrorResponse` format: **404** when no route matches, **503** when the target service is not registered in Eureka or does not answer, **504** when it answers after 15 s.
+- **Timeouts of the gateway:** 2 s to connect and 15 s for the answer on every route (`GATEWAY_CONNECT_TIMEOUT` in ms, `GATEWAY_RESPONSE_TIMEOUT`), instead of no limit at all. 15 s is longer than two calls between services in a row (5 s each), so the **503** of a service comes first.
 - **Health:** each service sends its Actuator status to Eureka. If a service loses PostgreSQL it becomes `DOWN` there and the gateway stops sending it traffic. The gateway does not expose its `gateway` Actuator endpoint (it lists and changes the routes).
 
 To run them without Docker, start PostgreSQL and create the databases once (`psql -U ecommerce -d ecommerce -f infra/postgres/init-databases.sql`), then in this order, each in its own terminal:
@@ -400,6 +404,8 @@ Toutes les erreurs ont le même format JSON, qu'elles viennent d'un service, de 
 | 409 | Conflit : nom déjà pris, stock insuffisant, contrainte de base de données |
 | 415 | `Content-Type` non supporté (le JSON est attendu) |
 | 500 | Erreur inattendue |
+| 503 | Service appelé arrêté, non enregistré dans Eureka, en erreur, trop lent, ou circuit breaker ouvert |
+| 504 | La gateway n'a pas reçu la réponse du service en 15 s |
 
 Les détails internes (message SQL, stack trace) ne sont jamais renvoyés au client : ils sont écrits dans les logs de l'application.
 

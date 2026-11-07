@@ -4,11 +4,16 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.cloud.gateway.config.HttpClientProperties;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
+
+import java.time.Duration;
+
+import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * The real gateway on a random port, in front of fake services.
@@ -27,6 +32,9 @@ class GatewayRoutingTest {
 
     @Autowired
     private WebTestClient client;
+
+    @Autowired
+    private HttpClientProperties httpClient;
 
     @DynamicPropertySource
     static void downstreamServices(DynamicPropertyRegistry registry) {
@@ -183,5 +191,12 @@ class GatewayRoutingTest {
         client.get().uri("/swagger-ui.html")
                 .exchange()
                 .expectStatus().isNotFound();
+    }
+
+    @Test
+    void timeouts_shouldComeFromApplicationYml() {
+        // No limit without them: a service that hangs would hold the request forever
+        assertThat(httpClient.getConnectTimeout()).isEqualTo(2000);
+        assertThat(httpClient.getResponseTimeout()).isEqualTo(Duration.ofSeconds(15));
     }
 }
