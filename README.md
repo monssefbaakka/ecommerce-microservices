@@ -19,7 +19,8 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
 | Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info) |
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, WireMock (fake services for the Feign clients), JaCoCo |
-| Planned | Resilience4j, GitHub Actions |
+| Resilience | Resilience4j 2.2: circuit breaker and retries around the Feign calls |
+| Planned | GitHub Actions |
 
 ## Getting started
 
