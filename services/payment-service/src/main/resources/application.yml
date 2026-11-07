@@ -64,6 +64,24 @@ resilience4j:
         record-exceptions:
           - feign.FeignException                                         # refused, dropped, timeout
           - com.monssef.paymentservice.client.ServiceUnavailableException  # 5xx, not in Eureka
+  retry:
+    instances:
+      # 3 attempts at most, 200 ms then 400 ms apart. Worst case for a read: 3 quick failures + 0.6 s.
+      # A timeout is never retried, so a hanging order-service still costs one read timeout (5 s)
+      order-service-reads:
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        # Refused, dropped, 5xx, not in Eureka yet: never a timeout, a 404 or a 409
+        retry-exception-predicate: com.monssef.paymentservice.client.RetryableReadFailure
+      order-service-writes:
+        max-attempts: 3
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        # Only when the request never reached order-service: an order is never marked paid twice
+        retry-exception-predicate: com.monssef.paymentservice.client.RequestNeverSent
 
 eureka:
   client:
