@@ -647,6 +647,11 @@ Content-Type: application/json
 
 { "productId": {{shopProduct.response.body.$.id}}, "quantity": 1 }
 
+### W18. product-service stopped (W16), circuit breaker open or not: the cart is still shown, with the name and price
+### seen last (expect 200, productsUpToDate false, "Shop phone" at 199.99). Once product-service is back: productsUpToDate true
+GET {{gateway}}/api/cart
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
 ### I1. /internal/** is not routed by the gateway (expect 404)
 GET {{gateway}}/internal/orders/{{shopOrder.response.body.$.id}}
 Authorization: Bearer {{gatewayLogin.response.body.$.token}}

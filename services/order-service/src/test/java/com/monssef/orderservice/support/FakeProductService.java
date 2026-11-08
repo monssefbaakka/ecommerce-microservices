@@ -3,6 +3,7 @@ package com.monssef.orderservice.support;
 import com.monssef.orderservice.common.ResourceNotFoundException;
 import com.monssef.orderservice.product.ProductClient;
 import com.monssef.orderservice.product.ProductInfo;
+import com.monssef.orderservice.product.ProductSnapshot;
 import com.monssef.orderservice.product.ReservedItem;
 import com.monssef.orderservice.product.StockLine;
 import org.springframework.http.HttpStatus;
@@ -54,6 +55,8 @@ public class FakeProductService {
 
     public void answerFor(ProductClient client) {
         when(client.findAll(anyCollection())).thenAnswer(call -> findAll(call.getArgument(0)));
+        when(client.findAllOrLastKnown(anyCollection()))
+                .thenAnswer(call -> new ProductSnapshot(findAll(call.getArgument(0)), true));
         when(client.find(anyLong())).thenAnswer(call -> find(call.getArgument(0)));
         when(client.reserve(anyList())).thenAnswer(call -> reserve(call.getArgument(0)));
         doAnswer(call -> {

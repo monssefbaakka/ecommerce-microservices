@@ -8,6 +8,7 @@ import com.monssef.orderservice.common.ResourceNotFoundException;
 import com.monssef.orderservice.product.InsufficientStockException;
 import com.monssef.orderservice.product.ProductClient;
 import com.monssef.orderservice.product.ProductInfo;
+import com.monssef.orderservice.product.ProductSnapshot;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mapstruct.factory.Mappers;
@@ -67,7 +68,7 @@ class CartServiceTest {
         cart.addItem(1L, 2);
         cart.addItem(2L, 1);
         when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
-        when(productClient.findAll(List.of(1L, 2L))).thenReturn(Map.of(1L, PHONE, 2L, CASE));
+        when(productClient.findAllOrLastKnown(List.of(1L, 2L))).thenReturn(upToDate(Map.of(1L, PHONE, 2L, CASE)));
 
         CartDTO result = service.getCart(EMAIL);
 
@@ -76,7 +77,7 @@ class CartServiceTest {
         assertThat(result.getItems().get(0).getSubtotal()).isEqualByComparingTo("1999.98");
         assertThat(result.getTotalQuantity()).isEqualTo(3);
         assertThat(result.getTotal()).isEqualByComparingTo("2019.88");
-        verify(productClient, times(1)).findAll(any());
+        verify(productClient, times(1)).findAllOrLastKnown(any());
     }
 
     @Test
@@ -85,7 +86,7 @@ class CartServiceTest {
         cart.addItem(1L, 2);
         cart.addItem(2L, 1);
         when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
-        when(productClient.findAll(List.of(1L, 2L))).thenReturn(Map.of(2L, CASE));
+        when(productClient.findAllOrLastKnown(List.of(1L, 2L))).thenReturn(upToDate(Map.of(2L, CASE)));
 
         CartDTO result = service.getCart(EMAIL);
 
@@ -94,11 +95,42 @@ class CartServiceTest {
     }
 
     @Test
+    void getCart_shouldShowLastKnownNamesAndPrices_whenProductServiceIsUnavailable() {
+        Cart cart = new Cart(EMAIL);
+        cart.addItem(1L, 2);
+        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+        when(productClient.findAllOrLastKnown(List.of(1L)))
+                .thenReturn(new ProductSnapshot(Map.of(1L, PHONE), false));
+
+        CartDTO result = service.getCart(EMAIL);
+
+        assertThat(result.isProductsUpToDate()).isFalse();
+        assertThat(result.getItems().get(0).getProductName()).isEqualTo("iPhone 15");
+        assertThat(result.getTotal()).isEqualByComparingTo("1999.98");
+    }
+
+    @Test
+    void removeItem_shouldStillRemoveTheLine_whenProductServiceIsUnavailable() {
+        Cart cart = new Cart(EMAIL);
+        cart.addItem(1L, 2);
+        cart.addItem(2L, 1);
+        when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
+        when(productClient.findAllOrLastKnown(List.of(2L))).thenReturn(new ProductSnapshot(Map.of(), false));
+
+        CartDTO result = service.removeItem(EMAIL, 1L);
+
+        assertThat(cart.getProductIds()).containsExactly(2L);
+        assertThat(result.isProductsUpToDate()).isFalse();
+        assertThat(result.getItems()).extracting("productId").containsExactly(2L);
+        assertThat(result.getTotal()).isNull();   // the price of the case was never seen
+    }
+
+    @Test
     void addItem_shouldCreateCartForTheEmail_whenUserHasNone() {
         when(productClient.find(1L)).thenReturn(PHONE);
         when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.empty());
         when(cartRepository.save(any(Cart.class))).thenAnswer(invocation -> invocation.getArgument(0));
-        when(productClient.findAll(List.of(1L))).thenReturn(Map.of(1L, PHONE));
+        when(productClient.findAllOrLastKnown(List.of(1L))).thenReturn(upToDate(Map.of(1L, PHONE)));
 
         CartDTO result = service.addItem(EMAIL, new AddCartItemRequest(1L, 2));
 
@@ -117,7 +149,7 @@ class CartServiceTest {
         when(productClient.find(1L)).thenReturn(PHONE);
         when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
         when(cartRepository.save(cart)).thenReturn(cart);
-        when(productClient.findAll(List.of(1L))).thenReturn(Map.of(1L, PHONE));
+        when(productClient.findAllOrLastKnown(List.of(1L))).thenReturn(upToDate(Map.of(1L, PHONE)));
 
         CartDTO result = service.addItem(EMAIL, new AddCartItemRequest(1L, 3));
 
@@ -199,7 +231,7 @@ class CartServiceTest {
         cart.addItem(1L, 2);
         when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
         when(productClient.find(1L)).thenReturn(PHONE);
-        when(productClient.findAll(List.of(1L))).thenReturn(Map.of(1L, PHONE));
+        when(productClient.findAllOrLastKnown(List.of(1L))).thenReturn(upToDate(Map.of(1L, PHONE)));
 
         CartDTO result = service.updateItem(EMAIL, 1L, new UpdateCartItemRequest(7));
 
@@ -237,7 +269,7 @@ class CartServiceTest {
         cart.addItem(1L, 2);
         cart.addItem(2L, 1);
         when(cartRepository.findByUserEmail(EMAIL)).thenReturn(Optional.of(cart));
-        when(productClient.findAll(List.of(2L))).thenReturn(Map.of(2L, CASE));
+        when(productClient.findAllOrLastKnown(List.of(2L))).thenReturn(upToDate(Map.of(2L, CASE)));
 
         CartDTO result = service.removeItem(EMAIL, 1L);
 
@@ -264,6 +296,10 @@ class CartServiceTest {
 
         assertThat(cart.getItems()).isEmpty();
         verifyNoInteractions(productClient);
+    }
+
+    private static ProductSnapshot upToDate(Map<Long, ProductInfo> products) {
+        return new ProductSnapshot(products, true);
     }
 
     private static ProductInfo product(Long id, String name, String price, int stock) {

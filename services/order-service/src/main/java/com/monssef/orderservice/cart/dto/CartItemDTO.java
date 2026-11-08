@@ -17,15 +17,17 @@ public class CartItemDTO {
     @Schema(description = "Identifiant du produit", example = "1")
     private Long productId;
 
-    @Schema(description = "Nom actuel du produit", example = "iPhone 15")
+    @Schema(description = "Nom actuel du produit. null si product-service est indisponible et le produit jamais vu",
+            example = "iPhone 15")
     private String productName;
 
-    @Schema(description = "Prix actuel du produit", example = "999.99")
+    @Schema(description = "Prix actuel du produit. null si product-service est indisponible et le produit jamais vu",
+            example = "999.99")
     private BigDecimal unitPrice;
 
     @Schema(description = "Quantité", example = "2")
     private int quantity;
 
-    @Schema(description = "unitPrice x quantity", example = "1999.98")
+    @Schema(description = "unitPrice x quantity. null quand unitPrice l'est", example = "1999.98")
     private BigDecimal subtotal;
 }

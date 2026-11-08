@@ -15,12 +15,14 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.Map;
 
 /**
  * The cart of the logged-in user. Every method takes the email from the JWT,
  * so a user can only ever read or change their own cart.
  * Names, prices and stock come from product-service at each request.
+ * When product-service is unavailable, the cart is still shown, with the last known names and prices
+ * (productsUpToDate false), but nothing that needs the stock can be done: adding or changing a quantity
+ * gives a 503.
  */
 @Service
 @RequiredArgsConstructor
@@ -74,10 +76,9 @@ public class CartService {
                 .ifPresent(cart -> cart.getItems().clear());
     }
 
-    // One call to product-service for all the lines of the cart
+    // One call to product-service for all the lines of the cart, or the last known values if it is unavailable
     private CartDTO toDto(Cart cart) {
-        Map<Long, ProductInfo> products = productClient.findAll(cart.getProductIds());
-        return mapper.toDto(cart, products);
+        return mapper.toDto(cart, productClient.findAllOrLastKnown(cart.getProductIds()));
     }
 
     private CartItem findItem(String email, Long productId) {
