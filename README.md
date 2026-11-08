@@ -322,6 +322,8 @@ La quantité va de 1 à 100 par produit, sans dépasser le stock du produit (**4
 
 Le panier affiche toujours le prix actuel du produit. Si un ADMIN supprime un produit, il disparaît des paniers.
 
+Via order-service, la réponse contient aussi `productsUpToDate` : `true` d'habitude. Si product-service est indisponible, le panier s'affiche quand même (**200**) avec les derniers noms et prix connus et `productsUpToDate: false` ; une ligne dont le produit n'a jamais été vu garde sa quantité, sans nom ni prix, et `total` vaut `null`. Ajouter un produit ou changer une quantité répond alors **503** : le stock doit être à jour.
+
 ### Orders
 
 Passer commande transforme le panier de l'utilisateur connecté en commande `PENDING`, puis vide le panier. On ne peut voir que ses propres commandes.
