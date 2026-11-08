@@ -1,12 +1,16 @@
 package com.monssef.orderservice.cart;
 
 import com.monssef.orderservice.client.ServiceUnavailableException;
+import com.monssef.orderservice.product.ProductInfo;
+import com.monssef.orderservice.product.ProductSnapshot;
 import com.monssef.orderservice.support.IntegrationTest;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.math.BigDecimal;
 import java.util.Map;
 
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -70,6 +74,36 @@ class CartFlowIT extends IntegrationTest {
         mockMvc.perform(auth(json(post("/api/cart/items"), Map.of("productId", iphone, "quantity", 1)), user))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.message").value("Product service unavailable"));
+    }
+
+    @Test
+    void cart_shouldStillShow_withLastKnownValues_whenProductServiceIsUnavailable() throws Exception {
+        addToCart(user, iphone, 2);
+        addToCart(user, caseId, 1);
+        // product-service down: ProductClient falls back on what it saw last, here only the iPhone
+        when(productClient.findAllOrLastKnown(anyCollection())).thenReturn(new ProductSnapshot(
+                Map.of(iphone, new ProductInfo(iphone, "iPhone 15", new BigDecimal("999.99"), 5)), false));
+
+        mockMvc.perform(auth(get("/api/cart"), user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.productsUpToDate").value(false))
+                .andExpect(jsonPath("$.items.length()").value(2))
+                .andExpect(jsonPath("$.items[0].productName").value("iPhone 15"))
+                .andExpect(jsonPath("$.items[0].subtotal").value(1999.98))
+                .andExpect(jsonPath("$.items[1].productId").value(caseId))
+                .andExpect(jsonPath("$.items[1].quantity").value(1))
+                .andExpect(jsonPath("$.items[1].productName").doesNotExist())
+                .andExpect(jsonPath("$.items[1].unitPrice").doesNotExist())
+                .andExpect(jsonPath("$.totalQuantity").value(3))
+                .andExpect(jsonPath("$.total").doesNotExist());
+    }
+
+    @Test
+    void cart_shouldSayItIsUpToDate_whenProductServiceAnswers() throws Exception {
+        addToCart(user, iphone, 1);
+
+        mockMvc.perform(auth(get("/api/cart"), user))
+                .andExpect(jsonPath("$.productsUpToDate").value(true));
     }
 
     @Test
