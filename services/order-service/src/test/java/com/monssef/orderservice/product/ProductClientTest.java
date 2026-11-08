@@ -38,13 +38,15 @@ class ProductClientTest {
     @Mock
     private ProductServiceApi api;
 
+    private final LastKnownProducts lastKnown = new LastKnownProducts();
+
     private ProductClient client;
 
     @BeforeEach
     void setUp() {
         Retry once = Retry.of("once", RetryConfig.custom().maxAttempts(1).build());
         client = new ProductClient(api, new RemoteCalls("Product service", CircuitBreaker.ofDefaults("product-service"),
-                once, once));
+                once, once), lastKnown);
     }
 
     @Test
@@ -113,6 +115,57 @@ class ProductClientTest {
         when(api.findAllById(any())).thenThrow(FeignFailures.connectionRefused());
 
         assertUnavailable(() -> client.findAll(List.of(1L)));
+    }
+
+    @Test
+    void findAll_shouldRememberTheAnswer() {
+        when(api.findAllById(List.of(1L, 2L))).thenReturn(List.of(IPHONE, CASE));
+
+        client.findAll(List.of(1L, 2L));
+
+        assertThat(lastKnown.get(List.of(1L, 2L))).containsOnlyKeys(1L, 2L);
+    }
+
+    @Test
+    void findAllOrLastKnown_shouldReturnTheAnswerAsUpToDate_whenProductServiceAnswers() {
+        when(api.findAllById(List.of(1L))).thenReturn(List.of(IPHONE));
+
+        ProductSnapshot snapshot = client.findAllOrLastKnown(List.of(1L));
+
+        assertThat(snapshot.upToDate()).isTrue();
+        assertThat(snapshot.products()).containsEntry(1L, IPHONE);
+    }
+
+    @Test
+    void findAllOrLastKnown_shouldReturnTheLastKnownProducts_whenProductServiceIsUnreachable() {
+        when(api.findAllById(List.of(1L, 2L)))
+                .thenReturn(List.of(IPHONE, CASE))
+                .thenThrow(FeignFailures.connectionRefused());
+        client.findAll(List.of(1L, 2L));
+
+        ProductSnapshot snapshot = client.findAllOrLastKnown(List.of(1L, 2L));
+
+        assertThat(snapshot.upToDate()).isFalse();
+        assertThat(snapshot.products()).containsEntry(1L, IPHONE).containsEntry(2L, CASE);
+    }
+
+    @Test
+    void findAllOrLastKnown_shouldReturnNoProduct_whenProductServiceIsUnreachableAndNoneWasSeen() {
+        when(api.findAllById(any())).thenThrow(FeignFailures.connectionRefused());
+
+        ProductSnapshot snapshot = client.findAllOrLastKnown(List.of(1L));
+
+        assertThat(snapshot.upToDate()).isFalse();
+        assertThat(snapshot.products()).isEmpty();
+    }
+
+    @Test
+    void findAllOrLastKnown_shouldNotHideA404OfProductService() {
+        // Only "unavailable" falls back: any other error is not about product-service being down
+        ResponseStatusException notFound = new ResponseStatusException(HttpStatus.NOT_FOUND, "Unknown");
+        when(api.findAllById(any())).thenThrow(notFound);
+
+        assertThatThrownBy(() -> client.findAllOrLastKnown(List.of(1L))).isSameAs(notFound);
     }
 
     @Test

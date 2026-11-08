@@ -56,7 +56,7 @@ class ProductServiceApiTest {
     @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
             UserDetailsServiceAutoConfiguration.class})
     @EnableFeignClients(clients = ProductServiceApi.class)
-    @Import({ProductClient.class, ServiceTokenProvider.class, ResilienceConfig.class})
+    @Import({ProductClient.class, LastKnownProducts.class, ServiceTokenProvider.class, ResilienceConfig.class})
     static class FeignClientOnly {
     }
 
