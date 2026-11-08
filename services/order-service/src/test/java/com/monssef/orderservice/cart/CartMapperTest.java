@@ -3,6 +3,7 @@ package com.monssef.orderservice.cart;
 import com.monssef.orderservice.cart.dto.CartDTO;
 import com.monssef.orderservice.cart.dto.CartItemDTO;
 import com.monssef.orderservice.product.ProductInfo;
+import com.monssef.orderservice.product.ProductSnapshot;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
 
@@ -64,6 +65,54 @@ class CartMapperTest {
         assertThat(dto.getItems()).isEmpty();
         assertThat(dto.getTotalQuantity()).isZero();
         assertThat(dto.getTotal()).isEqualByComparingTo("0");
+    }
+
+    @Test
+    void toDto_shouldBeUpToDate_whenProductServiceJustAnswered() {
+        Cart cart = new Cart("alice@example.com");
+        cart.addItem(1L, 2);
+        cart.addItem(2L, 1);
+
+        CartDTO dto = mapper.toDto(cart, new ProductSnapshot(Map.of(2L, product(2L, "Case", "19.90")), true));
+
+        assertThat(dto.isProductsUpToDate()).isTrue();
+        assertThat(dto.getItems()).extracting(CartItemDTO::getProductId).containsExactly(2L);   // 1 was deleted
+        assertThat(dto.getTotal()).isEqualByComparingTo("19.90");
+    }
+
+    @Test
+    void toDto_shouldUseLastKnownValues_andSayItIsNotUpToDate() {
+        Cart cart = new Cart("alice@example.com");
+        cart.addItem(1L, 2);
+        cart.addItem(2L, 1);
+
+        CartDTO dto = mapper.toDto(cart, new ProductSnapshot(Map.of(
+                1L, product(1L, "iPhone 15", "999.99"),
+                2L, product(2L, "Case", "19.90")), false));
+
+        assertThat(dto.isProductsUpToDate()).isFalse();
+        assertThat(dto.getItems()).extracting(CartItemDTO::getProductName).containsExactly("iPhone 15", "Case");
+        assertThat(dto.getTotalQuantity()).isEqualTo(3);
+        assertThat(dto.getTotal()).isEqualByComparingTo("2019.88");
+    }
+
+    @Test
+    void toDto_shouldKeepLinesNeverSeen_withoutNameNorPriceNorTotal_whenNotUpToDate() {
+        Cart cart = new Cart("alice@example.com");
+        cart.addItem(1L, 2);
+        cart.addItem(2L, 1);
+
+        CartDTO dto = mapper.toDto(cart, new ProductSnapshot(Map.of(2L, product(2L, "Case", "19.90")), false));
+
+        assertThat(dto.getItems()).hasSize(2);
+        CartItemDTO unknown = dto.getItems().get(0);
+        assertThat(unknown.getProductId()).isEqualTo(1L);
+        assertThat(unknown.getQuantity()).isEqualTo(2);
+        assertThat(unknown.getProductName()).isNull();
+        assertThat(unknown.getUnitPrice()).isNull();
+        assertThat(unknown.getSubtotal()).isNull();
+        assertThat(dto.getTotalQuantity()).isEqualTo(3);
+        assertThat(dto.getTotal()).isNull();
     }
 
     private ProductInfo product(Long id, String name, String price) {
