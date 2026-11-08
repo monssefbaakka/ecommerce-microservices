@@ -64,5 +64,5 @@ Use Resilience4j, called from code in a small `RemoteCalls` class of each servic
 - Worst case for a read: 3 quick failures and 0.6 s of waits, or one read timeout (5 s).
 - A write that may have been received and failed is still a **503**: whether it was done is not known.
   Making the internal writes idempotent (a request id) would allow resending them.
-- No fallback yet: an open circuit breaker gives a **503**, not a cached answer (#51).
+- An open circuit breaker gives a **503**, except for showing the cart, which falls back on the last known products: see [ADR 0003](0003-fallback-for-the-cart-only.md) (#51).
 - `RemoteCalls` and the two predicates are copied in each calling service, like the decoder of ADR 0001.
