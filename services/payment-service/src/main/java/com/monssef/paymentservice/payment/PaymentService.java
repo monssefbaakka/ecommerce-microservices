@@ -1,5 +1,6 @@
 package com.monssef.paymentservice.payment;
 
+import com.monssef.paymentservice.common.BusinessMetrics;
 import com.monssef.paymentservice.common.ResourceNotFoundException;
 import com.monssef.paymentservice.order.OrderClient;
 import com.monssef.paymentservice.order.OrderSummary;
@@ -27,6 +28,7 @@ public class PaymentService {
     private final PaymentRepository paymentRepository;
     private final CardProcessor cardProcessor;
     private final PaymentMapper mapper;
+    private final BusinessMetrics metrics;
 
     // Charges the order total and records the attempt; a success sets the order to PAID in order-service.
     // The advisory lock on the order id is held until the commit: a double click on "pay" runs the two
@@ -50,6 +52,7 @@ public class PaymentService {
             orderClient.markPaid(orderId);
         }
         Payment payment = paymentRepository.save(new Payment(order, request.getCardNumber(), status));
+        metrics.paymentRecorded(status); // only once recorded: a refused "mark paid" (409) is not counted
         return mapper.toDto(payment);
     }
 
