@@ -3,6 +3,12 @@
 x-spring-container: &spring-container
   profiles: ["app"]
   restart: unless-stopped     # restarts after a crash or a Docker restart, not after "docker compose stop"
+  deploy:
+    resources:
+      limits:
+        # The JVM takes 75% of it as heap (-XX:MaxRAMPercentage=75.0 in the Dockerfiles). Without a limit,
+        # each of the 7 JVMs would size its heap from the whole memory given to Docker
+        memory: 512M
 
 services:
   postgres:
