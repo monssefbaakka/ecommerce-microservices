@@ -447,6 +447,14 @@ GET {{host}}/actuator/info
 ### H6. Endpoint not exposed over HTTP (expect 401 without token, 404 for an ADMIN)
 GET {{host}}/actuator/env
 
+### H7. Names of the metrics: ADMIN token only (expect 200; 401 without token, 403 with a USER token)
+GET {{host}}/actuator/metrics
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
+### H8. One metric: requests answered, by status (expect 200, availableTags with application ecommerce-monolith)
+GET {{host}}/actuator/metrics/http.server.requests?tag=status:200
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
 
 ############################################################
 # MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, product-service 8082,
@@ -695,6 +703,25 @@ Authorization: Bearer {{gatewayLogin.response.body.$.token}}
 
 ### S8. payment-service readiness: database included (expect 200)
 GET {{paymentService}}/actuator/health/readiness
+
+### M1. Orders placed since order-service started (expect 200, measurements[0].value >= 1 after W4)
+GET {{orderService}}/actuator/metrics/orders.placed
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
+### M2. Carts shown with the last known products (expect 200, value goes up with each W18 while product-service is down)
+GET {{orderService}}/actuator/metrics/cart.fallback
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
+### M3. Declined payments (expect 200, value >= 1 after W6; status:succeeded for the others)
+GET {{paymentService}}/actuator/metrics/payments?tag=status:declined
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
+### M4. State of the circuit breaker of product-service, seen by order-service (expect 200, value 1 for the state it is in)
+GET {{orderService}}/actuator/metrics/resilience4j.circuitbreaker.state?tag=name:product-service&tag=state:closed
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
+### M5. The gateway has no JWT check: its metrics are not exposed (expect 404)
+GET {{gateway}}/actuator/metrics
 
 ### R1. Instances registered in Eureka: API-GATEWAY, AUTH-SERVICE, PRODUCT-SERVICE, ORDER-SERVICE and PAYMENT-SERVICE, status UP (expect 200)
 GET {{eureka}}/eureka/apps
