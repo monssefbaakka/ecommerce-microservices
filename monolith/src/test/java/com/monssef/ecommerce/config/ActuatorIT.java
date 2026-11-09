@@ -3,6 +3,8 @@ package com.monssef.ecommerce.config;
 import com.monssef.ecommerce.support.IntegrationTest;
 import org.junit.jupiter.api.Test;
 
+import static org.hamcrest.Matchers.hasItem;
+import static org.hamcrest.Matchers.hasItems;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -79,5 +81,23 @@ class ActuatorIT extends IntegrationTest {
         // even for an ADMIN: not exposed over HTTP at all
         mockMvc.perform(auth(get("/actuator/env"), adminToken()))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void metrics_shouldNeedAdmin() throws Exception {
+        mockMvc.perform(get("/actuator/metrics"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(auth(get("/actuator/metrics"), registerAndLogin("john@example.com")))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(auth(get("/actuator/metrics"), adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.names", hasItems("jvm.memory.used", "http.server.requests", "hikaricp.connections.active")));
+    }
+
+    @Test
+    void metrics_shouldBeTaggedWithTheApplicationName() throws Exception {
+        mockMvc.perform(auth(get("/actuator/metrics/jvm.memory.used"), adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.availableTags[?(@.tag == 'application')].values[*]", hasItem("ecommerce-monolith")));
     }
 }

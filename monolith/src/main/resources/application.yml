@@ -37,10 +37,14 @@ app:
     password: ${ADMIN_PASSWORD:}
 
 management:
+  metrics:
+    tags:
+      # Added to every metric: tells the services apart once their metrics are collected in one place
+      application: ${spring.application.name}
   endpoints:
     web:
       exposure:
-        include: health,info            # nothing else over HTTP: env, beans, heapdump... stay closed
+        include: health,info,metrics    # metrics: ADMIN token only; env, beans, heapdump... stay closed
   endpoint:
     health:
       # Anyone sees {"status":"UP"}; only an ADMIN token sees each component (db, disk space...)
