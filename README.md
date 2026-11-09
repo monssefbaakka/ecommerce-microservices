@@ -438,6 +438,30 @@ Seuls `health`, `info` et `metrics` sont exposés en HTTP : `env`, `beans`, `hea
 
 L'image Docker a un `HEALTHCHECK` sur la readiness : `docker ps` affiche `healthy` quand l'application répond et voit la base, `unhealthy` si PostgreSQL tombe.
 
+#### Métriques
+
+Le monolithe et les quatre services publient leurs métriques avec Micrometer, sur `/actuator/metrics`, pour un token ADMIN. Chaque métrique porte le tag `application` (`order-service`, `ecommerce-monolith`...) : une fois les métriques de tous les services réunies au même endroit, on sait d'où vient chacune.
+
+| Métrique | Où | Ce qu'elle mesure |
+|---|---|---|
+| `http.server.requests` | Partout | Requêtes reçues : nombre, durée, par URL, méthode et code de réponse |
+| `jvm.memory.used`, `jvm.threads.live`, `process.cpu.usage`... | Partout | Mémoire, threads et CPU de la JVM |
+| `hikaricp.connections.active`, `hikaricp.connections.pending` | Partout | Connexions à PostgreSQL utilisées, et requêtes qui attendent une connexion libre |
+| `resilience4j.circuitbreaker.state`, `resilience4j.retry.calls` | order-service, payment-service | État du circuit breaker (tag `state`) et appels réessayés ou non, pour chaque client Feign |
+| `orders.placed` | order-service | Commandes passées : stock réservé et commande enregistrée |
+| `cart.fallback` | order-service | Paniers affichés avec les derniers produits connus parce que product-service était indisponible |
+| `payments` | payment-service | Paiements enregistrés, avec le tag `status` (`succeeded` / `declined`) |
+
+Les compteurs métier existent dès le démarrage, à 0 : un compteur absent voudrait dire « pas mesuré », pas « rien ne s'est passé ».
+
+```bash
+# Avec un token ADMIN (POST /api/auth/login) :
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8083/actuator/metrics/orders.placed
+curl -H "Authorization: Bearer $TOKEN" "http://localhost:8084/actuator/metrics/payments?tag=status:declined"
+```
+
+La gateway et Eureka ne vérifient aucun token : leurs métriques seraient publiques, elles ne sont donc pas exposées (**404**). La gateway ne route pas `/actuator/**` : depuis `:8090`, les métriques des services restent inaccessibles.
+
 ### Categories
 | Méthode | URL | Description | Code |
 |---|---|---|---|
