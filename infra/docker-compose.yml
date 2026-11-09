@@ -1,3 +1,9 @@
+# Settings shared by every Spring container (the monolith, Eureka, the services and the gateway),
+# merged into each one with "<<: *spring-container". A key set in the service itself wins
+x-spring-container: &spring-container
+  profiles: ["app"]
+  restart: unless-stopped     # restarts after a crash or a Docker restart, not after "docker compose stop"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -24,7 +30,7 @@ services:
   # The monolith in a container. Behind the "app" profile, so "docker compose up" alone
   # still starts only PostgreSQL for "./mvnw spring-boot:run" (both would want port 8080)
   app:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../monolith
     image: ecommerce-monolith:latest
     container_name: ecommerce-app
@@ -44,11 +50,10 @@ services:
       - database
     ports:
       - "8080:8080"
-    restart: unless-stopped   # restarts after a crash or a Docker restart, not after "docker compose stop"
 
   # Service registry: every service and the gateway register here and find each other by name
   discovery-server:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/discovery-server
     image: ecommerce-discovery-server:latest
     container_name: ecommerce-discovery-server
@@ -58,10 +63,9 @@ services:
       - backend
     ports:
       - "8761:8761"             # Eureka dashboard on http://localhost:8761
-    restart: unless-stopped
 
   auth-service:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/auth-service
     image: ecommerce-auth-service:latest
     container_name: ecommerce-auth-service
@@ -86,10 +90,9 @@ services:
       - database
     ports:
       - "8081:8081"
-    restart: unless-stopped
 
   product-service:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/product-service
     image: ecommerce-product-service:latest
     container_name: ecommerce-product-service
@@ -114,10 +117,9 @@ services:
       - database
     ports:
       - "8082:8082"
-    restart: unless-stopped
 
   order-service:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/order-service
     image: ecommerce-order-service:latest
     container_name: ecommerce-order-service
@@ -142,10 +144,9 @@ services:
       - database
     ports:
       - "8083:8083"
-    restart: unless-stopped
 
   payment-service:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/payment-service
     image: ecommerce-payment-service:latest
     container_name: ecommerce-payment-service
@@ -170,13 +171,12 @@ services:
       - database
     ports:
       - "8084:8084"
-    restart: unless-stopped
 
   # Single entry point: /api/auth/** to auth-service, /api/products/** and /api/categories/** to product-service,
   # /api/cart/** and /api/orders/** to order-service, /api/payments/** to payment-service (all through Eureka),
   # the rest of /api/** to the monolith
   api-gateway:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/api-gateway
     image: ecommerce-api-gateway:latest
     container_name: ecommerce-api-gateway
@@ -191,7 +191,6 @@ services:
       - backend
     ports:
       - "8090:8090"
-    restart: unless-stopped
 
 # Two networks instead of the default one, each container joins only the ones it needs:
 # - backend:  the Spring containers, which find each other through Eureka and call each other
