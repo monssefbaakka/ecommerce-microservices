@@ -191,8 +191,22 @@ services:
     build: ../services/api-gateway
     image: ecommerce-api-gateway:latest
     container_name: ecommerce-api-gateway
+    # Started last, once everything it routes to is ready: the first request through the gateway gets an
+    # answer, not a 503 while a service is still starting. "docker compose up --wait" returns at that point.
+    # The services do not wait for each other: the Feign calls already go through retries, a circuit breaker
+    # and a 503 (and the cart through its fallback) while the other one is not there
     depends_on:
       discovery-server:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      payment-service:
         condition: service_healthy
     environment:
       EUREKA_URL: http://discovery-server:8761/eureka
