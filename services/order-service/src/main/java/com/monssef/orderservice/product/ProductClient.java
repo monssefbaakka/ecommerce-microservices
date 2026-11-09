@@ -2,6 +2,7 @@ package com.monssef.orderservice.product;
 
 import com.monssef.orderservice.client.RemoteCalls;
 import com.monssef.orderservice.client.ServiceUnavailableException;
+import com.monssef.orderservice.common.BusinessMetrics;
 import com.monssef.orderservice.common.ResourceNotFoundException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ public class ProductClient {
     private final ProductServiceApi api;
     private final RemoteCalls calls;
     private final LastKnownProducts lastKnown;
+    private final BusinessMetrics metrics;
 
     // Current name, price and stock, by id. A product deleted since is simply missing from the map
     public Map<Long, ProductInfo> findAll(Collection<Long> ids) {
@@ -49,6 +51,7 @@ public class ProductClient {
             return new ProductSnapshot(findAll(ids), true);
         } catch (ServiceUnavailableException e) {
             log.warn("Product service unavailable: last known products shown for {}", ids);
+            metrics.cartShownFromLastKnownProducts();
             return new ProductSnapshot(lastKnown.get(ids), false);
         }
     }

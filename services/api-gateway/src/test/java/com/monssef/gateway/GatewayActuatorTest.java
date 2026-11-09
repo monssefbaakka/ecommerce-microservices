@@ -44,4 +44,12 @@ class GatewayActuatorTest {
                 .exchange()
                 .expectStatus().isNotFound();
     }
+
+    // No JWT check in the gateway: its metrics would be public, so they are not exposed at all
+    @Test
+    void metricsEndpoint_shouldNotBeExposed() {
+        client.get().uri("/actuator/metrics")
+                .exchange()
+                .expectStatus().isNotFound();
+    }
 }

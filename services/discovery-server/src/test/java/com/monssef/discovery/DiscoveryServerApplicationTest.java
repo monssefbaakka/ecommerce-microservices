@@ -79,6 +79,8 @@ class DiscoveryServerApplicationTest {
     @Test
     void otherActuatorEndpoints_shouldNotBeExposed() {
         assertThat(rest.getForEntity("/actuator/env", String.class).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+        // No authentication on Eureka: its metrics would be public, so they are not exposed either
+        assertThat(rest.getForEntity("/actuator/metrics", String.class).getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
     }
 
     private HttpEntity<String> jsonRequest(String body) {

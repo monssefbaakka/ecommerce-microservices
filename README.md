@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -17,7 +17,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | API docs | OpenAPI 3 / Swagger UI (springdoc) |
 | Security | Spring Security, JWT (jjwt) |
 | Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
-| Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info) |
+| Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info, metrics), Micrometer (business counters) |
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, WireMock (fake services for the Feign clients), JaCoCo |
 | Resilience | Resilience4j 2.2: circuit breaker and retries around the Feign calls, last known products as fallback for the cart |
 | Planned | GitHub Actions |
@@ -121,13 +121,13 @@ cd services/auth-service    # or discovery-server, product-service, order-servic
 
 | Service | What the tests check |
 |---|---|
-| discovery-server | The registry starts, accepts registrations, serves the dashboard; only `health` and `info` are exposed |
-| auth-service | JWT, register / login rules, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (register then login, Actuator, OpenAPI) |
-| product-service | JWT check, category and product rules, paging and search, `ErrorResponse` bodies, security chain (401 / 403) with MockMvc; `*IT` on PostgreSQL with Testcontainers (catalog flow, Actuator, OpenAPI) |
+| discovery-server | The registry starts, accepts registrations, serves the dashboard; only `health` and `info` are exposed (no `metrics`: no authentication) |
+| auth-service | JWT, register / login rules, `ErrorResponse` bodies, security chain with MockMvc; `*IT` on PostgreSQL with Testcontainers (register then login, Actuator with `metrics` for ADMIN only, OpenAPI) |
+| product-service | JWT check, category and product rules, paging and search, `ErrorResponse` bodies, security chain (401 / 403) with MockMvc; `*IT` on PostgreSQL with Testcontainers (catalog flow, Actuator with `metrics` for ADMIN only, OpenAPI) |
 | product-service (stock) | Reservations all or nothing, release, `/internal/**` only for the `SERVICE` role; `StockIT` on PostgreSQL (rollback, last unit under concurrency) |
-| order-service | JWT check, cart and order rules (stock, per-line maximum, stock given back if the order cannot be saved), product-service Feign client against a fake product-service in WireMock, found through the LoadBalancer (`SERVICE` token sent, 404 / 409 passed on, 503 when it fails, rejects the token, drops the connection, answers after the read timeout or is not registered), retries (reads up to 3 times, a reservation never twice, not after a timeout, the live instance reached when the other one is down), circuit breaker (opens after 5 failed calls, ignores 409, closes again, read from `application.yml`), fallback (last known products when product-service fails or its circuit breaker is open, forgotten once deleted, lines never seen kept without price, never for an order), error decoder, `/internal/orders` for the `SERVICE` role only, mappers, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory product-service (cart and order flows, cart shown while product-service is down, concurrent orders, deleted products, Actuator, OpenAPI) |
-| payment-service | JWT check, simulated card, payment rules (`PAID` set in order-service on success, declined attempts kept, owner checked, 404 / 409 / 503), order-service Feign client against a fake order-service in WireMock (`SERVICE` token sent, 404 / 409 passed on, 503 when it fails, rejects the token, drops the connection, answers after the read timeout or is not registered), retries (reads up to 3 times, "mark paid" never twice, not after a timeout, the live instance reached when the other one is down), circuit breaker (opens after 5 failed calls, ignores 409, closes again, read from `application.yml`), error decoder, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory order-service (payment flow, double payment stopped by the advisory lock, Actuator, OpenAPI) |
-| api-gateway | Routing to every service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, 504 when it answers after the response timeout, Actuator |
+| order-service | JWT check, cart and order rules (stock, per-line maximum, stock given back if the order cannot be saved), product-service Feign client against a fake product-service in WireMock, found through the LoadBalancer (`SERVICE` token sent, 404 / 409 passed on, 503 when it fails, rejects the token, drops the connection, answers after the read timeout or is not registered), retries (reads up to 3 times, a reservation never twice, not after a timeout, the live instance reached when the other one is down), circuit breaker (opens after 5 failed calls, ignores 409, closes again, read from `application.yml`), fallback (last known products when product-service fails or its circuit breaker is open, forgotten once deleted, lines never seen kept without price, never for an order), business counters (`orders.placed` only once saved, `cart.fallback` on each fallback), error decoder, `/internal/orders` for the `SERVICE` role only, mappers, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory product-service (cart and order flows, cart shown while product-service is down, concurrent orders, deleted products, Actuator with `metrics` for ADMIN only (circuit breaker, retries and business counters listed), OpenAPI) |
+| payment-service | JWT check, simulated card, payment rules (`PAID` set in order-service on success, declined attempts kept, owner checked, 404 / 409 / 503), order-service Feign client against a fake order-service in WireMock (`SERVICE` token sent, 404 / 409 passed on, 503 when it fails, rejects the token, drops the connection, answers after the read timeout or is not registered), retries (reads up to 3 times, "mark paid" never twice, not after a timeout, the live instance reached when the other one is down), circuit breaker (opens after 5 failed calls, ignores 409, closes again, read from `application.yml`), `payments` counter by outcome (nothing counted when order-service refuses "mark paid"), error decoder, `ErrorResponse` bodies; `*IT` on PostgreSQL with Testcontainers and an in-memory order-service (payment flow, double payment stopped by the advisory lock, Actuator with `metrics` for ADMIN only, OpenAPI) |
+| api-gateway | Routing to every service and the monolith against stub services, 404 without route, 503 when a service is not registered or not answering, 504 when it answers after the response timeout, Actuator (no `metrics`: no JWT check in the gateway) |
 
 ### Stop
 
@@ -431,10 +431,36 @@ Les détails internes (message SQL, stack trace) ne sont jamais renvoyés au cli
 | GET | `/actuator/health/liveness` | Public | Le processus fonctionne. Ne vérifie **jamais** la base : une panne de PostgreSQL ne doit pas faire redémarrer l'application | 200 / 503 |
 | GET | `/actuator/health/readiness` | Public | L'application peut servir des requêtes : vérifie la base | 200 / 503 |
 | GET | `/actuator/info` | Public | Nom, version et date du build, version de Java | 200 |
+| GET | `/actuator/metrics` | ADMIN | Noms des métriques (requêtes HTTP, JVM, pool de connexions...) | 200 / 401 / 403 |
+| GET | `/actuator/metrics/{nom}` | ADMIN | Valeur d'une métrique, filtrable par tag : `?tag=status:200` | 200 / 401 / 403 / 404 |
 
-Seuls `health` et `info` sont exposés en HTTP : `env`, `beans`, `heapdump`... restent fermés (**404**, même pour un ADMIN). Toute autre URL `/actuator/**` demande de toute façon le rôle ADMIN (**401** / **403**).
+Seuls `health`, `info` et `metrics` sont exposés en HTTP : `env`, `beans`, `heapdump`... restent fermés (**404**, même pour un ADMIN). Toute autre URL `/actuator/**` que `health` et `info` demande le rôle ADMIN (**401** sans token, **403** avec un token USER).
 
 L'image Docker a un `HEALTHCHECK` sur la readiness : `docker ps` affiche `healthy` quand l'application répond et voit la base, `unhealthy` si PostgreSQL tombe.
+
+#### Métriques
+
+Le monolithe et les quatre services publient leurs métriques avec Micrometer, sur `/actuator/metrics`, pour un token ADMIN. Chaque métrique porte le tag `application` (`order-service`, `ecommerce-monolith`...) : une fois les métriques de tous les services réunies au même endroit, on sait d'où vient chacune.
+
+| Métrique | Où | Ce qu'elle mesure |
+|---|---|---|
+| `http.server.requests` | Partout | Requêtes reçues : nombre, durée, par URL, méthode et code de réponse |
+| `jvm.memory.used`, `jvm.threads.live`, `process.cpu.usage`... | Partout | Mémoire, threads et CPU de la JVM |
+| `hikaricp.connections.active`, `hikaricp.connections.pending` | Partout | Connexions à PostgreSQL utilisées, et requêtes qui attendent une connexion libre |
+| `resilience4j.circuitbreaker.state`, `resilience4j.retry.calls` | order-service, payment-service | État du circuit breaker (tag `state`) et appels réessayés ou non, pour chaque client Feign |
+| `orders.placed` | order-service | Commandes passées : stock réservé et commande enregistrée |
+| `cart.fallback` | order-service | Paniers affichés avec les derniers produits connus parce que product-service était indisponible |
+| `payments` | payment-service | Paiements enregistrés, avec le tag `status` (`succeeded` / `declined`) |
+
+Les compteurs métier existent dès le démarrage, à 0 : un compteur absent voudrait dire « pas mesuré », pas « rien ne s'est passé ».
+
+```bash
+# Avec un token ADMIN (POST /api/auth/login) :
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8083/actuator/metrics/orders.placed
+curl -H "Authorization: Bearer $TOKEN" "http://localhost:8084/actuator/metrics/payments?tag=status:declined"
+```
+
+La gateway et Eureka ne vérifient aucun token : leurs métriques seraient publiques, elles ne sont donc pas exposées (**404**). La gateway ne route pas `/actuator/**` : depuis `:8090`, les métriques des services restent inaccessibles.
 
 ### Categories
 | Méthode | URL | Description | Code |

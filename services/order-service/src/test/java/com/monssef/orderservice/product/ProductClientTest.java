@@ -2,11 +2,13 @@ package com.monssef.orderservice.product;
 
 import com.monssef.orderservice.client.RemoteCalls;
 import com.monssef.orderservice.client.ServiceUnavailableException;
+import com.monssef.orderservice.common.BusinessMetrics;
 import com.monssef.orderservice.common.ResourceNotFoundException;
 import com.monssef.orderservice.support.FeignFailures;
 import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import io.github.resilience4j.retry.Retry;
 import io.github.resilience4j.retry.RetryConfig;
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,13 +42,15 @@ class ProductClientTest {
 
     private final LastKnownProducts lastKnown = new LastKnownProducts();
 
+    private final SimpleMeterRegistry registry = new SimpleMeterRegistry();
+
     private ProductClient client;
 
     @BeforeEach
     void setUp() {
         Retry once = Retry.of("once", RetryConfig.custom().maxAttempts(1).build());
         client = new ProductClient(api, new RemoteCalls("Product service", CircuitBreaker.ofDefaults("product-service"),
-                once, once), lastKnown);
+                once, once), lastKnown, new BusinessMetrics(registry));
     }
 
     @Test
@@ -134,6 +138,7 @@ class ProductClientTest {
 
         assertThat(snapshot.upToDate()).isTrue();
         assertThat(snapshot.products()).containsEntry(1L, IPHONE);
+        assertThat(fallbacks()).isZero();
     }
 
     @Test
@@ -147,6 +152,7 @@ class ProductClientTest {
 
         assertThat(snapshot.upToDate()).isFalse();
         assertThat(snapshot.products()).containsEntry(1L, IPHONE).containsEntry(2L, CASE);
+        assertThat(fallbacks()).isEqualTo(1);
     }
 
     @Test
@@ -166,6 +172,7 @@ class ProductClientTest {
         when(api.findAllById(any())).thenThrow(notFound);
 
         assertThatThrownBy(() -> client.findAllOrLastKnown(List.of(1L))).isSameAs(notFound);
+        assertThat(fallbacks()).isZero();
     }
 
     @Test
@@ -173,6 +180,10 @@ class ProductClientTest {
         doThrow(FeignFailures.connectionRefused()).when(api).release(any());
 
         assertUnavailable(() -> client.release(List.of(new StockLine(1L, 2))));
+    }
+
+    private double fallbacks() {
+        return registry.get("cart.fallback").counter().count();
     }
 
     private void assertUnavailable(org.assertj.core.api.ThrowableAssert.ThrowingCallable call) {
