@@ -1,3 +1,20 @@
+# Settings shared by every Spring container (the monolith, Eureka, the services and the gateway),
+# merged into each one with "<<: *spring-container". A key set in the service itself wins
+x-spring-container: &spring-container
+  profiles: ["app"]
+  restart: unless-stopped     # restarts after a crash or a Docker restart, not after "docker compose stop"
+  deploy:
+    resources:
+      limits:
+        # The JVM takes 75% of it as heap (-XX:MaxRAMPercentage=75.0 in the Dockerfiles). Without a limit,
+        # each of the 7 JVMs would size its heap from the whole memory given to Docker
+        memory: 512M
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"         # rotated at 10 MB, 3 files kept: the logs of a container never grow past 30 MB
+      max-file: "3"
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -6,6 +23,8 @@ services:
       POSTGRES_DB: ecommerce
       POSTGRES_USER: ecommerce
       POSTGRES_PASSWORD: ecommerce   # local dev only, never in production
+    networks:   # only the containers that have a database reach it
+      - database
     ports:
       - "5432:5432"
     volumes:
@@ -22,7 +41,7 @@ services:
   # The monolith in a container. Behind the "app" profile, so "docker compose up" alone
   # still starts only PostgreSQL for "./mvnw spring-boot:run" (both would want port 8080)
   app:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../monolith
     image: ecommerce-monolith:latest
     container_name: ecommerce-app
@@ -37,24 +56,27 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/ecommerce   # the service name, not localhost
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
+    networks:
+      - backend
+      - database
     ports:
       - "8080:8080"
-    restart: unless-stopped   # restarts after a crash or a Docker restart, not after "docker compose stop"
 
   # Service registry: every service and the gateway register here and find each other by name
   discovery-server:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/discovery-server
     image: ecommerce-discovery-server:latest
     container_name: ecommerce-discovery-server
     environment:
       EUREKA_HOSTNAME: discovery-server
+    networks:   # no database: PostgreSQL is not even resolvable from here
+      - backend
     ports:
       - "8761:8761"             # Eureka dashboard on http://localhost:8761
-    restart: unless-stopped
 
   auth-service:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/auth-service
     image: ecommerce-auth-service:latest
     container_name: ecommerce-auth-service
@@ -74,12 +96,14 @@ services:
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: auth-service   # address registered in Eureka, reachable by the gateway
+    networks:
+      - backend
+      - database
     ports:
       - "8081:8081"
-    restart: unless-stopped
 
   product-service:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/product-service
     image: ecommerce-product-service:latest
     container_name: ecommerce-product-service
@@ -99,12 +123,14 @@ services:
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: product-service   # address registered in Eureka, reachable by the gateway
+    networks:
+      - backend
+      - database
     ports:
       - "8082:8082"
-    restart: unless-stopped
 
   order-service:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/order-service
     image: ecommerce-order-service:latest
     container_name: ecommerce-order-service
@@ -124,12 +150,14 @@ services:
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: order-service   # address registered in Eureka, reachable by the gateway
+    networks:
+      - backend
+      - database
     ports:
       - "8083:8083"
-    restart: unless-stopped
 
   payment-service:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/payment-service
     image: ecommerce-payment-service:latest
     container_name: ecommerce-payment-service
@@ -149,28 +177,56 @@ services:
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: payment-service   # address registered in Eureka, reachable by the gateway
+    networks:
+      - backend
+      - database
     ports:
       - "8084:8084"
-    restart: unless-stopped
 
   # Single entry point: /api/auth/** to auth-service, /api/products/** and /api/categories/** to product-service,
   # /api/cart/** and /api/orders/** to order-service, /api/payments/** to payment-service (all through Eureka),
   # the rest of /api/** to the monolith
   api-gateway:
-    profiles: ["app"]
+    <<: *spring-container
     build: ../services/api-gateway
     image: ecommerce-api-gateway:latest
     container_name: ecommerce-api-gateway
+    # Started last, once everything it routes to is ready: the first request through the gateway gets an
+    # answer, not a 503 while a service is still starting. "docker compose up --wait" returns at that point.
+    # The services do not wait for each other: the Feign calls already go through retries, a circuit breaker
+    # and a 503 (and the cart through its fallback) while the other one is not there
     depends_on:
       discovery-server:
+        condition: service_healthy
+      app:
+        condition: service_healthy
+      auth-service:
+        condition: service_healthy
+      product-service:
+        condition: service_healthy
+      order-service:
+        condition: service_healthy
+      payment-service:
         condition: service_healthy
     environment:
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: api-gateway
       MONOLITH_URL: http://app:8080
+    networks:   # no database: PostgreSQL is not even resolvable from here
+      - backend
     ports:
       - "8090:8090"
-    restart: unless-stopped
+
+# Two networks instead of the default one, each container joins only the ones it needs:
+# - backend:  the Spring containers, which find each other through Eureka and call each other
+# - database: PostgreSQL and the containers that own a database in it
+# The gateway and Eureka are not on "database": a flaw in the public entry point cannot reach PostgreSQL.
+# The published ports (8090, 5432...) still work from the host: only container to container traffic is split.
+networks:
+  backend:
+    name: ecommerce-backend
+  database:
+    name: ecommerce-database
 
 volumes:
   postgres_data:

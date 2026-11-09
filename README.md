@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 in progress: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -13,7 +13,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Database | PostgreSQL 16 |
 | Build | Maven (wrapper included) |
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
-| Containers | Docker, Docker Compose |
+| Containers | Docker, Docker Compose (health checks, two networks, memory limits, log rotation) |
 | API docs | OpenAPI 3 / Swagger UI (springdoc) |
 | Security | Spring Security, JWT (jjwt) |
 | Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
@@ -57,7 +57,7 @@ To try the endpoints, open `docs/requests.http` in VS Code (REST Client extensio
 The whole stack (PostgreSQL, the monolith and the [microservices](#microservices)) can also run in containers, without Java on the machine:
 
 ```bash
-docker compose -f infra/docker-compose.yml --profile app up -d --build
+docker compose -f infra/docker-compose.yml --profile app up -d --build --wait
 ```
 
 | Container | URL | Role |
@@ -71,11 +71,22 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build
 | `ecommerce-discovery-server` | `http://localhost:8761` | Eureka dashboard |
 | `ecommerce-postgres` | `localhost:5432` | PostgreSQL |
 
-`docker ps` shows each container as `healthy` once it answers on `/actuator/health/readiness`. The services start last (about 1 min): they wait for Eureka and PostgreSQL. Each one has its own database (`auth_db`, `product_db`, `order_db`, `payment_db`, next to the monolith's `ecommerce`), created by `infra/postgres/init-databases.sql` the first time the volume starts. With a volume created before, run `docker compose -f infra/docker-compose.yml down -v` once: it deletes the data and the databases are created on the next `up`. Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+`--wait` returns once every container is `healthy`, i.e. answers on `/actuator/health/readiness` (`docker ps` shows the same status). The services wait for Eureka and PostgreSQL, the gateway starts last, once all of them are healthy: when the command returns, the first request through `:8090` gets an answer, not a 503 from a service still starting (about 1 min, plus the build the first time). Each one has its own database (`auth_db`, `product_db`, `order_db`, `payment_db`, next to the monolith's `ecommerce`), created by `infra/postgres/init-databases.sql` the first time the volume starts. With a volume created before, the services stop on `database "auth_db" does not exist`: run `docker compose -f infra/docker-compose.yml down -v` once (it deletes the data, the databases are created on the next `up`), or keep the data and create them by hand with `docker exec ecommerce-postgres psql -U ecommerce -d ecommerce -c "CREATE DATABASE auth_db"` (same for `product_db`, `order_db`, `payment_db`). Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
+
+The containers do not share one network. Each joins only the ones it needs:
+
+| Network | Containers | Why |
+|---|---|---|
+| `ecommerce-backend` | the monolith, Eureka, the gateway and the four services | They find each other through Eureka and call each other (gateway routes, Feign clients) |
+| `ecommerce-database` | PostgreSQL, the monolith and the four services | Only the containers that own a database reach PostgreSQL |
+
+The gateway, the public entry point, and Eureka cannot even resolve the `postgres` host name: `docker exec ecommerce-api-gateway wget -qO- -T 2 http://postgres:5432` answers `bad address`. The published ports (`8090`, `5432`...) are not affected: the host still reaches every container.
 
 To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `infra/.env` and fill it in (the file is ignored by git). The monolith and every service read it, so they share the same secret.
 
 Each service has its own Dockerfile, built the same way. The monolith's image is built by [monolith/Dockerfile](monolith/Dockerfile) in two stages: the JDK and Maven only exist in the build stage, the final image holds a JRE and the application, split into Spring Boot layers so that a code change only rebuilds the last one. It runs as a non-root user and sizes the heap from the container memory limit (`JAVA_TOOL_OPTIONS`).
+
+In Compose, each Spring container is limited to 512 MB, so the JVM takes at most 384 MB of heap instead of 75% of all the memory given to Docker (a started service uses about 220 to 330 MB, `docker stats`). Its logs rotate at 10 MB, 3 files kept. These settings, the `app` profile and the restart policy are written once in the `x-spring-container` block of [infra/docker-compose.yml](infra/docker-compose.yml) and merged into each service.
 
 To build and run the image alone:
 
@@ -558,7 +569,7 @@ Controllers only ever receive and return DTOs, never entities. Each feature has 
 | 3 | Cart, orders, stock management | Done |
 | 4 | Tests, Docker, Actuator | In progress |
 | 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | In progress |
-| 6 | OpenFeign, Resilience4j, advanced Docker Compose | In progress |
+| 6 | OpenFeign, Resilience4j, advanced Docker Compose | Done |
 | 7 | CI/CD with GitHub Actions | Planned |
 | 8 | Deployment and frontend (bonus) | Planned |
 
