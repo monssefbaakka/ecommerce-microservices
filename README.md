@@ -431,8 +431,10 @@ Les détails internes (message SQL, stack trace) ne sont jamais renvoyés au cli
 | GET | `/actuator/health/liveness` | Public | Le processus fonctionne. Ne vérifie **jamais** la base : une panne de PostgreSQL ne doit pas faire redémarrer l'application | 200 / 503 |
 | GET | `/actuator/health/readiness` | Public | L'application peut servir des requêtes : vérifie la base | 200 / 503 |
 | GET | `/actuator/info` | Public | Nom, version et date du build, version de Java | 200 |
+| GET | `/actuator/metrics` | ADMIN | Noms des métriques (requêtes HTTP, JVM, pool de connexions...) | 200 / 401 / 403 |
+| GET | `/actuator/metrics/{nom}` | ADMIN | Valeur d'une métrique, filtrable par tag : `?tag=status:200` | 200 / 401 / 403 / 404 |
 
-Seuls `health` et `info` sont exposés en HTTP : `env`, `beans`, `heapdump`... restent fermés (**404**, même pour un ADMIN). Toute autre URL `/actuator/**` demande de toute façon le rôle ADMIN (**401** / **403**).
+Seuls `health`, `info` et `metrics` sont exposés en HTTP : `env`, `beans`, `heapdump`... restent fermés (**404**, même pour un ADMIN). Toute autre URL `/actuator/**` que `health` et `info` demande le rôle ADMIN (**401** sans token, **403** avec un token USER).
 
 L'image Docker a un `HEALTHCHECK` sur la readiness : `docker ps` affiche `healthy` quand l'application répond et voit la base, `unhealthy` si PostgreSQL tombe.
 
