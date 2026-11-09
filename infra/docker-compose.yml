@@ -6,6 +6,8 @@ services:
       POSTGRES_DB: ecommerce
       POSTGRES_USER: ecommerce
       POSTGRES_PASSWORD: ecommerce   # local dev only, never in production
+    networks:   # only the containers that have a database reach it
+      - database
     ports:
       - "5432:5432"
     volumes:
@@ -37,6 +39,9 @@ services:
       DB_URL: jdbc:postgresql://postgres:5432/ecommerce   # the service name, not localhost
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
+    networks:
+      - backend
+      - database
     ports:
       - "8080:8080"
     restart: unless-stopped   # restarts after a crash or a Docker restart, not after "docker compose stop"
@@ -49,6 +54,8 @@ services:
     container_name: ecommerce-discovery-server
     environment:
       EUREKA_HOSTNAME: discovery-server
+    networks:   # no database: PostgreSQL is not even resolvable from here
+      - backend
     ports:
       - "8761:8761"             # Eureka dashboard on http://localhost:8761
     restart: unless-stopped
@@ -74,6 +81,9 @@ services:
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: auth-service   # address registered in Eureka, reachable by the gateway
+    networks:
+      - backend
+      - database
     ports:
       - "8081:8081"
     restart: unless-stopped
@@ -99,6 +109,9 @@ services:
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: product-service   # address registered in Eureka, reachable by the gateway
+    networks:
+      - backend
+      - database
     ports:
       - "8082:8082"
     restart: unless-stopped
@@ -124,6 +137,9 @@ services:
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: order-service   # address registered in Eureka, reachable by the gateway
+    networks:
+      - backend
+      - database
     ports:
       - "8083:8083"
     restart: unless-stopped
@@ -149,6 +165,9 @@ services:
       DB_PASSWORD: ecommerce
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: payment-service   # address registered in Eureka, reachable by the gateway
+    networks:
+      - backend
+      - database
     ports:
       - "8084:8084"
     restart: unless-stopped
@@ -168,9 +187,22 @@ services:
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: api-gateway
       MONOLITH_URL: http://app:8080
+    networks:   # no database: PostgreSQL is not even resolvable from here
+      - backend
     ports:
       - "8090:8090"
     restart: unless-stopped
+
+# Two networks instead of the default one, each container joins only the ones it needs:
+# - backend:  the Spring containers, which find each other through Eureka and call each other
+# - database: PostgreSQL and the containers that own a database in it
+# The gateway and Eureka are not on "database": a flaw in the public entry point cannot reach PostgreSQL.
+# The published ports (8090, 5432...) still work from the host: only container to container traffic is split.
+networks:
+  backend:
+    name: ecommerce-backend
+  database:
+    name: ecommerce-database
 
 volumes:
   postgres_data:
