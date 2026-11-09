@@ -79,7 +79,8 @@ class ActuatorIT extends IntegrationTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(auth(get("/actuator/metrics"), adminToken()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.names", hasItems("jvm.memory.used", "http.server.requests", "hikaricp.connections.active", "resilience4j.circuitbreaker.state", "resilience4j.retry.calls")));
+                .andExpect(jsonPath("$.names", hasItems("jvm.memory.used", "http.server.requests", "hikaricp.connections.active", "resilience4j.circuitbreaker.state", "resilience4j.retry.calls",
+                        "orders.placed", "cart.fallback")));
     }
 
     @Test
