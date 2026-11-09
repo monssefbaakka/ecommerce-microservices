@@ -9,6 +9,11 @@ x-spring-container: &spring-container
         # The JVM takes 75% of it as heap (-XX:MaxRAMPercentage=75.0 in the Dockerfiles). Without a limit,
         # each of the 7 JVMs would size its heap from the whole memory given to Docker
         memory: 512M
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"         # rotated at 10 MB, 3 files kept: the logs of a container never grow past 30 MB
+      max-file: "3"
 
 services:
   postgres:
