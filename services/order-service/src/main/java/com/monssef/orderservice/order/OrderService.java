@@ -2,6 +2,7 @@ package com.monssef.orderservice.order;
 
 import com.monssef.orderservice.cart.Cart;
 import com.monssef.orderservice.cart.CartRepository;
+import com.monssef.orderservice.common.BusinessMetrics;
 import com.monssef.orderservice.common.ResourceNotFoundException;
 import com.monssef.orderservice.order.dto.OrderDTO;
 import com.monssef.orderservice.order.dto.OrderSummaryDTO;
@@ -33,6 +34,7 @@ public class OrderService {
     private final CartRepository cartRepository;
     private final ProductClient productClient;
     private final OrderMapper mapper;
+    private final BusinessMetrics metrics;
 
     // Turns the cart into an order and empties the cart. product-service removes the units from the stock
     // (all lines or none: 409 if one lacks stock) and gives the name and price to copy into the order.
@@ -54,6 +56,7 @@ public class OrderService {
             reserved.forEach(order::addItem);
             Order saved = orderRepository.saveAndFlush(order);
             cart.getItems().clear(); // orphanRemoval deletes the cart lines
+            metrics.orderPlaced(); // once the order is saved: a refused or failed order is not counted
             return mapper.toDto(saved);
         } catch (RuntimeException e) {
             // The stock is already taken in product-service: give it back, the order does not exist
