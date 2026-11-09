@@ -4,6 +4,7 @@ import com.github.tomakehurst.wiremock.http.Fault;
 import com.github.tomakehurst.wiremock.junit5.WireMockExtension;
 import com.monssef.orderservice.client.ServiceUnavailableException;
 import com.monssef.orderservice.auth.ServiceTokenProvider;
+import com.monssef.orderservice.common.BusinessMetrics;
 import com.monssef.orderservice.config.ResilienceConfig;
 import com.monssef.orderservice.support.FeignFailures;
 import feign.Logger;
@@ -56,7 +57,8 @@ class ProductServiceApiTest {
     @EnableAutoConfiguration(exclude = {DataSourceAutoConfiguration.class, HibernateJpaAutoConfiguration.class,
             UserDetailsServiceAutoConfiguration.class})
     @EnableFeignClients(clients = ProductServiceApi.class)
-    @Import({ProductClient.class, LastKnownProducts.class, ServiceTokenProvider.class, ResilienceConfig.class})
+    @Import({ProductClient.class, LastKnownProducts.class, BusinessMetrics.class, ServiceTokenProvider.class,
+            ResilienceConfig.class})
     static class FeignClientOnly {
     }
 

@@ -14,6 +14,7 @@ class BusinessMetricsTest {
     @Test
     void counters_shouldExistAtZeroBeforeTheFirstEvent() {
         assertThat(registry.get("orders.placed").counter().count()).isZero();
+        assertThat(registry.get("cart.fallback").counter().count()).isZero();
     }
 
     @Test
@@ -22,5 +23,13 @@ class BusinessMetricsTest {
         metrics.orderPlaced();
 
         assertThat(registry.get("orders.placed").counter().count()).isEqualTo(2);
+    }
+
+    @Test
+    void cartShownFromLastKnownProducts_shouldCountEachFallback() {
+        metrics.cartShownFromLastKnownProducts();
+
+        assertThat(registry.get("cart.fallback").counter().count()).isEqualTo(1);
+        assertThat(registry.get("orders.placed").counter().count()).isZero();
     }
 }
