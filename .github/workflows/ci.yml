@@ -203,7 +203,7 @@ jobs:
           # "dependency:go-offline" layer is reused and Maven downloads nothing
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
-          # Into the runner's Docker, to be inspected below. Nothing is pushed to a registry
+          # Into the runner's Docker, to be inspected below. Pushed only by the last step, once checked
           load: true
           push: false
 
