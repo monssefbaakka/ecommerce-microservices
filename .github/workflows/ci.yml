@@ -276,7 +276,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
   compose:
-    name: Docker Compose file
+    name: Docker Compose files
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -293,8 +293,8 @@ jobs:
           docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app config --quiet
           images=$(docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app config --images)
           echo "$images"
-          local=$(echo "$images" | grep '^ecommerce-' || true)
-          if [ -n "$local" ]; then
-            echo "::error::Not taken from ghcr.io: $local"
+          built_here=$(echo "$images" | grep '^ecommerce-' || true)
+          if [ -n "$built_here" ]; then
+            echo "::error::Not taken from ghcr.io: $built_here"
             exit 1
           fi
