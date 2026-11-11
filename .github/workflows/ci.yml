@@ -131,6 +131,11 @@ jobs:
     # Only once every project is built and tested: an image is never made from code that fails its tests
     needs: build
     runs-on: ubuntu-latest
+    # Only this job may write to GitHub Container Registry (ghcr.io), with the GITHUB_TOKEN of the run:
+    # no personal token or secret to create. The other jobs keep the read-only token
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
