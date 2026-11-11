@@ -17,21 +17,22 @@ permissions:
 
 jobs:
   test:
-    name: Tests (${{ matrix.project }})
+    name: Tests (${{ matrix.name }})
     runs-on: ubuntu-latest
     strategy:
       # One failing project does not cancel the others: every broken project is reported at once
       fail-fast: false
       matrix:
-        # Each one is a separate Maven project with its own wrapper: one job each, run in parallel
-        project:
-          - monolith
-          - services/discovery-server
-          - services/auth-service
-          - services/product-service
-          - services/order-service
-          - services/payment-service
-          - services/api-gateway
+        # Each one is a separate Maven project with its own wrapper: one job each, run in parallel.
+        # "name" names the job and its artifacts (no "/" allowed there), "path" is the project folder
+        include:
+          - { name: monolith, path: monolith }
+          - { name: discovery-server, path: services/discovery-server }
+          - { name: auth-service, path: services/auth-service }
+          - { name: product-service, path: services/product-service }
+          - { name: order-service, path: services/order-service }
+          - { name: payment-service, path: services/payment-service }
+          - { name: api-gateway, path: services/api-gateway }
     steps:
       - uses: actions/checkout@v5
 
@@ -43,10 +44,10 @@ jobs:
           # ~/.m2/repository restored between runs, one cache per project (keyed on its pom.xml):
           # the dependencies are downloaded again only when that pom.xml changes
           cache: maven
-          cache-dependency-path: ${{ matrix.project }}/pom.xml
+          cache-dependency-path: ${{ matrix.path }}/pom.xml
 
       # Unit and slice tests (*Test), then the integration tests (*IT) on a PostgreSQL started by
       # Testcontainers: Docker is already running on the GitHub-hosted Ubuntu runners
       - name: Run the tests
-        working-directory: ${{ matrix.project }}
+        working-directory: ${{ matrix.path }}
         run: ./mvnw -B verify
