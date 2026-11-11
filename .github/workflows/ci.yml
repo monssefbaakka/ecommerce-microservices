@@ -1,0 +1,203 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A new push on a pull request branch cancels its run still in progress: only the last commit matters.
+# Never on main, where each merged commit keeps its own result
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+# The jobs only read the code: the GITHUB_TOKEN cannot push, comment or change anything
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build (${{ matrix.name }})
+    runs-on: ubuntu-latest
+    strategy:
+      # One failing project does not cancel the others: every broken project is reported at once
+      fail-fast: false
+      matrix:
+        # Each one is a separate Maven project with its own wrapper: one job each, run in parallel.
+        # "name" names the job and its artifacts (no "/" allowed there), "path" is the project folder
+        include:
+          - { name: monolith, path: monolith }
+          - { name: discovery-server, path: services/discovery-server }
+          - { name: auth-service, path: services/auth-service }
+          - { name: product-service, path: services/product-service }
+          - { name: order-service, path: services/order-service }
+          - { name: payment-service, path: services/payment-service }
+          - { name: api-gateway, path: services/api-gateway }
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+          # ~/.m2/repository restored between runs, one cache per project (keyed on its pom.xml):
+          # the dependencies are downloaded again only when that pom.xml changes
+          cache: maven
+          cache-dependency-path: ${{ matrix.path }}/pom.xml
+
+      # One Maven run for the whole lifecycle: compile, unit and slice tests (*Test), package the
+      # executable jar, then the integration tests (*IT) on a PostgreSQL started by Testcontainers
+      # (Docker is already running on the GitHub-hosted Ubuntu runners) and the coverage report
+      - name: Build, test and package
+        working-directory: ${{ matrix.path }}
+        run: ./mvnw -B verify
+
+      # Without Docker the *IT classes are skipped, not failed (disabledWithoutDocker = true): fine on a
+      # laptop, but in CI a green run must mean they ran. discovery-server and api-gateway have no *IT
+      - name: Check that no integration test was skipped
+        working-directory: ${{ matrix.path }}
+        run: |
+          summary=target/failsafe-reports/failsafe-summary.xml
+          if [ ! -f "$summary" ]; then
+            echo "No integration tests in this project"
+            exit 0
+          fi
+          skipped=$(sed -n 's:.*<skipped>\([0-9]*\)</skipped>.*:\1:p' "$summary")
+          if [ "${skipped:-0}" -ne 0 ]; then
+            echo "::error::$skipped integration test(s) skipped: is Docker available on the runner?"
+            exit 1
+          fi
+          echo "Every integration test ran"
+
+      # Tests run, line coverage and jar size, shown on the run page without downloading anything
+      - name: Write the job summary
+        working-directory: ${{ matrix.path }}
+        run: |
+          count() {
+            cat "$1"/TEST-*.xml 2>/dev/null | grep -o '<testsuite [^>]*' \
+              | sed -n 's/.* tests="\([0-9]*\)".*/\1/p' | awk '{ s += $1 } END { print s + 0 }'
+          }
+          coverage="-"
+          if [ -f target/site/jacoco/jacoco.csv ]; then
+            # LINE_MISSED and LINE_COVERED are the 8th and 9th columns
+            coverage=$(awk -F, 'NR > 1 { m += $8; c += $9 } END { if (m + c) printf "%.1f%%", 100 * c / (m + c) }' \
+              target/site/jacoco/jacoco.csv)
+          fi
+          jar=$(ls target/*.jar)
+          {
+            echo "### ${{ matrix.name }}"
+            echo
+            echo "| Unit and slice tests | Integration tests | Line coverage | Jar |"
+            echo "|---|---|---|---|"
+            echo "| $(count target/surefire-reports) | $(count target/failsafe-reports) | $coverage | \`$(basename "$jar")\` ($(du -h "$jar" | cut -f1)) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The tested Spring Boot jar, kept with the run ("java -jar" runs it). target/*.jar leaves out
+      # the *.jar.original that the repackaging leaves next to it
+      - name: Upload the jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar-${{ matrix.name }}
+          path: ${{ matrix.path }}/target/*.jar
+          retention-days: 7
+          if-no-files-found: error
+
+      # HTML coverage report of the unit + integration tests (open index.html once downloaded).
+      # discovery-server and api-gateway have no JaCoCo: nothing to upload for them
+      - name: Upload the coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.name }}
+          path: ${{ matrix.path }}/target/site/jacoco/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # The full output of each failed test (stack trace, Spring and Testcontainers logs), downloadable
+      # from the run page: the job log only shows a summary
+      - name: Upload the test reports
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports-${{ matrix.name }}
+          path: |
+            ${{ matrix.path }}/target/surefire-reports/
+            ${{ matrix.path }}/target/failsafe-reports/
+          retention-days: 7
+          if-no-files-found: ignore
+
+  docker:
+    name: Docker image (${{ matrix.name }})
+    # Only once every project is built and tested: an image is never made from code that fails its tests
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Same projects as the build job. "name" also names the image, like in infra/docker-compose.yml
+        include:
+          - { name: monolith, path: monolith }
+          - { name: discovery-server, path: services/discovery-server }
+          - { name: auth-service, path: services/auth-service }
+          - { name: product-service, path: services/product-service }
+          - { name: order-service, path: services/order-service }
+          - { name: payment-service, path: services/payment-service }
+          - { name: api-gateway, path: services/api-gateway }
+    steps:
+      - uses: actions/checkout@v5
+
+      # BuildKit builder able to export its layer cache to the GitHub Actions cache
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # The project's own multi-stage Dockerfile: it builds the jar again from the sources (tests
+      # skipped, they ran in the build job) and keeps only the JRE and the Spring Boot layers
+      - name: Build the image
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.path }}
+          tags: ecommerce-${{ matrix.name }}:${{ github.sha }}
+          # Layers kept between runs, one cache per image: when only the code changed, the
+          # "dependency:go-offline" layer is reused and Maven downloads nothing
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+          # Into the runner's Docker, to be inspected below. Nothing is pushed to a registry
+          load: true
+          push: false
+
+      # What every Dockerfile promises, checked on the built image: never run as root, and a
+      # HEALTHCHECK so that Docker Compose can wait for the container to be ready
+      - name: Check the image
+        run: |
+          image=ecommerce-${{ matrix.name }}:${{ github.sha }}
+          user=$(docker image inspect -f '{{ .Config.User }}' "$image")
+          if [ -z "$user" ] || [ "${user%%:*}" = root ]; then
+            echo "::error::$image runs as root"
+            exit 1
+          fi
+          healthcheck=$(docker image inspect -f '{{ if .Config.Healthcheck }}{{ join .Config.Healthcheck.Test " " }}{{ end }}' "$image")
+          if [ -z "$healthcheck" ]; then
+            echo "::error::$image has no HEALTHCHECK"
+            exit 1
+          fi
+          size=$(docker image inspect -f '{{ .Size }}' "$image" | awk '{ printf "%.0f MB", $1 / 1000 / 1000 }')
+          {
+            echo "### ecommerce-${{ matrix.name }}"
+            echo
+            echo "| User | Health check | Size |"
+            echo "|---|---|---|"
+            # The "|" of "|| exit 1" escaped, or it would split the table cell
+            escaped='\|'
+            echo "| \`$user\` | \`${healthcheck//|/$escaped}\` | $size |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  compose:
+    name: Docker Compose file
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Parses infra/docker-compose.yml with every service of the "app" profile: a wrong key, anchor
+      # or indentation fails here instead of on the next "docker compose up"
+      - name: Validate the Compose file
+        run: docker compose -f infra/docker-compose.yml --profile app config --quiet
