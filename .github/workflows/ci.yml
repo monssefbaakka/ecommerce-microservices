@@ -156,6 +156,23 @@ jobs:
       - name: Name the image
         run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/ecommerce-${{ matrix.name }}" >> "$GITHUB_ENV"
 
+      # Tags and OCI labels of the image, from the event of the run:
+      #   - sha-<short sha>: every build, points to the exact commit
+      #   - latest: only on main, the last image that passed the tests there
+      #   - pr-<number>: on a pull request (built to be checked, never pushed)
+      # The labels link the image to this repository (source, revision, creation date)
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=pr
+          labels: |
+            org.opencontainers.image.title=ecommerce-${{ matrix.name }}
+
       # BuildKit builder able to export its layer cache to the GitHub Actions cache
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -170,7 +187,8 @@ jobs:
           DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: ${{ matrix.path }}
-          tags: ecommerce-${{ matrix.name }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           # Layers kept between runs, one cache per image: when only the code changed, the
           # "dependency:go-offline" layer is reused and Maven downloads nothing
           cache-from: type=gha,scope=${{ matrix.name }}
@@ -183,7 +201,7 @@ jobs:
       # HEALTHCHECK so that Docker Compose can wait for the container to be ready
       - name: Check the image
         run: |
-          image=ecommerce-${{ matrix.name }}:${{ github.sha }}
+          image=$IMAGE:${{ steps.meta.outputs.version }}
           user=$(docker image inspect -f '{{ .Config.User }}' "$image")
           if [ -z "$user" ] || [ "${user%%:*}" = root ]; then
             echo "::error::$image runs as root"
