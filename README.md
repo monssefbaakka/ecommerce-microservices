@@ -88,6 +88,20 @@ Each service has its own Dockerfile, built the same way. The monolith's image is
 
 In Compose, each Spring container is limited to 512 MB, so the JVM takes at most 384 MB of heap instead of 75% of all the memory given to Docker (a started service uses about 220 to 330 MB, `docker stats`). Its logs rotate at 10 MB, 3 files kept. These settings, the `app` profile and the restart policy are written once in the `x-spring-container` block of [infra/docker-compose.yml](infra/docker-compose.yml) and merged into each service.
 
+#### Without building: the published images
+
+The images built and tested by the CI are on GitHub Container Registry ([Published images](#published-images)). With the override [infra/docker-compose.ghcr.yml](infra/docker-compose.ghcr.yml), Compose pulls them instead of building: no JDK and no Maven build on the machine, only Docker and this repository's `infra/` folder.
+
+```bash
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app up -d --wait
+```
+
+Only the image of each service changes: networks, health checks, memory limits and environment come from `docker-compose.yml`. The images are pulled again on every `up` (`latest` moves). `IMAGE_TAG` picks another version (`sha-<short sha>`, `1.2.0`, `1.2`), `IMAGE_REGISTRY` the images of a fork, both settable in `infra/.env`:
+
+```bash
+IMAGE_TAG=1.0.0 docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app up -d --wait
+```
+
 To build and run the image alone:
 
 ```bash
