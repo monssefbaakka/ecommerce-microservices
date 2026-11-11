@@ -251,6 +251,11 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.name }}
+          # Attached to the published image: the list of every package and library inside it (SBOM),
+          # and how it was built (provenance: commit, workflow, build arguments).
+          # Read with "docker buildx imagetools inspect <image> --format '{{ json .SBOM }}'"
+          sbom: true
+          provenance: mode=max
           push: true
 
   compose:
