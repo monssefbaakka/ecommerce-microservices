@@ -135,6 +135,23 @@ cd services/auth-service    # or discovery-server, product-service, order-servic
 docker compose -f infra/docker-compose.yml --profile app stop   # --profile app also stops the app and service containers
 ```
 
+## Continuous integration
+
+Every pull request and every push to `main` runs the [CI workflow](.github/workflows/ci.yml) on GitHub Actions. Nothing to set up: the runners already have Java and Docker.
+
+### Build job
+
+One job per Maven project (the monolith and the six services), run in parallel. A failing project does not stop the others, so every broken project shows up in the same run.
+
+| Step | What it does |
+|---|---|
+| Build, test and package | `./mvnw -B verify`: compile, unit and slice tests, executable jar, integration tests on PostgreSQL with Testcontainers, coverage report |
+| No integration test skipped | Fails the job if any `*IT` was skipped. On a laptop without Docker they are skipped on purpose, but in CI a green run must mean they ran |
+| Job summary | Number of unit and integration tests, line coverage and jar size, shown on the run page |
+| Artifacts | The tested jar (`jar-<project>`) and the JaCoCo report (`coverage-<project>`), kept 7 days. When a job fails, the Surefire / Failsafe reports too (`test-reports-<project>`) |
+
+The Maven dependencies are cached per project, keyed on its `pom.xml`: they are downloaded again only when that file changes. A new push on a pull request cancels the run still in progress for it.
+
 ## Microservices
 
 Phase 5 extracts the monolith step by step. The first services are in [services/](services/):
