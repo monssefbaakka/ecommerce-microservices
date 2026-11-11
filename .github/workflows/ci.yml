@@ -7,8 +7,21 @@ on:
 
 jobs:
   test:
-    name: Tests (monolith)
+    name: Tests (${{ matrix.project }})
     runs-on: ubuntu-latest
+    strategy:
+      # One failing project does not cancel the others: every broken project is reported at once
+      fail-fast: false
+      matrix:
+        # Each one is a separate Maven project with its own wrapper: one job each, run in parallel
+        project:
+          - monolith
+          - services/discovery-server
+          - services/auth-service
+          - services/product-service
+          - services/order-service
+          - services/payment-service
+          - services/api-gateway
     steps:
       - uses: actions/checkout@v5
 
@@ -21,5 +34,5 @@ jobs:
       # Unit and slice tests (*Test), then the integration tests (*IT) on a PostgreSQL started by
       # Testcontainers: Docker is already running on the GitHub-hosted Ubuntu runners
       - name: Run the tests
-        working-directory: monolith
+        working-directory: ${{ matrix.project }}
         run: ./mvnw -B verify
