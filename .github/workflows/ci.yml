@@ -46,9 +46,10 @@ jobs:
           cache: maven
           cache-dependency-path: ${{ matrix.path }}/pom.xml
 
-      # Unit and slice tests (*Test), then the integration tests (*IT) on a PostgreSQL started by
-      # Testcontainers: Docker is already running on the GitHub-hosted Ubuntu runners
-      - name: Run the tests
+      # One Maven run for the whole lifecycle: compile, unit and slice tests (*Test), package the
+      # executable jar, then the integration tests (*IT) against that jar's classes on a PostgreSQL
+      # started by Testcontainers (Docker is already running on the GitHub-hosted Ubuntu runners)
+      - name: Build, test and package
         working-directory: ${{ matrix.path }}
         run: ./mvnw -B verify
 
@@ -68,6 +69,16 @@ jobs:
             exit 1
           fi
           echo "Every integration test ran"
+
+      # The tested Spring Boot jar, kept with the run ("java -jar" runs it). target/*.jar leaves out
+      # the *.jar.original that the repackaging leaves next to it
+      - name: Upload the jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: jar-${{ matrix.name }}
+          path: ${{ matrix.path }}/target/*.jar
+          retention-days: 7
+          if-no-files-found: error
 
       # The full output of each failed test (stack trace, Spring and Testcontainers logs), downloadable
       # from the run page: the job log only shows a summary
