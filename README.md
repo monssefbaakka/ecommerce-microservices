@@ -152,6 +152,14 @@ One job per Maven project (the monolith and the six services), run in parallel. 
 
 The Maven dependencies are cached per project, keyed on its `pom.xml`: they are downloaded again only when that file changes. A new push on a pull request cancels the run still in progress for it.
 
+### Docker job
+
+Once every build job has passed, the Docker image of each project is built from its own `Dockerfile`, as `ecommerce-<project>:<commit sha>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
+
+The image layers are cached between runs, one cache per image: when only the code changed, the layer holding the Maven dependencies is reused. Nothing is pushed to a registry yet.
+
+A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`.
+
 ## Microservices
 
 Phase 5 extracts the monolith step by step. The first services are in [services/](services/):
