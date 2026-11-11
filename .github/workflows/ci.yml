@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: Tests (monolith)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Java 21
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      # Unit and slice tests (*Test), then the integration tests (*IT) on a PostgreSQL started by
+      # Testcontainers: Docker is already running on the GitHub-hosted Ubuntu runners
+      - name: Run the tests
+        working-directory: monolith
+        run: ./mvnw -B verify
