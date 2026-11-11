@@ -154,6 +154,10 @@ jobs:
       # skipped, they ran in the build job) and keeps only the JRE and the Spring Boot layers
       - name: Build the image
         uses: docker/build-push-action@v6
+        env:
+          # No "<repo>~<id>.dockerbuild" build record attached to the run for each image: the build
+          # summary already appears on the run page, and the artifacts list keeps the jars and reports
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: ${{ matrix.path }}
           tags: ecommerce-${{ matrix.name }}:${{ github.sha }}
