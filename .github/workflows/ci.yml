@@ -164,3 +164,29 @@ jobs:
           # Into the runner's Docker, to be inspected below. Nothing is pushed to a registry
           load: true
           push: false
+
+      # What every Dockerfile promises, checked on the built image: never run as root, and a
+      # HEALTHCHECK so that Docker Compose can wait for the container to be ready
+      - name: Check the image
+        run: |
+          image=ecommerce-${{ matrix.name }}:${{ github.sha }}
+          user=$(docker image inspect -f '{{ .Config.User }}' "$image")
+          if [ -z "$user" ] || [ "${user%%:*}" = root ]; then
+            echo "::error::$image runs as root"
+            exit 1
+          fi
+          healthcheck=$(docker image inspect -f '{{ if .Config.Healthcheck }}{{ join .Config.Healthcheck.Test " " }}{{ end }}' "$image")
+          if [ -z "$healthcheck" ]; then
+            echo "::error::$image has no HEALTHCHECK"
+            exit 1
+          fi
+          size=$(docker image inspect -f '{{ .Size }}' "$image" | awk '{ printf "%.0f MB", $1 / 1000 / 1000 }')
+          {
+            echo "### ecommerce-${{ matrix.name }}"
+            echo
+            echo "| User | Health check | Size |"
+            echo "|---|---|---|"
+            # The "|" of "|| exit 1" escaped, or it would split the table cell
+            escaped='\|'
+            echo "| \`$user\` | \`${healthcheck//|/$escaped}\` | $size |"
+          } >> "$GITHUB_STEP_SUMMARY"
