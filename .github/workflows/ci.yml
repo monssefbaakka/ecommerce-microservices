@@ -70,6 +70,29 @@ jobs:
           fi
           echo "Every integration test ran"
 
+      # Tests run, line coverage and jar size, shown on the run page without downloading anything
+      - name: Write the job summary
+        working-directory: ${{ matrix.path }}
+        run: |
+          count() {
+            cat "$1"/TEST-*.xml 2>/dev/null | grep -o '<testsuite [^>]*' \
+              | sed -n 's/.* tests="\([0-9]*\)".*/\1/p' | awk '{ s += $1 } END { print s + 0 }'
+          }
+          coverage="-"
+          if [ -f target/site/jacoco/jacoco.csv ]; then
+            # LINE_MISSED and LINE_COVERED are the 8th and 9th columns
+            coverage=$(awk -F, 'NR > 1 { m += $8; c += $9 } END { if (m + c) printf "%.1f%%", 100 * c / (m + c) }' \
+              target/site/jacoco/jacoco.csv)
+          fi
+          jar=$(ls target/*.jar)
+          {
+            echo "### ${{ matrix.name }}"
+            echo
+            echo "| Unit and slice tests | Integration tests | Line coverage | Jar |"
+            echo "|---|---|---|---|"
+            echo "| $(count target/surefire-reports) | $(count target/failsafe-reports) | $coverage | \`$(basename "$jar")\` ($(du -h "$jar" | cut -f1)) |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       # The tested Spring Boot jar, kept with the run ("java -jar" runs it). target/*.jar leaves out
       # the *.jar.original that the repackaging leaves next to it
       - name: Upload the jar
