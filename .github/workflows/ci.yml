@@ -146,8 +146,21 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # BuildKit builder able to export its layer cache to the GitHub Actions cache
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       # The project's own multi-stage Dockerfile: it builds the jar again from the sources (tests
       # skipped, they ran in the build job) and keeps only the JRE and the Spring Boot layers
       - name: Build the image
-        working-directory: ${{ matrix.path }}
-        run: docker build -t ecommerce-${{ matrix.name }}:${{ github.sha }} .
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.path }}
+          tags: ecommerce-${{ matrix.name }}:${{ github.sha }}
+          # Layers kept between runs, one cache per image: when only the code changed, the
+          # "dependency:go-offline" layer is reused and Maven downloads nothing
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
+          # Into the runner's Docker, to be inspected below. Nothing is pushed to a registry
+          load: true
+          push: false
