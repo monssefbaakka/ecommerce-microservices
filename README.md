@@ -2,7 +2,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 in progress: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 in progress: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -20,7 +20,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info, metrics), Micrometer (business counters) |
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, WireMock (fake services for the Feign clients), JaCoCo |
 | Resilience | Resilience4j 2.2: circuit breaker and retries around the Feign calls, last known products as fallback for the cart |
-| CI | GitHub Actions: build, tests and Docker images of every project on each pull request |
+| CI | GitHub Actions: build, tests and Docker images of every project on each pull request, images published to GitHub Container Registry (ghcr.io) |
 
 ## Getting started
 
@@ -88,6 +88,20 @@ Each service has its own Dockerfile, built the same way. The monolith's image is
 
 In Compose, each Spring container is limited to 512 MB, so the JVM takes at most 384 MB of heap instead of 75% of all the memory given to Docker (a started service uses about 220 to 330 MB, `docker stats`). Its logs rotate at 10 MB, 3 files kept. These settings, the `app` profile and the restart policy are written once in the `x-spring-container` block of [infra/docker-compose.yml](infra/docker-compose.yml) and merged into each service.
 
+#### Without building: the published images
+
+The images built and tested by the CI are on GitHub Container Registry ([Published images](#published-images)). With the override [infra/docker-compose.ghcr.yml](infra/docker-compose.ghcr.yml), Compose pulls them instead of building: no JDK and no Maven build on the machine, only Docker and this repository's `infra/` folder.
+
+```bash
+docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app up -d --wait
+```
+
+Only the image of each service changes: networks, health checks, memory limits and environment come from `docker-compose.yml`. The images are pulled again on every `up` (`latest` moves). `IMAGE_TAG` picks another version (`sha-<short sha>`, `1.2.0`, `1.2`), `IMAGE_REGISTRY` the images of a fork, both settable in `infra/.env`:
+
+```bash
+IMAGE_TAG=1.0.0 docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app up -d --wait
+```
+
 To build and run the image alone:
 
 ```bash
@@ -154,11 +168,34 @@ The Maven dependencies are cached per project, keyed on its `pom.xml`: they are 
 
 ### Docker job
 
-Once every build job has passed, the Docker image of each project is built from its own `Dockerfile`, as `ecommerce-<project>:<commit sha>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
+Once every build job has passed, the Docker image of each project is built from its own `Dockerfile`, as `ghcr.io/monssefbaakka/ecommerce-<project>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
 
-The image layers are cached between runs, one cache per image: when only the code changed, the layer holding the Maven dependencies is reused. Nothing is pushed to a registry yet.
+On `main` and on a release tag, the checked image is then pushed to GitHub Container Registry (see [Published images](#published-images)). On a pull request it is only built and checked: the run never logs in to the registry.
 
-A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`.
+The image layers are cached between runs, one cache per image: when only the code changed, the layer holding the Maven dependencies is reused. The push reuses the same cache, so nothing is compiled twice.
+
+A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`. It does the same with `infra/docker-compose.ghcr.yml` merged over it, and fails if any service image is still a local build instead of a `ghcr.io` one.
+
+### Published images
+
+The seven images are on GitHub Container Registry, under the [packages of the repository](https://github.com/monssefbaakka?tab=packages&repo_name=ecommerce-microservices): `ghcr.io/monssefbaakka/ecommerce-<project>`, with `<project>` one of `monolith`, `discovery-server`, `auth-service`, `product-service`, `order-service`, `payment-service`, `api-gateway`.
+
+| Tag | Published by | Points to |
+|---|---|---|
+| `latest` | each push to `main` | The last image of `main` that passed the tests. Moves with every merge |
+| `sha-<short sha>` | each push to `main`, each release tag | The image of that exact commit. Never moves |
+| `1.2.0`, `1.2` | the git tag `v1.2.0` | A release. `1.2` moves to the last patch of 1.2 |
+
+A release is a git tag pushed to GitHub, the workflow does the rest:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The run token (`GITHUB_TOKEN`) pushes the images: no personal token or secret to create, and only the Docker job may write packages. Each image carries the OCI labels linking it to this repository and commit, an SBOM (every package and library inside it) and its build provenance (`docker buildx imagetools inspect ghcr.io/monssefbaakka/ecommerce-monolith:latest`). The tags and the digest published by a run are listed in its job summary.
+
+A package created by its first push is **private**, even for a public repository. To let anyone pull without logging in, open each package once, then *Package settings* → *Change visibility* → *Public*. While a package is private, pulling it needs `docker login ghcr.io` with a personal access token that has the `read:packages` scope.
 
 ## Microservices
 
@@ -602,7 +639,8 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │   ├── order-service/      cart and orders of the logged-in user, stock reserved in product-service
 │   ├── payment-service/    simulated card payments, sets the order to PAID
 │   └── api-gateway/        single entry point, routes to the services and the monolith
-├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices), .env.example
+├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices), .env.example,
+│                    docker-compose.ghcr.yml (same stack from the images published on ghcr.io)
 │   └── postgres/    init-databases.sql: one database per service
 ├── docs/            HTTP request examples, architecture notes
 └── .github/         CI workflow (workflows/ci.yml), issue and pull request templates

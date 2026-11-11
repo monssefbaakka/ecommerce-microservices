@@ -3,13 +3,15 @@ name: CI
 on:
   push:
     branches: [main]
+    # A release: "git tag v1.2.0 && git push origin v1.2.0" publishes images tagged with that version
+    tags: ["v*.*.*"]
   pull_request:
 
 # A new push on a pull request branch cancels its run still in progress: only the last commit matters.
-# Never on main, where each merged commit keeps its own result
+# Never on main or a release tag, where each run publishes images and must finish
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # The jobs only read the code: the GITHUB_TOKEN cannot push, comment or change anything
 permissions:
@@ -96,7 +98,7 @@ jobs:
       # The tested Spring Boot jar, kept with the run ("java -jar" runs it). target/*.jar leaves out
       # the *.jar.original that the repackaging leaves next to it
       - name: Upload the jar
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: jar-${{ matrix.name }}
           path: ${{ matrix.path }}/target/*.jar
@@ -106,7 +108,7 @@ jobs:
       # HTML coverage report of the unit + integration tests (open index.html once downloaded).
       # discovery-server and api-gateway have no JaCoCo: nothing to upload for them
       - name: Upload the coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: coverage-${{ matrix.name }}
           path: ${{ matrix.path }}/target/site/jacoco/
@@ -117,7 +119,7 @@ jobs:
       # from the run page: the job log only shows a summary
       - name: Upload the test reports
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: test-reports-${{ matrix.name }}
           path: |
@@ -131,6 +133,11 @@ jobs:
     # Only once every project is built and tested: an image is never made from code that fails its tests
     needs: build
     runs-on: ubuntu-latest
+    # Only this job may write to GitHub Container Registry (ghcr.io), with the GITHUB_TOKEN of the run:
+    # no personal token or secret to create. The other jobs keep the read-only token
+    permissions:
+      contents: read
+      packages: write
     strategy:
       fail-fast: false
       matrix:
@@ -146,6 +153,41 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # ghcr.io/<owner>/ecommerce-<project>, in lower case: the registry refuses capital letters,
+      # which a GitHub user or organization name may have
+      - name: Name the image
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/ecommerce-${{ matrix.name }}" >> "$GITHUB_ENV"
+
+      # Tags and OCI labels of the image, from the event of the run:
+      #   - sha-<short sha>: every build, points to the exact commit
+      #   - latest: only on main, the last image that passed the tests there
+      #   - pr-<number>: on a pull request (built to be checked, never pushed)
+      #   - 1.2.0 and 1.2: on the git tag v1.2.0, so that "1.2" always gives the last patch
+      # The labels link the image to this repository (source, revision, creation date)
+      - name: Tags and labels
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE }}
+          tags: |
+            type=sha
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+          labels: |
+            org.opencontainers.image.title=ecommerce-${{ matrix.name }}
+
+      # Never on a pull request: its images are only built and checked. The GITHUB_TOKEN of a pull
+      # request from a fork could not push anyway
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       # BuildKit builder able to export its layer cache to the GitHub Actions cache
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -154,14 +196,19 @@ jobs:
       # skipped, they ran in the build job) and keeps only the JRE and the Spring Boot layers
       - name: Build the image
         uses: docker/build-push-action@v6
+        env:
+          # No "<repo>~<id>.dockerbuild" build record attached to the run for each image: the build
+          # summary already appears on the run page, and the artifacts list keeps the jars and reports
+          DOCKER_BUILD_RECORD_UPLOAD: false
         with:
           context: ${{ matrix.path }}
-          tags: ecommerce-${{ matrix.name }}:${{ github.sha }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
           # Layers kept between runs, one cache per image: when only the code changed, the
           # "dependency:go-offline" layer is reused and Maven downloads nothing
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,scope=${{ matrix.name }},mode=max
-          # Into the runner's Docker, to be inspected below. Nothing is pushed to a registry
+          # Into the runner's Docker, to be inspected below. Pushed only by the last step, once checked
           load: true
           push: false
 
@@ -169,7 +216,7 @@ jobs:
       # HEALTHCHECK so that Docker Compose can wait for the container to be ready
       - name: Check the image
         run: |
-          image=ecommerce-${{ matrix.name }}:${{ github.sha }}
+          image=$IMAGE:${{ steps.meta.outputs.version }}
           user=$(docker image inspect -f '{{ .Config.User }}' "$image")
           if [ -z "$user" ] || [ "${user%%:*}" = root ]; then
             echo "::error::$image runs as root"
@@ -191,8 +238,45 @@ jobs:
             echo "| \`$user\` | \`${healthcheck//|/$escaped}\` | $size |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Only an image that passed the checks above is published, and never from a pull request.
+      # Same Dockerfile, tags and cache as the build above: every layer is already in the cache,
+      # nothing is compiled again, the layers are only sent to the registry
+      - name: Push the image
+        id: push
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: ${{ matrix.path }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          # Attached to the published image: the list of every package and library inside it (SBOM),
+          # and how it was built (provenance: commit, workflow, build arguments).
+          # Read with "docker buildx imagetools inspect <image> --format '{{ json .SBOM }}'"
+          sbom: true
+          provenance: mode=max
+          push: true
+
+      # What was published, ready to copy: the tags, and the digest that names this exact image forever
+      # (a tag like "latest" moves, "@sha256:..." never does)
+      - name: List the published tags
+        if: github.event_name != 'pull_request'
+        env:
+          TAGS: ${{ steps.meta.outputs.tags }}
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          {
+            echo
+            echo "Published:"
+            echo
+            echo "$TAGS" | sed 's/.*/- `&`/'
+            echo "- \`$IMAGE@$DIGEST\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
   compose:
-    name: Docker Compose file
+    name: Docker Compose files
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -201,3 +285,16 @@ jobs:
       # or indentation fails here instead of on the next "docker compose up"
       - name: Validate the Compose file
         run: docker compose -f infra/docker-compose.yml --profile app config --quiet
+
+      # The override for the images published on ghcr.io, merged over the main file: each service
+      # must exist in both, and its image must point to the registry, not to a local build
+      - name: Validate the override for the published images
+        run: |
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app config --quiet
+          images=$(docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app config --images)
+          echo "$images"
+          built_here=$(echo "$images" | grep '^ecommerce-' || true)
+          if [ -n "$built_here" ]; then
+            echo "::error::Not taken from ghcr.io: $built_here"
+            exit 1
+          fi

@@ -1,0 +1,44 @@
+# Runs the images published by the CI on GitHub Container Registry instead of building them here:
+# no JDK, no Maven, no build, the containers start from what passed the tests on main.
+#
+#   docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app up -d
+#
+# Merged over docker-compose.yml: only the image of each service changes, everything else
+# (networks, health checks, memory limits, environment) comes from there.
+#
+# IMAGE_TAG picks the version: "latest" (default, last image of main), "sha-<short sha>" for one commit,
+# or "1.2.0" / "1.2" for a release. IMAGE_REGISTRY points to a fork's images. Both can go in infra/.env
+
+x-ghcr-image: &ghcr-image
+  # Always pulled, even when an image with that tag is already on this machine: "latest" moves.
+  # Never built from the sources, although docker-compose.yml still has a "build" section
+  pull_policy: always
+
+services:
+  app:
+    <<: *ghcr-image
+    image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-monolith:${IMAGE_TAG:-latest}
+
+  discovery-server:
+    <<: *ghcr-image
+    image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-discovery-server:${IMAGE_TAG:-latest}
+
+  auth-service:
+    <<: *ghcr-image
+    image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-auth-service:${IMAGE_TAG:-latest}
+
+  product-service:
+    <<: *ghcr-image
+    image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-product-service:${IMAGE_TAG:-latest}
+
+  order-service:
+    <<: *ghcr-image
+    image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-order-service:${IMAGE_TAG:-latest}
+
+  payment-service:
+    <<: *ghcr-image
+    image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-payment-service:${IMAGE_TAG:-latest}
+
+  api-gateway:
+    <<: *ghcr-image
+    image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-api-gateway:${IMAGE_TAG:-latest}
