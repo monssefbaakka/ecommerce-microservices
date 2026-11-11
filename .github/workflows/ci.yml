@@ -233,6 +233,21 @@ jobs:
             echo "| \`$user\` | \`${healthcheck//|/$escaped}\` | $size |"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # Only an image that passed the checks above is published, and never from a pull request.
+      # Same Dockerfile, tags and cache as the build above: every layer is already in the cache,
+      # nothing is compiled again, the layers are only sent to the registry
+      - name: Push the image
+        if: github.event_name != 'pull_request'
+        uses: docker/build-push-action@v6
+        env:
+          DOCKER_BUILD_RECORD_UPLOAD: false
+        with:
+          context: ${{ matrix.path }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          push: true
+
   compose:
     name: Docker Compose file
     runs-on: ubuntu-latest
