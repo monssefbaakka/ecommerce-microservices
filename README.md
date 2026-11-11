@@ -162,6 +162,25 @@ The image layers are cached between runs, one cache per image: when only the cod
 
 A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`.
 
+### Published images
+
+The seven images are on GitHub Container Registry, under the [packages of the repository](https://github.com/monssefbaakka?tab=packages&repo_name=ecommerce-microservices): `ghcr.io/monssefbaakka/ecommerce-<project>`, with `<project>` one of `monolith`, `discovery-server`, `auth-service`, `product-service`, `order-service`, `payment-service`, `api-gateway`.
+
+| Tag | Published by | Points to |
+|---|---|---|
+| `latest` | each push to `main` | The last image of `main` that passed the tests. Moves with every merge |
+| `sha-<short sha>` | each push to `main`, each release tag | The image of that exact commit. Never moves |
+| `1.2.0`, `1.2` | the git tag `v1.2.0` | A release. `1.2` moves to the last patch of 1.2 |
+
+A release is a git tag pushed to GitHub, the workflow does the rest:
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+The run token (`GITHUB_TOKEN`) pushes the images: no personal token or secret to create, and only the Docker job may write packages. Each image carries the OCI labels linking it to this repository and commit, an SBOM (every package and library inside it) and its build provenance (`docker buildx imagetools inspect ghcr.io/monssefbaakka/ecommerce-monolith:latest`). The tags and the digest published by a run are listed in its job summary.
+
 ## Microservices
 
 Phase 5 extracts the monolith step by step. The first services are in [services/](services/):
