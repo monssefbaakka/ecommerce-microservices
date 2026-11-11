@@ -3,6 +3,8 @@ name: CI
 on:
   push:
     branches: [main]
+    # A release: "git tag v1.2.0 && git push origin v1.2.0" publishes images tagged with that version
+    tags: ["v*.*.*"]
   pull_request:
 
 # A new push on a pull request branch cancels its run still in progress: only the last commit matters.
@@ -160,6 +162,7 @@ jobs:
       #   - sha-<short sha>: every build, points to the exact commit
       #   - latest: only on main, the last image that passed the tests there
       #   - pr-<number>: on a pull request (built to be checked, never pushed)
+      #   - 1.2.0 and 1.2: on the git tag v1.2.0, so that "1.2" always gives the last patch
       # The labels link the image to this repository (source, revision, creation date)
       - name: Tags and labels
         id: meta
@@ -170,6 +173,8 @@ jobs:
             type=sha
             type=raw,value=latest,enable={{is_default_branch}}
             type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
           labels: |
             org.opencontainers.image.title=ecommerce-${{ matrix.name }}
 
