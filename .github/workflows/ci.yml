@@ -30,6 +30,10 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+          # ~/.m2/repository restored between runs, one cache per project (keyed on its pom.xml):
+          # the dependencies are downloaded again only when that pom.xml changes
+          cache: maven
+          cache-dependency-path: ${{ matrix.project }}/pom.xml
 
       # Unit and slice tests (*Test), then the integration tests (*IT) on a PostgreSQL started by
       # Testcontainers: Docker is already running on the GitHub-hosted Ubuntu runners
