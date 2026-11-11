@@ -47,8 +47,8 @@ jobs:
           cache-dependency-path: ${{ matrix.path }}/pom.xml
 
       # One Maven run for the whole lifecycle: compile, unit and slice tests (*Test), package the
-      # executable jar, then the integration tests (*IT) against that jar's classes on a PostgreSQL
-      # started by Testcontainers (Docker is already running on the GitHub-hosted Ubuntu runners)
+      # executable jar, then the integration tests (*IT) on a PostgreSQL started by Testcontainers
+      # (Docker is already running on the GitHub-hosted Ubuntu runners) and the coverage report
       - name: Build, test and package
         working-directory: ${{ matrix.path }}
         run: ./mvnw -B verify
