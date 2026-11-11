@@ -125,3 +125,29 @@ jobs:
             ${{ matrix.path }}/target/failsafe-reports/
           retention-days: 7
           if-no-files-found: ignore
+
+  docker:
+    name: Docker image (${{ matrix.name }})
+    # Only once every project is built and tested: an image is never made from code that fails its tests
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Same projects as the build job. "name" also names the image, like in infra/docker-compose.yml
+        include:
+          - { name: monolith, path: monolith }
+          - { name: discovery-server, path: services/discovery-server }
+          - { name: auth-service, path: services/auth-service }
+          - { name: product-service, path: services/product-service }
+          - { name: order-service, path: services/order-service }
+          - { name: payment-service, path: services/payment-service }
+          - { name: api-gateway, path: services/api-gateway }
+    steps:
+      - uses: actions/checkout@v5
+
+      # The project's own multi-stage Dockerfile: it builds the jar again from the sources (tests
+      # skipped, they ran in the build job) and keeps only the JRE and the Spring Boot layers
+      - name: Build the image
+        working-directory: ${{ matrix.path }}
+        run: docker build -t ecommerce-${{ matrix.name }}:${{ github.sha }} .
