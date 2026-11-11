@@ -151,6 +151,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # ghcr.io/<owner>/ecommerce-<project>, in lower case: the registry refuses capital letters,
+      # which a GitHub user or organization name may have
+      - name: Name the image
+        run: echo "IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/ecommerce-${{ matrix.name }}" >> "$GITHUB_ENV"
+
       # BuildKit builder able to export its layer cache to the GitHub Actions cache
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
