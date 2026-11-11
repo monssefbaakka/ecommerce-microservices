@@ -51,3 +51,20 @@ jobs:
       - name: Run the tests
         working-directory: ${{ matrix.path }}
         run: ./mvnw -B verify
+
+      # Without Docker the *IT classes are skipped, not failed (disabledWithoutDocker = true): fine on a
+      # laptop, but in CI a green run must mean they ran. discovery-server and api-gateway have no *IT
+      - name: Check that no integration test was skipped
+        working-directory: ${{ matrix.path }}
+        run: |
+          summary=target/failsafe-reports/failsafe-summary.xml
+          if [ ! -f "$summary" ]; then
+            echo "No integration tests in this project"
+            exit 0
+          fi
+          skipped=$(sed -n 's:.*<skipped>\([0-9]*\)</skipped>.*:\1:p' "$summary")
+          if [ "${skipped:-0}" -ne 0 ]; then
+            echo "::error::$skipped integration test(s) skipped: is Docker available on the runner?"
+            exit 1
+          fi
+          echo "Every integration test ran"
