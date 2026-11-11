@@ -154,9 +154,11 @@ The Maven dependencies are cached per project, keyed on its `pom.xml`: they are 
 
 ### Docker job
 
-Once every build job has passed, the Docker image of each project is built from its own `Dockerfile`, as `ecommerce-<project>:<commit sha>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
+Once every build job has passed, the Docker image of each project is built from its own `Dockerfile`, as `ghcr.io/monssefbaakka/ecommerce-<project>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
 
-The image layers are cached between runs, one cache per image: when only the code changed, the layer holding the Maven dependencies is reused. Nothing is pushed to a registry yet.
+On `main` and on a release tag, the checked image is then pushed to GitHub Container Registry (see [Published images](#published-images)). On a pull request it is only built and checked: the run never logs in to the registry.
+
+The image layers are cached between runs, one cache per image: when only the code changed, the layer holding the Maven dependencies is reused. The push reuses the same cache, so nothing is compiled twice.
 
 A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`.
 
