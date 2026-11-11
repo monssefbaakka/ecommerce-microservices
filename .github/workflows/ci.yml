@@ -285,3 +285,16 @@ jobs:
       # or indentation fails here instead of on the next "docker compose up"
       - name: Validate the Compose file
         run: docker compose -f infra/docker-compose.yml --profile app config --quiet
+
+      # The override for the images published on ghcr.io, merged over the main file: each service
+      # must exist in both, and its image must point to the registry, not to a local build
+      - name: Validate the override for the published images
+        run: |
+          docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app config --quiet
+          images=$(docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml --profile app config --images)
+          echo "$images"
+          local=$(echo "$images" | grep '^ecommerce-' || true)
+          if [ -n "$local" ]; then
+            echo "::error::Not taken from ghcr.io: $local"
+            exit 1
+          fi
