@@ -190,3 +190,14 @@ jobs:
             escaped='\|'
             echo "| \`$user\` | \`${healthcheck//|/$escaped}\` | $size |"
           } >> "$GITHUB_STEP_SUMMARY"
+
+  compose:
+    name: Docker Compose file
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # Parses infra/docker-compose.yml with every service of the "app" profile: a wrong key, anchor
+      # or indentation fails here instead of on the next "docker compose up"
+      - name: Validate the Compose file
+        run: docker compose -f infra/docker-compose.yml --profile app config --quiet
