@@ -16,8 +16,8 @@ permissions:
   contents: read
 
 jobs:
-  test:
-    name: Tests (${{ matrix.name }})
+  build:
+    name: Build (${{ matrix.name }})
     runs-on: ubuntu-latest
     strategy:
       # One failing project does not cancel the others: every broken project is reported at once
