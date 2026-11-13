@@ -31,3 +31,6 @@ target/
 .vscode/
 .env
 *.log
+
+# Version running on the server, written by infra/deploy.sh
+.deployed-tag
