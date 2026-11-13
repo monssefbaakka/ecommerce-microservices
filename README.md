@@ -1,8 +1,15 @@
 # E-Commerce Platform
 
+[![CI](https://github.com/monssefbaakka/ecommerce-microservices/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/monssefbaakka/ecommerce-microservices/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush)
+[![Java](https://img.shields.io/badge/dynamic/xml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmonssefbaakka%2Fecommerce-microservices%2Fmain%2Fmonolith%2Fpom.xml&query=%2F%2F%2A%5Blocal-name%28%29%3D%27java.version%27%5D&label=Java&logo=openjdk&logoColor=white&color=ED8B00)](monolith/pom.xml)
+[![Spring Boot](https://img.shields.io/badge/dynamic/xml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmonssefbaakka%2Fecommerce-microservices%2Fmain%2Fmonolith%2Fpom.xml&query=%2F%2A%5Blocal-name%28%29%3D%27project%27%5D%2F%2A%5Blocal-name%28%29%3D%27parent%27%5D%2F%2A%5Blocal-name%28%29%3D%27version%27%5D&label=Spring%20Boot&logo=springboot&logoColor=white&color=6DB33F)](monolith/pom.xml)
+[![Spring Cloud](https://img.shields.io/badge/dynamic/xml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmonssefbaakka%2Fecommerce-microservices%2Fmain%2Fservices%2Fapi-gateway%2Fpom.xml&query=%2F%2F%2A%5Blocal-name%28%29%3D%27spring-cloud.version%27%5D&label=Spring%20Cloud&logo=spring&logoColor=white&color=6DB33F)](services/api-gateway/pom.xml)
+[![Docker images](https://img.shields.io/badge/images-ghcr.io-2496ED?logo=docker&logoColor=white)](#published-images)
+[![License](https://img.shields.io/github/license/monssefbaakka/ecommerce-microservices)](LICENSE)
+
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 in progress: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -152,6 +159,8 @@ docker compose -f infra/docker-compose.yml --profile app stop   # --profile app 
 ## Continuous integration
 
 Every pull request and every push to `main` runs the [CI workflow](.github/workflows/ci.yml) on GitHub Actions. Nothing to set up: the runners already have Java and Docker.
+
+The **CI** badge at the top of this page shows the last run on `main` (pushes only: a failing pull request does not turn it red) and links to its runs. The Java, Spring Boot and Spring Cloud badges read their version from the `pom.xml` of `main` (the monolith's, and the gateway's for Spring Cloud), so they follow an upgrade without editing this file.
 
 ### Build job
 
@@ -660,7 +669,7 @@ Controllers only ever receive and return DTOs, never entities. Each feature has 
 | 4 | Tests, Docker, Actuator | In progress |
 | 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | In progress |
 | 6 | OpenFeign, Resilience4j, advanced Docker Compose | Done |
-| 7 | CI/CD with GitHub Actions | In progress |
+| 7 | CI/CD with GitHub Actions | Done |
 | 8 | Deployment and frontend (bonus) | Planned |
 
 > **Note:** DTOs, global exception handler, Swagger/OpenAPI and unit tests were delivered as part of Phase 1.
