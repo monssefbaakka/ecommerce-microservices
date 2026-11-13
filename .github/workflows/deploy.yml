@@ -1,0 +1,135 @@
+name: Deploy
+
+on:
+  # After each CI run on main: the images of that commit have just been pushed to ghcr.io
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  # By hand, from the Actions tab: deploy again, or roll back to an older version
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Image tag: sha-<short sha> or a release like 1.2.0. Empty: the last commit of the branch picked above"
+        required: false
+
+# One deploy at a time, and never cancelled halfway: the next one waits for the current one to finish
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Deploy to the server
+    # Only once CI passed on a push to main (not on a failed or cancelled run, nor on a release tag), and
+    # only once a server is set up: without the DEPLOY_HOST variable the job is skipped, not failed
+    if: >-
+      vars.DEPLOY_HOST != '' &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+    # Every deploy is listed under the repository's "production" environment, with the URL of the site.
+    # Required reviewers can be added to it (Settings → Environments) to approve each deploy by hand
+    environment:
+      name: production
+      url: ${{ vars.DEPLOY_URL }}
+    env:
+      DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      DEPLOY_PORT: ${{ vars.DEPLOY_PORT || '22' }}
+      # Folder of the stack on the server, relative to the home of DEPLOY_USER
+      DEPLOY_DIR: ${{ vars.DEPLOY_DIR || 'ecommerce' }}
+      DEPLOY_URL: ${{ vars.DEPLOY_URL }}
+    steps:
+      # The commit CI just tested, or the one picked by hand. Its image is tagged sha-<7 first characters>
+      # (docker/metadata-action in ci.yml), a tag that never moves: what runs on the server is exactly what
+      # passed the tests, even if main moved on in the meantime ("latest" could already be a newer commit)
+      - name: Pick the version
+        id: version
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          SHA: ${{ github.event.workflow_run.head_sha || github.sha }}
+        run: |
+          tag=${INPUT_TAG:-sha-${SHA::7}}
+          # Passed to a command on the server: only the characters of a Docker tag
+          if ! echo "$tag" | grep -Eq '^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$'; then
+            echo "::error::Not a Docker tag: $tag"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      # Only infra/: the Compose files, the Caddyfile, the database script and deploy.sh of that commit
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ steps.version.outputs.sha }}
+          sparse-checkout: infra
+
+      # The private key is a secret, the host key a plain variable (it is public). With the host key pinned,
+      # the runner refuses to talk to another machine answering on that address
+      - name: Set up SSH
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ vars.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          if [ -z "$DEPLOY_USER" ] || [ -z "$SSH_KEY" ] || [ -z "$KNOWN_HOSTS" ]; then
+            echo "::error::Set DEPLOY_USER, DEPLOY_KNOWN_HOSTS (variables) and DEPLOY_SSH_KEY (secret): see docs/deployment.md"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host server
+            HostName $DEPLOY_HOST
+            User $DEPLOY_USER
+            Port $DEPLOY_PORT
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ConnectTimeout 15
+          EOF
+
+      # Sent as a tar stream, nothing to install on the server. infra/.env is not in the repository: it
+      # stays on the server, with the secrets, and is never overwritten
+      - name: Copy the stack files
+        run: |
+          # $DEPLOY_DIR expanded here, on the runner, on purpose
+          # shellcheck disable=SC2029
+          tar -C infra -cf - docker-compose.yml docker-compose.ghcr.yml docker-compose.prod.yml \
+            deploy.sh .env.example caddy postgres \
+            | ssh server "mkdir -p '$DEPLOY_DIR/infra' && tar -C '$DEPLOY_DIR/infra' -xf -"
+
+      - name: Deploy ${{ steps.version.outputs.tag }}
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          # Expanded here, on the runner, then quoted for the shell of the server
+          # shellcheck disable=SC2029
+          ssh server "'$DEPLOY_DIR/infra/deploy.sh' '$TAG'"
+
+      # From the internet, through Caddy and the gateway: a public endpoint that reads product-service and
+      # its database. deploy.sh already waited for every container to be healthy, this checks the way in
+      - name: Check the site
+        if: env.DEPLOY_URL != ''
+        run: |
+          curl --fail --silent --show-error --retry 5 --retry-delay 3 --retry-all-errors \
+            --output /dev/null --write-out "GET /api/products: %{http_code} in %{time_total} s\n" \
+            "${DEPLOY_URL%/}/api/products?size=1"
+
+      - name: Write the job summary
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          {
+            echo "### Deployed \`$TAG\`"
+            echo
+            echo "| Server | Commit | URL |"
+            echo "|---|---|---|"
+            echo "| \`$DEPLOY_HOST\` | \`${{ steps.version.outputs.sha }}\` | ${DEPLOY_URL:--} |"
+          } >> "$GITHUB_STEP_SUMMARY"

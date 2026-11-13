@@ -298,3 +298,39 @@ jobs:
             echo "::error::Not taken from ghcr.io: $built_here"
             exit 1
           fi
+
+      # The production settings merged over both (what deploy.sh runs on the server), with placeholder
+      # secrets: the real ones only exist in infra/.env on the server. No port may face the internet
+      # except Caddy's: a port published on every interface by any other service fails the job
+      - name: Validate the production override
+        env:
+          JWT_SECRET: placeholder
+          POSTGRES_PASSWORD: placeholder
+          DOMAIN: shop.example.com
+        run: |
+          compose="docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml -f infra/docker-compose.prod.yml --profile app"
+          $compose config --quiet
+          public=$($compose config --format json | jq -r '
+            .services | to_entries[] | .key as $service | .value.ports // [] | .[]
+            | select((.host_ip // "") != "127.0.0.1") | "\($service):\(.published)"')
+          echo "Published on every interface:"
+          echo "$public"
+          exposed=$(echo "$public" | grep -v '^caddy:' || true)
+          if [ -n "$exposed" ]; then
+            echo "::error::Reachable from the internet on the server: $exposed"
+            exit 1
+          fi
+
+      # The Caddyfile parsed by the Caddy version of docker-compose.prod.yml, with a domain and with the
+      # ":80" that Compose passes without one
+      - name: Validate the Caddyfile
+        run: |
+          image=$(sed -n 's/^ *image: *\(caddy:.*\)$/\1/p' infra/docker-compose.prod.yml)
+          for domain in :80 shop.example.com; do
+            docker run --rm -e DOMAIN="$domain" -v "$PWD/infra/caddy:/etc/caddy:ro" "$image" \
+              caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          done
+
+      # The script run on the server over SSH: plain POSIX sh, checked by ShellCheck (installed on the runners)
+      - name: Check deploy.sh
+        run: shellcheck infra/deploy.sh
