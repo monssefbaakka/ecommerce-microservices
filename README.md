@@ -206,6 +206,19 @@ The run token (`GITHUB_TOKEN`) pushes the images: no personal token or secret to
 
 A package created by its first push is **private**, even for a public repository. To let anyone pull without logging in, open each package once, then *Package settings* → *Change visibility* → *Public*. While a package is private, pulling it needs `docker login ghcr.io` with a personal access token that has the `read:packages` scope.
 
+## Deployment
+
+The stack runs on a single Linux server with Docker, from the images published on ghcr.io: nothing is built there. Each merge to `main` is deployed automatically once its CI run has passed. Step-by-step setup, roll back and backups: [docs/deployment.md](docs/deployment.md). Why one server rather than a PaaS or Kubernetes: [ADR 0004](docs/adr/0004-deploy-on-a-single-server-with-docker-compose.md).
+
+| Piece | Role |
+|---|---|
+| [infra/docker-compose.prod.yml](infra/docker-compose.prod.yml) | Merged over `docker-compose.yml` and `docker-compose.ghcr.yml`: no port of the stack published, `JWT_SECRET` and `POSTGRES_PASSWORD` required, Caddy in front of the gateway |
+| [infra/caddy/Caddyfile](infra/caddy/Caddyfile) | The only public entry point: HTTPS for `DOMAIN` with a Let's Encrypt certificate renewed by Caddy, everything sent to the gateway |
+| [infra/deploy.sh](infra/deploy.sh) | On the server: pulls one image version, waits until every container is healthy, starts the previous version again if one is not |
+| [Deploy workflow](.github/workflows/deploy.yml) | After CI passed on `main`: copies `infra/` to the server over SSH and runs `deploy.sh` with the image of the tested commit (`sha-<commit>`, never `latest`), then calls the public URL |
+
+The secrets stay in `infra/.env` on the server; GitHub only holds the SSH key of the deploy user (secret `DEPLOY_SSH_KEY`) and the address of the server (variables `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_URL`). Without `DEPLOY_HOST` the workflow is skipped. A roll back is a manual run of the workflow (*Actions* → *Deploy* → *Run workflow*) with an older tag.
+
 ## Microservices
 
 Phase 5 extracts the monolith step by step. The first services are in [services/](services/):
