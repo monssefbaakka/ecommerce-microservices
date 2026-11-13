@@ -9,7 +9,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -28,6 +28,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, WireMock (fake services for the Feign clients), JaCoCo |
 | Resilience | Resilience4j 2.2: circuit breaker and retries around the Feign calls, last known products as fallback for the cart |
 | CI | GitHub Actions: build, tests and Docker images of every project on each pull request, images published to GitHub Container Registry (ghcr.io) |
+| Deployment | Docker Compose on a single Linux server, Caddy (HTTPS, Let's Encrypt), deployed over SSH by GitHub Actions after each green CI run on `main` |
 
 ## Getting started
 
@@ -183,7 +184,7 @@ On `main` and on a release tag, the checked image is then pushed to GitHub Conta
 
 The image layers are cached between runs, one cache per image: when only the code changed, the layer holding the Maven dependencies is reused. The push reuses the same cache, so nothing is compiled twice.
 
-A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`. It does the same with `infra/docker-compose.ghcr.yml` merged over it, and fails if any service image is still a local build instead of a `ghcr.io` one.
+A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`. It does the same with `infra/docker-compose.ghcr.yml` merged over it, and fails if any service image is still a local build instead of a `ghcr.io` one. Then with the production override on top ([Deployment](#deployment)): the job fails if any port other than Caddy's is published on every interface, and it also validates the Caddyfile and runs ShellCheck on `infra/deploy.sh`.
 
 ### Published images
 
@@ -205,6 +206,19 @@ git push origin v1.0.0
 The run token (`GITHUB_TOKEN`) pushes the images: no personal token or secret to create, and only the Docker job may write packages. Each image carries the OCI labels linking it to this repository and commit, an SBOM (every package and library inside it) and its build provenance (`docker buildx imagetools inspect ghcr.io/monssefbaakka/ecommerce-monolith:latest`). The tags and the digest published by a run are listed in its job summary.
 
 A package created by its first push is **private**, even for a public repository. To let anyone pull without logging in, open each package once, then *Package settings* → *Change visibility* → *Public*. While a package is private, pulling it needs `docker login ghcr.io` with a personal access token that has the `read:packages` scope.
+
+## Deployment
+
+The stack runs on a single Linux server with Docker, from the images published on ghcr.io: nothing is built there. Each merge to `main` is deployed automatically once its CI run has passed. Step-by-step setup, roll back and backups: [docs/deployment.md](docs/deployment.md). Why one server rather than a PaaS or Kubernetes: [ADR 0004](docs/adr/0004-deploy-on-a-single-server-with-docker-compose.md).
+
+| Piece | Role |
+|---|---|
+| [infra/docker-compose.prod.yml](infra/docker-compose.prod.yml) | Merged over `docker-compose.yml` and `docker-compose.ghcr.yml`: no port of the stack published, `JWT_SECRET` and `POSTGRES_PASSWORD` required, Caddy in front of the gateway |
+| [infra/caddy/Caddyfile](infra/caddy/Caddyfile) | The only public entry point: HTTPS for `DOMAIN` with a Let's Encrypt certificate renewed by Caddy, everything sent to the gateway |
+| [infra/deploy.sh](infra/deploy.sh) | On the server: pulls one image version, waits until every container is healthy, starts the previous version again if one is not |
+| [Deploy workflow](.github/workflows/deploy.yml) | After CI passed on `main`: copies `infra/` to the server over SSH and runs `deploy.sh` with the image of the tested commit (`sha-<commit>`, never `latest`), then calls the public URL |
+
+The secrets stay in `infra/.env` on the server; GitHub only holds the SSH key of the deploy user (secret `DEPLOY_SSH_KEY`) and the address of the server (variables `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_URL`). Without `DEPLOY_HOST` the workflow is skipped. A roll back is a manual run of the workflow (*Actions* → *Deploy* → *Run workflow*) with an older tag.
 
 ## Microservices
 
@@ -649,10 +663,12 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │   ├── payment-service/    simulated card payments, sets the order to PAID
 │   └── api-gateway/        single entry point, routes to the services and the monolith
 ├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices), .env.example,
-│                    docker-compose.ghcr.yml (same stack from the images published on ghcr.io)
+│                    docker-compose.ghcr.yml (same stack from the images published on ghcr.io),
+│                    docker-compose.prod.yml and deploy.sh (the server)
+│   ├── caddy/       Caddyfile: HTTPS entry point of the server
 │   └── postgres/    init-databases.sql: one database per service
-├── docs/            HTTP request examples, architecture notes
-└── .github/         CI workflow (workflows/ci.yml), issue and pull request templates
+├── docs/            HTTP request examples, architecture decisions (adr/), deployment guide
+└── .github/         CI and deploy workflows (workflows/), issue and pull request templates
 ```
 
 The code is organized by feature rather than by layer, which makes the later split into microservices straightforward.
@@ -670,7 +686,7 @@ Controllers only ever receive and return DTOs, never entities. Each feature has 
 | 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | In progress |
 | 6 | OpenFeign, Resilience4j, advanced Docker Compose | Done |
 | 7 | CI/CD with GitHub Actions | Done |
-| 8 | Deployment and frontend (bonus) | Planned |
+| 8 | Deployment and frontend (bonus) | In progress |
 
 > **Note:** DTOs, global exception handler, Swagger/OpenAPI and unit tests were delivered as part of Phase 1.
 

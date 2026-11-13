@@ -1,0 +1,116 @@
+# Production settings for a single server (see docs/deployment.md). Merged last, over the main file and the
+# override for the images published on ghcr.io:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ghcr.yml -f docker-compose.prod.yml --profile app up -d --wait
+#
+# (run from infra/ by deploy.sh, which also picks the image version)
+#
+# What changes compared to the local stack:
+#   - no port of the stack is published any more: the main file opens 5432, 8080 to 8084, 8761 and 8090 to
+#     every network interface, so on a server PostgreSQL and every service would face the internet. Docker
+#     writes its own iptables rules, a host firewall (ufw) does not stop them. Only Caddy listens on 80 / 443;
+#   - Caddy, in front of the gateway, gets and renews the HTTPS certificate of DOMAIN;
+#   - no dev default for the secrets: JWT_SECRET and POSTGRES_PASSWORD must be set in infra/.env, or
+#     "docker compose" stops before starting anything;
+#   - PostgreSQL restarts with the server, and its logs rotate like the others.
+#
+# "!reset" and "!override" need Docker Compose 2.24.4 or later.
+
+# Password of the "ecommerce" PostgreSQL user, in every service that connects to the database.
+# Read by PostgreSQL only when its volume is created: changing it later also needs an ALTER USER
+x-database-password: &database-password
+  DB_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in infra/.env}
+
+x-jwt-secret: &jwt-secret
+  JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in infra/.env (openssl rand -base64 32)}
+
+services:
+  postgres:
+    environment:
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD must be set in infra/.env}
+    ports: !reset []
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  app:
+    environment:
+      <<: [*database-password, *jwt-secret]
+    ports: !reset []
+
+  # Eureka dashboard on the server's loopback only: "ssh -L 8761:localhost:8761 <user>@<server>",
+  # then http://localhost:8761 on your machine
+  discovery-server:
+    ports: !override
+      - "127.0.0.1:8761:8761"
+
+  auth-service:
+    environment:
+      <<: [*database-password, *jwt-secret]
+    ports: !reset []
+
+  product-service:
+    environment:
+      <<: [*database-password, *jwt-secret]
+    ports: !reset []
+
+  order-service:
+    environment:
+      <<: [*database-password, *jwt-secret]
+    ports: !reset []
+
+  payment-service:
+    environment:
+      <<: [*database-password, *jwt-secret]
+    ports: !reset []
+
+  # Reached by Caddy only, on the "edge" network
+  api-gateway:
+    ports: !reset []
+    networks:
+      - backend
+      - edge
+
+  caddy:
+    image: caddy:2.11-alpine
+    container_name: ecommerce-caddy
+    profiles: ["app"]
+    restart: unless-stopped
+    depends_on:
+      api-gateway:
+        condition: service_healthy   # no 502 for the first requests: the gateway answers when Caddy starts
+    environment:
+      # ":80" (plain HTTP on any address) when DOMAIN is not set or empty: Caddy only applies the default
+      # of {$DOMAIN::80} to a variable that is not set at all, an empty one would break the Caddyfile
+      DOMAIN: ${DOMAIN:-:80}
+    networks:   # the gateway only: Caddy cannot reach a service, Eureka or PostgreSQL directly
+      - edge
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data       # certificates and the Let's Encrypt account: kept, or a new one at each start
+      - caddy_config:/config
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Caddy and the gateway: the internet side, apart from the services and PostgreSQL
+networks:
+  edge:
+    name: ecommerce-edge
+
+volumes:
+  caddy_data:
+  caddy_config:

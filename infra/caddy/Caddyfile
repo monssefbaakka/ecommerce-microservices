@@ -1,0 +1,23 @@
+# Public entry point of the production stack (infra/docker-compose.prod.yml): the only container with
+# ports open to the internet. Everything goes to the API gateway, which routes to the services.
+#
+# DOMAIN set in infra/.env (e.g. shop.example.com, or 203-0-113-10.sslip.io for a server without a domain):
+# Caddy gets a Let's Encrypt certificate for it on the first start, renews it, and redirects HTTP to HTTPS.
+# DOMAIN not set: plain HTTP on port 80, for a first test with the IP address of the server only.
+
+{$DOMAIN::80} {
+	# Compressed answers, when the client accepts them
+	encode zstd gzip
+
+	reverse_proxy api-gateway:8090 {
+		# While a deploy recreates the gateway, a request waits (up to 30 s) for it to accept connections
+		# again instead of getting a 502 at once
+		lb_try_duration 30s
+		lb_try_interval 500ms
+	}
+
+	log {
+		output stdout
+		format console
+	}
+}
