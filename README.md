@@ -1,6 +1,9 @@
 # E-Commerce Platform
 
 [![CI](https://github.com/monssefbaakka/ecommerce-microservices/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/monssefbaakka/ecommerce-microservices/actions/workflows/ci.yml?query=branch%3Amain+event%3Apush)
+[![Java](https://img.shields.io/badge/dynamic/xml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmonssefbaakka%2Fecommerce-microservices%2Fmain%2Fmonolith%2Fpom.xml&query=%2F%2F%2A%5Blocal-name%28%29%3D%27java.version%27%5D&label=Java&logo=openjdk&logoColor=white&color=ED8B00)](monolith/pom.xml)
+[![Spring Boot](https://img.shields.io/badge/dynamic/xml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmonssefbaakka%2Fecommerce-microservices%2Fmain%2Fmonolith%2Fpom.xml&query=%2F%2A%5Blocal-name%28%29%3D%27project%27%5D%2F%2A%5Blocal-name%28%29%3D%27parent%27%5D%2F%2A%5Blocal-name%28%29%3D%27version%27%5D&label=Spring%20Boot&logo=springboot&logoColor=white&color=6DB33F)](monolith/pom.xml)
+[![Spring Cloud](https://img.shields.io/badge/dynamic/xml?url=https%3A%2F%2Fraw.githubusercontent.com%2Fmonssefbaakka%2Fecommerce-microservices%2Fmain%2Fservices%2Fapi-gateway%2Fpom.xml&query=%2F%2F%2A%5Blocal-name%28%29%3D%27spring-cloud.version%27%5D&label=Spring%20Cloud&logo=spring&logoColor=white&color=6DB33F)](services/api-gateway/pom.xml)
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
 
