@@ -667,8 +667,8 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │                    docker-compose.prod.yml and deploy.sh (the server)
 │   ├── caddy/       Caddyfile: HTTPS entry point of the server
 │   └── postgres/    init-databases.sql: one database per service
-├── docs/            HTTP request examples, architecture notes
-└── .github/         CI workflow (workflows/ci.yml), issue and pull request templates
+├── docs/            HTTP request examples, architecture decisions (adr/), deployment guide
+└── .github/         CI and deploy workflows (workflows/), issue and pull request templates
 ```
 
 The code is organized by feature rather than by layer, which makes the later split into microservices straightforward.
