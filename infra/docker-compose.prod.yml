@@ -83,7 +83,9 @@ services:
       api-gateway:
         condition: service_healthy   # no 502 for the first requests: the gateway answers when Caddy starts
     environment:
-      DOMAIN: ${DOMAIN:-}
+      # ":80" (plain HTTP on any address) when DOMAIN is not set or empty: Caddy only applies the default
+      # of {$DOMAIN::80} to a variable that is not set at all, an empty one would break the Caddyfile
+      DOMAIN: ${DOMAIN:-:80}
     networks:   # the gateway only: Caddy cannot reach a service, Eureka or PostgreSQL directly
       - edge
     ports:
