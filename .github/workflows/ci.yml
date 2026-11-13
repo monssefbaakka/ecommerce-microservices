@@ -329,3 +329,7 @@ jobs:
             docker run --rm -e DOMAIN="$domain" -v "$PWD/infra/caddy:/etc/caddy:ro" "$image" \
               caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           done
+
+      # The script run on the server over SSH: plain POSIX sh, checked by ShellCheck (installed on the runners)
+      - name: Check deploy.sh
+        run: shellcheck infra/deploy.sh
