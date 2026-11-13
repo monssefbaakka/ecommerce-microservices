@@ -183,7 +183,7 @@ On `main` and on a release tag, the checked image is then pushed to GitHub Conta
 
 The image layers are cached between runs, one cache per image: when only the code changed, the layer holding the Maven dependencies is reused. The push reuses the same cache, so nothing is compiled twice.
 
-A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`. It does the same with `infra/docker-compose.ghcr.yml` merged over it, and fails if any service image is still a local build instead of a `ghcr.io` one.
+A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`. It does the same with `infra/docker-compose.ghcr.yml` merged over it, and fails if any service image is still a local build instead of a `ghcr.io` one. Then with the production override on top ([Deployment](#deployment)): the job fails if any port other than Caddy's is published on every interface, and it also validates the Caddyfile and runs ShellCheck on `infra/deploy.sh`.
 
 ### Published images
 
