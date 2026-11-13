@@ -320,3 +320,12 @@ jobs:
             echo "::error::Reachable from the internet on the server: $exposed"
             exit 1
           fi
+
+      # The Caddyfile parsed by the Caddy version of docker-compose.prod.yml, with and without a domain
+      - name: Validate the Caddyfile
+        run: |
+          image=$(sed -n 's/^ *image: *\(caddy:.*\)$/\1/p' infra/docker-compose.prod.yml)
+          for domain in "" shop.example.com; do
+            docker run --rm -e DOMAIN="$domain" -v "$PWD/infra/caddy:/etc/caddy:ro" "$image" \
+              caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
+          done
