@@ -160,6 +160,8 @@ docker compose -f infra/docker-compose.yml --profile app stop   # --profile app 
 
 Every pull request and every push to `main` runs the [CI workflow](.github/workflows/ci.yml) on GitHub Actions. Nothing to set up: the runners already have Java and Docker.
 
+The **CI** badge at the top of this page shows the last run on `main` (pushes only: a failing pull request does not turn it red) and links to its runs. The Java, Spring Boot and Spring Cloud badges read their version from the `pom.xml` of `main` (the monolith's, and the gateway's for Spring Cloud), so they follow an upgrade without editing this file.
+
 ### Build job
 
 One job per Maven project (the monolith and the six services), run in parallel. A failing project does not stop the others, so every broken project shows up in the same run.
