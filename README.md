@@ -663,7 +663,9 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │   ├── payment-service/    simulated card payments, sets the order to PAID
 │   └── api-gateway/        single entry point, routes to the services and the monolith
 ├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices), .env.example,
-│                    docker-compose.ghcr.yml (same stack from the images published on ghcr.io)
+│                    docker-compose.ghcr.yml (same stack from the images published on ghcr.io),
+│                    docker-compose.prod.yml and deploy.sh (the server)
+│   ├── caddy/       Caddyfile: HTTPS entry point of the server
 │   └── postgres/    init-databases.sql: one database per service
 ├── docs/            HTTP request examples, architecture notes
 └── .github/         CI workflow (workflows/ci.yml), issue and pull request templates
