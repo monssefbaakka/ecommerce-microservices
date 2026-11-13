@@ -6,7 +6,7 @@
 
 ## Context
 
-The stack is nine containers: PostgreSQL, Eureka, the gateway, four services and the monolith, with Caddy in
+The stack is eight containers: PostgreSQL, Eureka, the gateway, four services and the monolith, and Caddy in
 front once deployed. The CI already tests every project and publishes its image on ghcr.io (#57), and
 [infra/docker-compose.ghcr.yml](../../infra/docker-compose.ghcr.yml) starts the whole stack from those images.
 Issue #59 asks for a *simple* host: a demo that anyone can call, for a few euros a month at most, which one
