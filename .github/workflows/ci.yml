@@ -321,11 +321,12 @@ jobs:
             exit 1
           fi
 
-      # The Caddyfile parsed by the Caddy version of docker-compose.prod.yml, with and without a domain
+      # The Caddyfile parsed by the Caddy version of docker-compose.prod.yml, with a domain and with the
+      # ":80" that Compose passes without one
       - name: Validate the Caddyfile
         run: |
           image=$(sed -n 's/^ *image: *\(caddy:.*\)$/\1/p' infra/docker-compose.prod.yml)
-          for domain in "" shop.example.com; do
+          for domain in :80 shop.example.com; do
             docker run --rm -e DOMAIN="$domain" -v "$PWD/infra/caddy:/etc/caddy:ro" "$image" \
               caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           done
