@@ -7,9 +7,9 @@ tests pass. Why one server and Docker Compose rather than a PaaS or Kubernetes: 
 ```mermaid
 flowchart LR
     dev([git push / merge]) --> ci["CI workflow<br/>tests, images"]
-    ci -- "push sha-&lt;commit&gt;" --> ghcr[(ghcr.io)]
+    ci -- "push image sha-1a2b3c4" --> ghcr[(ghcr.io)]
     ci -- "passed on main" --> deploy["Deploy workflow"]
-    deploy -- "SSH: infra files,<br/>deploy.sh sha-&lt;commit&gt;" --> server
+    deploy -- "SSH: infra files,<br/>deploy.sh sha-1a2b3c4" --> server
     subgraph server["Server (Docker)"]
         caddy["Caddy :80 / :443<br/>HTTPS"] --> gateway["api-gateway"]
         gateway --> services["auth, product, order,<br/>payment, monolith"]
