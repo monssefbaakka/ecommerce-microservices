@@ -686,7 +686,7 @@ Controllers only ever receive and return DTOs, never entities. Each feature has 
 | 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | In progress |
 | 6 | OpenFeign, Resilience4j, advanced Docker Compose | Done |
 | 7 | CI/CD with GitHub Actions | Done |
-| 8 | Deployment and frontend (bonus) | Planned |
+| 8 | Deployment and frontend (bonus) | In progress |
 
 > **Note:** DTOs, global exception handler, Swagger/OpenAPI and unit tests were delivered as part of Phase 1.
 
