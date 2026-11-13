@@ -9,7 +9,12 @@
 	# Compressed answers, when the client accepts them
 	encode zstd gzip
 
-	reverse_proxy api-gateway:8090
+	reverse_proxy api-gateway:8090 {
+		# While a deploy recreates the gateway, a request waits (up to 30 s) for it to accept connections
+		# again instead of getting a 502 at once
+		lb_try_duration 30s
+		lb_try_interval 500ms
+	}
 
 	log {
 		output stdout
