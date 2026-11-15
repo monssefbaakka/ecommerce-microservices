@@ -7,9 +7,9 @@
 [![Docker images](https://img.shields.io/badge/images-ghcr.io-2496ED?logo=docker&logoColor=white)](#published-images)
 [![License](https://img.shields.io/github/license/monssefbaakka/ecommerce-microservices)](LICENSE)
 
-A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
+A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD, with a small React web shop on top.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS, and a React [frontend](#frontend) (catalog, cart, orders, payments, catalog admin) is served next to the API. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -20,7 +20,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Database | PostgreSQL 16 |
 | Build | Maven (wrapper included) |
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
-| Containers | Docker, Docker Compose (health checks, two networks, memory limits, log rotation) |
+| Containers | Docker, Docker Compose (health checks, three networks, memory limits, log rotation) |
 | API docs | OpenAPI 3 / Swagger UI (springdoc) |
 | Security | Spring Security, JWT (jjwt) |
 | Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
@@ -28,6 +28,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, WireMock (fake services for the Feign clients), JaCoCo |
 | Resilience | Resilience4j 2.2: circuit breaker and retries around the Feign calls, last known products as fallback for the cart |
 | CI | GitHub Actions: build, tests and Docker images of every project on each pull request, images published to GitHub Container Registry (ghcr.io) |
+| Frontend | React 19, TypeScript, Vite, React Router, Vitest; built into static files served by nginx |
 | Deployment | Docker Compose on a single Linux server, Caddy (HTTPS, Let's Encrypt), deployed over SSH by GitHub Actions after each green CI run on `main` |
 
 ## Getting started
@@ -62,7 +63,7 @@ To try the endpoints, open `docs/requests.http` in VS Code (REST Client extensio
 
 ### Run with Docker
 
-The whole stack (PostgreSQL, the monolith and the [microservices](#microservices)) can also run in containers, without Java on the machine:
+The whole stack (PostgreSQL, the monolith, the [microservices](#microservices) and the [frontend](#frontend)) can also run in containers, without Java or Node.js on the machine:
 
 ```bash
 docker compose -f infra/docker-compose.yml --profile app up -d --build --wait
@@ -70,7 +71,8 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build --wait
 
 | Container | URL | Role |
 |---|---|---|
-| `ecommerce-api-gateway` | `http://localhost:8090` | Single entry point: use this one |
+| `ecommerce-frontend` | `http://localhost:3000` | The web shop, in a browser |
+| `ecommerce-api-gateway` | `http://localhost:8090` | Single entry point of the API: use this one |
 | `ecommerce-app` | `http://localhost:8080` | The monolith, still reachable directly |
 | `ecommerce-auth-service` | `http://localhost:8081` | Register and login |
 | `ecommerce-product-service` | `http://localhost:8082` | Categories and products |
@@ -87,6 +89,7 @@ The containers do not share one network. Each joins only the ones it needs:
 |---|---|---|
 | `ecommerce-backend` | the monolith, Eureka, the gateway and the four services | They find each other through Eureka and call each other (gateway routes, Feign clients) |
 | `ecommerce-database` | PostgreSQL, the monolith and the four services | Only the containers that own a database reach PostgreSQL |
+| `ecommerce-edge` | the gateway and the frontend (and Caddy on the server) | The public side: the frontend reaches the gateway, nothing behind it |
 
 The gateway, the public entry point, and Eureka cannot even resolve the `postgres` host name: `docker exec ecommerce-api-gateway wget -qO- -T 2 http://postgres:5432` answers `bad address`. The published ports (`8090`, `5432`...) are not affected: the host still reaches every container.
 
@@ -165,7 +168,7 @@ The **CI** badge at the top of this page shows the last run on `main` (pushes on
 
 ### Build job
 
-One job per Maven project (the monolith and the six services), run in parallel. A failing project does not stop the others, so every broken project shows up in the same run.
+One job per Maven project (the monolith and the six services), run in parallel. The frontend has a job of its own ([below](#frontend-job)). A failing project does not stop the others, so every broken project shows up in the same run.
 
 | Step | What it does |
 |---|---|
@@ -176,9 +179,13 @@ One job per Maven project (the monolith and the six services), run in parallel. 
 
 The Maven dependencies are cached per project, keyed on its `pom.xml`: they are downloaded again only when that file changes. A new push on a pull request cancels the run still in progress for it.
 
+### Frontend job
+
+`npm ci` (exactly the versions of `package-lock.json`), the Vitest unit tests, then `npm run build`: the strict TypeScript check of the whole app and the Vite build. The size of each built file goes into the job summary and the `dist/` folder is kept as the `frontend-dist` artifact (7 days). The npm cache is keyed on `package-lock.json`.
+
 ### Docker job
 
-Once every build job has passed, the Docker image of each project is built from its own `Dockerfile`, as `ghcr.io/monssefbaakka/ecommerce-<project>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
+Once every build job and the frontend job have passed, the Docker image of each project is built from its own `Dockerfile`, as `ghcr.io/monssefbaakka/ecommerce-<project>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
 
 On `main` and on a release tag, the checked image is then pushed to GitHub Container Registry (see [Published images](#published-images)). On a pull request it is only built and checked: the run never logs in to the registry.
 
@@ -188,7 +195,7 @@ A separate job validates `infra/docker-compose.yml` with every service of the `a
 
 ### Published images
 
-The seven images are on GitHub Container Registry, under the [packages of the repository](https://github.com/monssefbaakka?tab=packages&repo_name=ecommerce-microservices): `ghcr.io/monssefbaakka/ecommerce-<project>`, with `<project>` one of `monolith`, `discovery-server`, `auth-service`, `product-service`, `order-service`, `payment-service`, `api-gateway`.
+The eight images are on GitHub Container Registry, under the [packages of the repository](https://github.com/monssefbaakka?tab=packages&repo_name=ecommerce-microservices): `ghcr.io/monssefbaakka/ecommerce-<project>`, with `<project>` one of `monolith`, `discovery-server`, `auth-service`, `product-service`, `order-service`, `payment-service`, `api-gateway`, `frontend`.
 
 | Tag | Published by | Points to |
 |---|---|---|
@@ -213,8 +220,8 @@ The stack runs on a single Linux server with Docker, from the images published o
 
 | Piece | Role |
 |---|---|
-| [infra/docker-compose.prod.yml](infra/docker-compose.prod.yml) | Merged over `docker-compose.yml` and `docker-compose.ghcr.yml`: no port of the stack published, `JWT_SECRET` and `POSTGRES_PASSWORD` required, Caddy in front of the gateway |
-| [infra/caddy/Caddyfile](infra/caddy/Caddyfile) | The only public entry point: HTTPS for `DOMAIN` with a Let's Encrypt certificate renewed by Caddy, everything sent to the gateway |
+| [infra/docker-compose.prod.yml](infra/docker-compose.prod.yml) | Merged over `docker-compose.yml` and `docker-compose.ghcr.yml`: no port of the stack published, `JWT_SECRET` and `POSTGRES_PASSWORD` required, Caddy in front of the gateway and the frontend |
+| [infra/caddy/Caddyfile](infra/caddy/Caddyfile) | The only public entry point: HTTPS for `DOMAIN` with a Let's Encrypt certificate renewed by Caddy, `/api/**` sent to the gateway, the other paths to the frontend |
 | [infra/deploy.sh](infra/deploy.sh) | On the server: pulls one image version, waits until every container is healthy, starts the previous version again if one is not |
 | [Deploy workflow](.github/workflows/deploy.yml) | After CI passed on `main`: copies `infra/` to the server over SSH and runs `deploy.sh` with the image of the tested commit (`sha-<commit>`, never `latest`), then calls the public URL |
 
@@ -565,6 +572,46 @@ La gateway et Eureka ne vérifient aucun token : leurs métriques seraient publi
 | PUT | /api/products/{id} | Modifier | 200 / 400 / 404 |
 | DELETE | /api/products/{id} | Supprimer | 204 / 404 |
 
+## Frontend
+
+A small web shop in [frontend/](frontend/), on top of the gateway: React 19 and TypeScript, built by Vite, no UI library. It only calls `/api/**` on its own origin, so the gateway needs no CORS setting.
+
+| Page | Path | Who |
+|---|---|---|
+| Catalog: search by name, filter by category, sort, pages (kept in the URL) | `/` | everyone |
+| Product, add to cart (up to the stock left) | `/products/:id` | everyone, cart once logged in |
+| Login, register (then logged in at once) | `/login`, `/register` | visitors |
+| Cart: quantities, remove, empty, place the order | `/cart` | logged in |
+| Order history, and one order with its payment form while `PENDING` | `/orders`, `/orders/:id` | logged in |
+| Payment history, declined attempts included | `/payments` | logged in |
+| Categories and products: create, edit, delete | `/admin` | `ADMIN` |
+
+The JWT of auth-service is kept in `localStorage` and sent as `Authorization: Bearer` with each request. The app only reads its claims (email, role, expiry date) to show the right links; the services still check the signature and the role on every request. The user is logged out at the expiry date of the token, or as soon as a request sent with it gets a 401. The messages of the services (`ErrorResponse`) are shown as they come, under the right field for a 400. When product-service is down, the cart says that its prices are the last known ones and the order button waits for it to come back.
+
+Payments are simulated by payment-service: a card number ending in `0002` is declined, any other one of 16 digits is accepted (`4242 4242 4242 4242`). The first `ADMIN` account comes from `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `infra/.env`.
+
+### Run it in development
+
+The stack must be running (at least the gateway on `:8090`, see [Run with Docker](#run-with-docker)). Node.js 22.12 or later:
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173, /api/** forwarded to http://localhost:8090
+```
+
+Pages reload on each save. `API_URL=https://shop.example.com npm run dev` points the dev server to another gateway.
+
+| Command | What it does |
+|---|---|
+| `npm test` | Vitest unit tests (JWT reading, fetch client, query strings, formatting) |
+| `npm run typecheck` | TypeScript check, strict mode |
+| `npm run build` | Type check, then the static files in `dist/` |
+
+### In a container
+
+[frontend/Dockerfile](frontend/Dockerfile) builds the app with Node.js, then keeps only the static files and nginx (unprivileged image: never root, port 8080, about 26 MB). [frontend/nginx/default.conf.template](frontend/nginx/default.conf.template) answers `index.html` for every route of the app (a reload on `/orders/12` works), lets the browser keep the hashed assets for a year, and forwards `/api/**` to `API_GATEWAY_URL` (`http://api-gateway:8090` by default), looking up the address of the gateway again every 10 s so that recreating the gateway does not break it. On the server, Caddy sends `/api/**` to the gateway itself and only the pages to this container.
+
 ## Database schema
 
 ```mermaid
@@ -662,6 +709,13 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │   ├── order-service/      cart and orders of the logged-in user, stock reserved in product-service
 │   ├── payment-service/    simulated card payments, sets the order to PAID
 │   └── api-gateway/        single entry point, routes to the services and the monolith
+├── frontend/        React + TypeScript web shop (Vite), with its Dockerfile and nginx config
+│   └── src/
+│       ├── api/         fetch client (JWT, ErrorResponse → ApiError), one function per endpoint, JSON types
+│       ├── auth/        session read from the JWT, kept in localStorage
+│       ├── cart/        cart count shown in the header
+│       ├── pages/       catalog, product, cart, orders, payments, login, register, admin
+│       └── admin/       ADMIN forms for categories and products
 ├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices), .env.example,
 │                    docker-compose.ghcr.yml (same stack from the images published on ghcr.io),
 │                    docker-compose.prod.yml and deploy.sh (the server)

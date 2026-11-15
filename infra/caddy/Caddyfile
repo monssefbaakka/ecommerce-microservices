@@ -1,5 +1,6 @@
 # Public entry point of the production stack (infra/docker-compose.prod.yml): the only container with
-# ports open to the internet. Everything goes to the API gateway, which routes to the services.
+# ports open to the internet. /api/** goes to the API gateway, which routes to the services; every other
+# path to the frontend container, which serves the pages of the web shop.
 #
 # DOMAIN set in infra/.env (e.g. shop.example.com, or 203-0-113-10.sslip.io for a server without a domain):
 # Caddy gets a Let's Encrypt certificate for it on the first start, renews it, and redirects HTTP to HTTPS.
@@ -9,11 +10,24 @@
 	# Compressed answers, when the client accepts them
 	encode zstd gzip
 
-	reverse_proxy api-gateway:8090 {
-		# While a deploy recreates the gateway, a request waits (up to 30 s) for it to accept connections
-		# again instead of getting a 502 at once
-		lb_try_duration 30s
-		lb_try_interval 500ms
+	# The API and the gateway's health check. Straight to the gateway, not through the nginx of the frontend:
+	# one hop less, and an API call keeps working while the frontend container restarts
+	@api path /api/* /actuator/*
+	handle @api {
+		reverse_proxy api-gateway:8090 {
+			# While a deploy recreates the gateway, a request waits (up to 30 s) for it to accept connections
+			# again instead of getting a 502 at once
+			lb_try_duration 30s
+			lb_try_interval 500ms
+		}
+	}
+
+	# Everything else: the React app (index.html for its routes, the hashed assets), same wait during a deploy
+	handle {
+		reverse_proxy frontend:8080 {
+			lb_try_duration 30s
+			lb_try_interval 500ms
+		}
 	}
 
 	log {
