@@ -6,10 +6,10 @@
 # (run from infra/ by deploy.sh, which also picks the image version)
 #
 # What changes compared to the local stack:
-#   - no port of the stack is published any more: the main file opens 5432, 8080 to 8084, 8761 and 8090 to
-#     every network interface, so on a server PostgreSQL and every service would face the internet. Docker
+#   - no port of the stack is published any more: the main file opens 3000, 5432, 8080 to 8084, 8761 and 8090
+#     to every network interface, so on a server PostgreSQL and every service would face the internet. Docker
 #     writes its own iptables rules, a host firewall (ufw) does not stop them. Only Caddy listens on 80 / 443;
-#   - Caddy, in front of the gateway, gets and renews the HTTPS certificate of DOMAIN;
+#   - Caddy, in front of the gateway and the frontend, gets and renews the HTTPS certificate of DOMAIN;
 #   - no dev default for the secrets: JWT_SECRET and POSTGRES_PASSWORD must be set in infra/.env, or
 #     "docker compose" stops before starting anything;
 #   - PostgreSQL restarts with the server, and its logs rotate like the others.
@@ -70,23 +70,25 @@ services:
   # Reached by Caddy only, on the "edge" network
   api-gateway:
     ports: !reset []
-    networks:
-      - backend
-      - edge
+
+  frontend:
+    ports: !reset []
 
   caddy:
     image: caddy:2.11-alpine
     container_name: ecommerce-caddy
     profiles: ["app"]
     restart: unless-stopped
-    depends_on:
+    depends_on:   # no 502 for the first requests: both answer when Caddy starts
       api-gateway:
-        condition: service_healthy   # no 502 for the first requests: the gateway answers when Caddy starts
+        condition: service_healthy
+      frontend:
+        condition: service_healthy
     environment:
       # ":80" (plain HTTP on any address) when DOMAIN is not set or empty: Caddy only applies the default
       # of {$DOMAIN::80} to a variable that is not set at all, an empty one would break the Caddyfile
       DOMAIN: ${DOMAIN:-:80}
-    networks:   # the gateway only: Caddy cannot reach a service, Eureka or PostgreSQL directly
+    networks:   # the gateway and the frontend only: Caddy cannot reach a service, Eureka or PostgreSQL directly
       - edge
     ports:
       - "80:80"
@@ -105,11 +107,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-# Caddy and the gateway: the internet side, apart from the services and PostgreSQL
-networks:
-  edge:
-    name: ecommerce-edge
 
 volumes:
   caddy_data:
