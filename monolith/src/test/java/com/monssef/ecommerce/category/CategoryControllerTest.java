@@ -4,15 +4,15 @@ import com.monssef.ecommerce.auth.JwtService;
 import com.monssef.ecommerce.category.dto.CategoryDTO;
 import com.monssef.ecommerce.category.dto.CategoryRequest;
 import com.monssef.ecommerce.config.SecurityConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.List;
 
@@ -32,10 +32,10 @@ class CategoryControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private CategoryService service;
 
-    @MockBean
+    @MockitoBean
     private JwtService jwtService; // required by SecurityConfig (JWT filter)
 
     @Test

@@ -1,13 +1,13 @@
 package com.monssef.ecommerce.config;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -27,9 +27,9 @@ class JsonSecurityErrorHandlerTest {
         assertThat(response.getContentType()).isEqualTo(MediaType.APPLICATION_JSON_VALUE);
         JsonNode body = objectMapper.readTree(response.getContentAsString());
         assertThat(body.get("status").asInt()).isEqualTo(401);
-        assertThat(body.get("error").asText()).isEqualTo("Unauthorized");
-        assertThat(body.get("message").asText()).isEqualTo("Authentication required");
-        assertThat(body.get("path").asText()).isEqualTo("/api/cart");
+        assertThat(body.get("error").asString()).isEqualTo("Unauthorized");
+        assertThat(body.get("message").asString()).isEqualTo("Authentication required");
+        assertThat(body.get("path").asString()).isEqualTo("/api/cart");
         assertThat(body.get("errors")).isEmpty();
     }
 
@@ -41,9 +41,9 @@ class JsonSecurityErrorHandlerTest {
 
         assertThat(response.getStatus()).isEqualTo(403);
         JsonNode body = objectMapper.readTree(response.getContentAsString());
-        assertThat(body.get("error").asText()).isEqualTo("Forbidden");
-        assertThat(body.get("message").asText()).isEqualTo("Access denied");
-        assertThat(body.get("path").asText()).isEqualTo("/api/products");
+        assertThat(body.get("error").asString()).isEqualTo("Forbidden");
+        assertThat(body.get("message").asString()).isEqualTo("Access denied");
+        assertThat(body.get("path").asString()).isEqualTo("/api/products");
     }
 
     @Test
