@@ -1,6 +1,5 @@
 package com.monssef.productservice.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.monssef.productservice.auth.JwtAuthenticationFilter;
 import com.monssef.productservice.auth.JwtService;
 import org.springframework.context.annotation.Bean;
@@ -11,6 +10,7 @@ import org.springframework.security.config.annotation.web.configurers.AbstractHt
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 public class SecurityConfig {
