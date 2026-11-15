@@ -7,6 +7,7 @@ import { CartPage } from "./pages/CartPage";
 import { CatalogPage } from "./pages/CatalogPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { OrderPage } from "./pages/OrderPage";
 import { OrdersPage } from "./pages/OrdersPage";
 import { ProductPage } from "./pages/ProductPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -21,6 +22,7 @@ const router = createBrowserRouter([
       { path: "products/:id", element: <ProductPage /> },
       { path: "cart", element: <RequireAuth><CartPage /></RequireAuth> },
       { path: "orders", element: <RequireAuth><OrdersPage /></RequireAuth> },
+      { path: "orders/:id", element: <RequireAuth><OrderPage /></RequireAuth> },
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
       { path: "*", element: <NotFoundPage /> },

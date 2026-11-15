@@ -320,6 +320,10 @@ input[aria-invalid="true"] {
   padding: 1.25rem;
 }
 
+.card > h2:first-child {
+  margin-top: 0;
+}
+
 .grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
