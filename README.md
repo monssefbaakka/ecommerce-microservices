@@ -565,6 +565,46 @@ La gateway et Eureka ne vérifient aucun token : leurs métriques seraient publi
 | PUT | /api/products/{id} | Modifier | 200 / 400 / 404 |
 | DELETE | /api/products/{id} | Supprimer | 204 / 404 |
 
+## Frontend
+
+A small web shop in [frontend/](frontend/), on top of the gateway: React 19 and TypeScript, built by Vite, no UI library. It only calls `/api/**` on its own origin, so the gateway needs no CORS setting.
+
+| Page | Path | Who |
+|---|---|---|
+| Catalog: search by name, filter by category, sort, pages (kept in the URL) | `/` | everyone |
+| Product, add to cart (up to the stock left) | `/products/:id` | everyone, cart once logged in |
+| Login, register (then logged in at once) | `/login`, `/register` | visitors |
+| Cart: quantities, remove, empty, place the order | `/cart` | logged in |
+| Order history, and one order with its payment form while `PENDING` | `/orders`, `/orders/:id` | logged in |
+| Payment history, declined attempts included | `/payments` | logged in |
+| Categories and products: create, edit, delete | `/admin` | `ADMIN` |
+
+The JWT of auth-service is kept in `localStorage` and sent as `Authorization: Bearer` with each request. The app only reads its claims (email, role, expiry date) to show the right links; the services still check the signature and the role on every request. The user is logged out at the expiry date of the token, or as soon as a request sent with it gets a 401. The messages of the services (`ErrorResponse`) are shown as they come, under the right field for a 400. When product-service is down, the cart says that its prices are the last known ones and the order button waits for it to come back.
+
+Payments are simulated by payment-service: a card number ending in `0002` is declined, any other one of 16 digits is accepted (`4242 4242 4242 4242`). The first `ADMIN` account comes from `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `infra/.env`.
+
+### Run it in development
+
+The stack must be running (at least the gateway on `:8090`, see [Run with Docker](#run-with-docker)). Node.js 22.12 or later:
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173, /api/** forwarded to http://localhost:8090
+```
+
+Pages reload on each save. `API_URL=https://shop.example.com npm run dev` points the dev server to another gateway.
+
+| Command | What it does |
+|---|---|
+| `npm test` | Vitest unit tests (JWT reading, fetch client, query strings, formatting) |
+| `npm run typecheck` | TypeScript check, strict mode |
+| `npm run build` | Type check, then the static files in `dist/` |
+
+### In a container
+
+[frontend/Dockerfile](frontend/Dockerfile) builds the app with Node.js, then keeps only the static files and nginx (unprivileged image: never root, port 8080, about 26 MB). [frontend/nginx/default.conf.template](frontend/nginx/default.conf.template) answers `index.html` for every route of the app (a reload on `/orders/12` works), lets the browser keep the hashed assets for a year, and forwards `/api/**` to `API_GATEWAY_URL` (`http://api-gateway:8090` by default), looking up the address of the gateway again every 10 s so that recreating the gateway does not break it. On the server, Caddy sends `/api/**` to the gateway itself and only the pages to this container.
+
 ## Database schema
 
 ```mermaid
