@@ -454,6 +454,49 @@ th {
   width: 5rem;
 }
 
+.list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 1.25rem;
+}
+
+.list li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.admin {
+  display: grid;
+  grid-template-columns: minmax(16rem, 1fr) minmax(0, 2fr);
+  gap: 1.5rem;
+  align-items: start;
+}
+
+.card-header {
+  margin-top: 0;
+  margin-bottom: 1rem;
+}
+
+.card-header h2 {
+  margin: 0;
+}
+
+.form-wide {
+  max-width: none;
+  padding: 1rem;
+  margin-bottom: 1.25rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+
+.form-wide h3 {
+  margin: 0;
+}
+
 .pagination {
   display: flex;
   align-items: center;
@@ -477,7 +520,8 @@ th {
 }
 
 @media (max-width: 720px) {
-  .detail {
+  .detail,
+  .admin {
     grid-template-columns: 1fr;
   }
 

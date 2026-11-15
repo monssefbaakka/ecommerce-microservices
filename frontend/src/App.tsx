@@ -3,6 +3,7 @@ import { AuthProvider } from "./auth/AuthContext";
 import { CartProvider } from "./cart/CartContext";
 import { Layout } from "./components/Layout";
 import { RequireAuth } from "./components/RequireAuth";
+import { AdminPage } from "./pages/AdminPage";
 import { CartPage } from "./pages/CartPage";
 import { CatalogPage } from "./pages/CatalogPage";
 import { LoginPage } from "./pages/LoginPage";
@@ -25,6 +26,7 @@ const router = createBrowserRouter([
       { path: "orders", element: <RequireAuth><OrdersPage /></RequireAuth> },
       { path: "orders/:id", element: <RequireAuth><OrderPage /></RequireAuth> },
       { path: "payments", element: <RequireAuth><PaymentsPage /></RequireAuth> },
+      { path: "admin", element: <RequireAuth role="ADMIN"><AdminPage /></RequireAuth> },
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
       { path: "*", element: <NotFoundPage /> },
