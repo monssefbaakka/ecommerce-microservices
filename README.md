@@ -167,7 +167,7 @@ The **CI** badge at the top of this page shows the last run on `main` (pushes on
 
 ### Build job
 
-One job per Maven project (the monolith and the six services), run in parallel. A failing project does not stop the others, so every broken project shows up in the same run.
+One job per Maven project (the monolith and the six services), run in parallel. The frontend has a job of its own ([below](#frontend-job)). A failing project does not stop the others, so every broken project shows up in the same run.
 
 | Step | What it does |
 |---|---|
@@ -178,9 +178,13 @@ One job per Maven project (the monolith and the six services), run in parallel. 
 
 The Maven dependencies are cached per project, keyed on its `pom.xml`: they are downloaded again only when that file changes. A new push on a pull request cancels the run still in progress for it.
 
+### Frontend job
+
+`npm ci` (exactly the versions of `package-lock.json`), the Vitest unit tests, then `npm run build`: the strict TypeScript check of the whole app and the Vite build. The size of each built file goes into the job summary and the `dist/` folder is kept as the `frontend-dist` artifact (7 days). The npm cache is keyed on `package-lock.json`.
+
 ### Docker job
 
-Once every build job has passed, the Docker image of each project is built from its own `Dockerfile`, as `ghcr.io/monssefbaakka/ecommerce-<project>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
+Once every build job and the frontend job have passed, the Docker image of each project is built from its own `Dockerfile`, as `ghcr.io/monssefbaakka/ecommerce-<project>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
 
 On `main` and on a release tag, the checked image is then pushed to GitHub Container Registry (see [Published images](#published-images)). On a pull request it is only built and checked: the run never logs in to the registry.
 
@@ -190,7 +194,7 @@ A separate job validates `infra/docker-compose.yml` with every service of the `a
 
 ### Published images
 
-The seven images are on GitHub Container Registry, under the [packages of the repository](https://github.com/monssefbaakka?tab=packages&repo_name=ecommerce-microservices): `ghcr.io/monssefbaakka/ecommerce-<project>`, with `<project>` one of `monolith`, `discovery-server`, `auth-service`, `product-service`, `order-service`, `payment-service`, `api-gateway`.
+The eight images are on GitHub Container Registry, under the [packages of the repository](https://github.com/monssefbaakka?tab=packages&repo_name=ecommerce-microservices): `ghcr.io/monssefbaakka/ecommerce-<project>`, with `<project>` one of `monolith`, `discovery-server`, `auth-service`, `product-service`, `order-service`, `payment-service`, `api-gateway`, `frontend`.
 
 | Tag | Published by | Points to |
 |---|---|---|
