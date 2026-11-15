@@ -11,7 +11,8 @@ flowchart LR
     ci -- "passed on main" --> deploy["Deploy workflow"]
     deploy -- "SSH: infra files,<br/>deploy.sh sha-1a2b3c4" --> server
     subgraph server["Server (Docker)"]
-        caddy["Caddy :80 / :443<br/>HTTPS"] --> gateway["api-gateway"]
+        caddy["Caddy :80 / :443<br/>HTTPS"] -- "/api/**" --> gateway["api-gateway"]
+        caddy -- "pages" --> frontend["frontend<br/>nginx"]
         gateway --> services["auth, product, order,<br/>payment, monolith"]
         services --> postgres[(PostgreSQL)]
     end
@@ -21,8 +22,8 @@ flowchart LR
 
 | File | Role |
 |---|---|
-| [infra/docker-compose.prod.yml](../infra/docker-compose.prod.yml) | Merged over `docker-compose.yml` and `docker-compose.ghcr.yml`: no port published but Caddy's, secrets required, Caddy in front of the gateway |
-| [infra/caddy/Caddyfile](../infra/caddy/Caddyfile) | HTTPS for `DOMAIN` (Let's Encrypt certificate, renewed by Caddy), everything sent to the gateway |
+| [infra/docker-compose.prod.yml](../infra/docker-compose.prod.yml) | Merged over `docker-compose.yml` and `docker-compose.ghcr.yml`: no port published but Caddy's, secrets required, Caddy in front of the gateway and the frontend |
+| [infra/caddy/Caddyfile](../infra/caddy/Caddyfile) | HTTPS for `DOMAIN` (Let's Encrypt certificate, renewed by Caddy), `/api/**` sent to the gateway, the other paths to the frontend |
 | [infra/deploy.sh](../infra/deploy.sh) | Run on the server: pulls one image version, waits until every container is healthy, rolls back if one is not |
 | [.github/workflows/deploy.yml](../.github/workflows/deploy.yml) | After CI passed on `main`: copies `infra/` to the server over SSH and runs `deploy.sh` with the image of that commit |
 
@@ -35,7 +36,7 @@ flowchart LR
 - A domain name pointing to its IP address (an `A` record), or none: `<IP with dashes>.sslip.io` resolves
   to the IP written in it (`203-0-113-10.sslip.io` → `203.0.113.10`), and Let's Encrypt gives it a certificate.
 
-Seven JVMs are limited to 512 MB each in Compose, plus PostgreSQL and Caddy. Once started they use about
+Seven JVMs are limited to 512 MB each in Compose, plus PostgreSQL, Caddy and the nginx of the frontend (64 MB). Once started they use about
 2 to 2.5 GB together (`docker stats`): 4 GB leaves room for the system and the peaks.
 
 ## 1. Prepare the server (once)
@@ -139,12 +140,14 @@ workflow reads `DEPLOY_HOST` to decide whether to run at all, before any environ
 *Actions* → *Deploy* → *Run workflow* on `main`, tag left empty: it deploys the image of the last commit of
 `main`. Or merge a pull request.
 
-The first start takes a few minutes: the server pulls seven images, PostgreSQL creates the databases, and Caddy
+The first start takes a few minutes: the server pulls eight images, PostgreSQL creates the databases, and Caddy
 gets the certificate of `DOMAIN` (ports 80 and 443 must already reach the server for that). Then:
 
 ```bash
 curl https://shop.example.com/api/products
 ```
+
+and `https://shop.example.com` in a browser opens the web shop.
 
 ## Each merge to main
 
@@ -170,7 +173,7 @@ one is healthy (5 min at most). If one never gets healthy, the version that ran 
 Finally, the images no container uses and older than a week are deleted.
 
 While a container is recreated, its service is unavailable for a few seconds: the gateway answers **503**
-for it, and Caddy holds the requests for up to 30 s while the gateway itself restarts (no **502**).
+for it, and Caddy holds the requests for up to 30 s while the gateway or the frontend itself restarts (no **502**).
 
 To approve each deploy by hand, add required reviewers to the *production* environment
 (*Settings* → *Environments*): the job then waits for a click.
