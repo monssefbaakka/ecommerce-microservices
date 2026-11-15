@@ -62,7 +62,7 @@ To try the endpoints, open `docs/requests.http` in VS Code (REST Client extensio
 
 ### Run with Docker
 
-The whole stack (PostgreSQL, the monolith and the [microservices](#microservices)) can also run in containers, without Java on the machine:
+The whole stack (PostgreSQL, the monolith, the [microservices](#microservices) and the [frontend](#frontend)) can also run in containers, without Java or Node.js on the machine:
 
 ```bash
 docker compose -f infra/docker-compose.yml --profile app up -d --build --wait
@@ -70,7 +70,8 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build --wait
 
 | Container | URL | Role |
 |---|---|---|
-| `ecommerce-api-gateway` | `http://localhost:8090` | Single entry point: use this one |
+| `ecommerce-frontend` | `http://localhost:3000` | The web shop, in a browser |
+| `ecommerce-api-gateway` | `http://localhost:8090` | Single entry point of the API: use this one |
 | `ecommerce-app` | `http://localhost:8080` | The monolith, still reachable directly |
 | `ecommerce-auth-service` | `http://localhost:8081` | Register and login |
 | `ecommerce-product-service` | `http://localhost:8082` | Categories and products |
@@ -87,6 +88,7 @@ The containers do not share one network. Each joins only the ones it needs:
 |---|---|---|
 | `ecommerce-backend` | the monolith, Eureka, the gateway and the four services | They find each other through Eureka and call each other (gateway routes, Feign clients) |
 | `ecommerce-database` | PostgreSQL, the monolith and the four services | Only the containers that own a database reach PostgreSQL |
+| `ecommerce-edge` | the gateway and the frontend (and Caddy on the server) | The public side: the frontend reaches the gateway, nothing behind it |
 
 The gateway, the public entry point, and Eureka cannot even resolve the `postgres` host name: `docker exec ecommerce-api-gateway wget -qO- -T 2 http://postgres:5432` answers `bad address`. The published ports (`8090`, `5432`...) are not affected: the host still reaches every container.
 
