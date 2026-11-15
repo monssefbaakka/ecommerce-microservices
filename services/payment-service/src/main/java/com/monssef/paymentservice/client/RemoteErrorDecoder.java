@@ -1,11 +1,12 @@
 package com.monssef.paymentservice.client;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import feign.Response;
 import feign.codec.ErrorDecoder;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
+import tools.jackson.core.JacksonException;
+import tools.jackson.databind.ObjectMapper;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -43,8 +44,9 @@ public class RemoteErrorDecoder implements ErrorDecoder {
             return null;
         }
         try (InputStream body = response.body().asInputStream()) {
-            return objectMapper.readTree(body).path("message").asText(null);
-        } catch (IOException e) {
+            return objectMapper.readTree(body).path("message").asString(null);
+        } catch (IOException | JacksonException e) {
+            // Not JSON (an HTML error page of a proxy...): Jackson 3 throws its own unchecked exception
             return null;
         }
     }
