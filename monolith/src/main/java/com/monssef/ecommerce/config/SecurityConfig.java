@@ -1,6 +1,5 @@
 package com.monssef.ecommerce.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.monssef.ecommerce.auth.JwtAuthenticationFilter;
 import com.monssef.ecommerce.auth.JwtService;
 import org.springframework.context.annotation.Bean;
@@ -13,6 +12,7 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 public class SecurityConfig {
