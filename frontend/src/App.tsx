@@ -7,6 +7,7 @@ import { CartPage } from "./pages/CartPage";
 import { CatalogPage } from "./pages/CatalogPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
+import { OrdersPage } from "./pages/OrdersPage";
 import { ProductPage } from "./pages/ProductPage";
 import { RegisterPage } from "./pages/RegisterPage";
 
@@ -18,14 +19,8 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <CatalogPage /> },
       { path: "products/:id", element: <ProductPage /> },
-      {
-        path: "cart",
-        element: (
-          <RequireAuth>
-            <CartPage />
-          </RequireAuth>
-        ),
-      },
+      { path: "cart", element: <RequireAuth><CartPage /></RequireAuth> },
+      { path: "orders", element: <RequireAuth><OrdersPage /></RequireAuth> },
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
       { path: "*", element: <NotFoundPage /> },
