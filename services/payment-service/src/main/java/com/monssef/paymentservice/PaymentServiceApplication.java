@@ -2,7 +2,7 @@ package com.monssef.paymentservice;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.autoconfigure.security.servlet.UserDetailsServiceAutoConfiguration;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
 import org.springframework.data.web.config.EnableSpringDataWebSupport;
 
 // No accounts here (the JWT carries the identity): no default user with a generated password
