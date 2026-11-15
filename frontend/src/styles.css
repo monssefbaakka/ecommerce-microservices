@@ -221,6 +221,16 @@ h2 {
   max-width: 26rem;
 }
 
+.form-card {
+  max-width: 28rem;
+  margin: 1rem auto;
+}
+
+.form-card .form {
+  max-width: none;
+  margin-bottom: 1rem;
+}
+
 .field {
   display: grid;
   gap: 0.3rem;
