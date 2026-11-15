@@ -334,6 +334,18 @@ input[aria-invalid="true"] {
   font-size: 1.05rem;
 }
 
+.line-clamp {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+
+.pre-line {
+  white-space: pre-line;
+}
+
 .price {
   font-weight: 700;
   font-size: 1.1rem;

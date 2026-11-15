@@ -2,6 +2,7 @@ import { createBrowserRouter, RouterProvider } from "react-router";
 import { AuthProvider } from "./auth/AuthContext";
 import { CartProvider } from "./cart/CartContext";
 import { Layout } from "./components/Layout";
+import { CatalogPage } from "./pages/CatalogPage";
 import { LoginPage } from "./pages/LoginPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 import { RegisterPage } from "./pages/RegisterPage";
@@ -12,6 +13,7 @@ const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
+      { index: true, element: <CatalogPage /> },
       { path: "login", element: <LoginPage /> },
       { path: "register", element: <RegisterPage /> },
       { path: "*", element: <NotFoundPage /> },
