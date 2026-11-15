@@ -56,6 +56,30 @@ export const paymentApi = {
     request<Page<Payment>>("GET", `/api/payments${toQueryString({ page, size, sort: "createdAt,desc" })}`),
 };
 
+// ADMIN token only: product-service answers 403 to any other account
+export interface CategoryInput {
+  name: string;
+  description: string | null;
+}
+
+export interface ProductInput {
+  name: string;
+  description: string | null;
+  price: number;
+  categoryId: number;
+  stock: number;
+}
+
+export const adminApi = {
+  createCategory: (category: CategoryInput) => request<Category>("POST", "/api/categories", category),
+  updateCategory: (id: number, category: CategoryInput) => request<Category>("PUT", `/api/categories/${id}`, category),
+  // 409 while a product still uses it
+  deleteCategory: (id: number) => request<void>("DELETE", `/api/categories/${id}`),
+  createProduct: (product: ProductInput) => request<Product>("POST", "/api/products", product),
+  updateProduct: (id: number, product: ProductInput) => request<Product>("PUT", `/api/products/${id}`, product),
+  deleteProduct: (id: number) => request<void>("DELETE", `/api/products/${id}`),
+};
+
 // Leaves out undefined and empty values: "?name=" would search for an empty name
 export function toQueryString(params: Record<string, string | number | undefined>): string {
   const search = new URLSearchParams();
