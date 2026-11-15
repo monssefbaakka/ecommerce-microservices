@@ -27,6 +27,7 @@ ENV NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1
 
 EXPOSE 8080
 
-# BusyBox wget ships with the Alpine image: no curl to install
+# BusyBox wget ships with the Alpine image: no curl to install. 127.0.0.1, not localhost: BusyBox resolves
+# localhost to ::1 first, and nginx only listens on IPv4
 HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
-    CMD wget -qO- http://localhost:8080/healthz || exit 1
+    CMD wget -qO- http://127.0.0.1:8080/healthz || exit 1
