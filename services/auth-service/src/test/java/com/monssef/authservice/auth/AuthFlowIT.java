@@ -62,7 +62,7 @@ class AuthFlowIT extends IntegrationTest {
                 .andExpect(jsonPath("$.expiresIn").value(3600))
                 .andReturn();
 
-        Claims claims = jwtService.parseClaims(body(result).get("token").asText());
+        Claims claims = jwtService.parseClaims(body(result).get("token").asString());
         assertThat(claims.getSubject()).isEqualTo("john@example.com");
         assertThat(claims.get("role", String.class)).isEqualTo("USER");
     }
