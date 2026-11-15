@@ -217,19 +217,43 @@ services:
       MONOLITH_URL: http://app:8080
     networks:   # no database: PostgreSQL is not even resolvable from here
       - backend
+      - edge    # reached by the frontend (and by Caddy on the server)
     ports:
       - "8090:8090"
 
-# Two networks instead of the default one, each container joins only the ones it needs:
+  # The web shop on http://localhost:3000: the React app built into static files, served by nginx, which
+  # sends /api/** to the gateway (same origin, no CORS). Not a Spring container: a few MB of memory, no JVM.
+  # It does not wait for the gateway: the pages load at once, the API answers once the gateway is healthy
+  frontend:
+    build: ../frontend
+    image: ecommerce-frontend:latest
+    container_name: ecommerce-frontend
+    profiles: ["app"]
+    restart: unless-stopped
+    networks:   # the gateway only: no service, Eureka or PostgreSQL reachable from the public side
+      - edge
+    ports:
+      - "3000:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 64M
+    logging: *logging
+
+# Three networks instead of the default one, each container joins only the ones it needs:
 # - backend:  the Spring containers, which find each other through Eureka and call each other
 # - database: PostgreSQL and the containers that own a database in it
+# - edge:     the public side, the gateway and the frontend (and Caddy on the server)
 # The gateway and Eureka are not on "database": a flaw in the public entry point cannot reach PostgreSQL.
+# The frontend is only on "edge": it reaches the gateway, nothing behind it.
 # The published ports (8090, 5432...) still work from the host: only container to container traffic is split.
 networks:
   backend:
     name: ecommerce-backend
   database:
     name: ecommerce-database
+  edge:
+    name: ecommerce-edge
 
 volumes:
   postgres_data:
