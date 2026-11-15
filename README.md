@@ -7,9 +7,9 @@
 [![Docker images](https://img.shields.io/badge/images-ghcr.io-2496ED?logo=docker&logoColor=white)](#published-images)
 [![License](https://img.shields.io/github/license/monssefbaakka/ecommerce-microservices)](LICENSE)
 
-A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
+A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD, with a small React web shop on top.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS, and a React [frontend](#frontend) (catalog, cart, orders, payments, catalog admin) is served next to the API. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -20,7 +20,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Database | PostgreSQL 16 |
 | Build | Maven (wrapper included) |
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
-| Containers | Docker, Docker Compose (health checks, two networks, memory limits, log rotation) |
+| Containers | Docker, Docker Compose (health checks, three networks, memory limits, log rotation) |
 | API docs | OpenAPI 3 / Swagger UI (springdoc) |
 | Security | Spring Security, JWT (jjwt) |
 | Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
@@ -28,6 +28,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers, WireMock (fake services for the Feign clients), JaCoCo |
 | Resilience | Resilience4j 2.2: circuit breaker and retries around the Feign calls, last known products as fallback for the cart |
 | CI | GitHub Actions: build, tests and Docker images of every project on each pull request, images published to GitHub Container Registry (ghcr.io) |
+| Frontend | React 19, TypeScript, Vite, React Router, Vitest; built into static files served by nginx |
 | Deployment | Docker Compose on a single Linux server, Caddy (HTTPS, Let's Encrypt), deployed over SSH by GitHub Actions after each green CI run on `main` |
 
 ## Getting started
@@ -219,8 +220,8 @@ The stack runs on a single Linux server with Docker, from the images published o
 
 | Piece | Role |
 |---|---|
-| [infra/docker-compose.prod.yml](infra/docker-compose.prod.yml) | Merged over `docker-compose.yml` and `docker-compose.ghcr.yml`: no port of the stack published, `JWT_SECRET` and `POSTGRES_PASSWORD` required, Caddy in front of the gateway |
-| [infra/caddy/Caddyfile](infra/caddy/Caddyfile) | The only public entry point: HTTPS for `DOMAIN` with a Let's Encrypt certificate renewed by Caddy, everything sent to the gateway |
+| [infra/docker-compose.prod.yml](infra/docker-compose.prod.yml) | Merged over `docker-compose.yml` and `docker-compose.ghcr.yml`: no port of the stack published, `JWT_SECRET` and `POSTGRES_PASSWORD` required, Caddy in front of the gateway and the frontend |
+| [infra/caddy/Caddyfile](infra/caddy/Caddyfile) | The only public entry point: HTTPS for `DOMAIN` with a Let's Encrypt certificate renewed by Caddy, `/api/**` sent to the gateway, the other paths to the frontend |
 | [infra/deploy.sh](infra/deploy.sh) | On the server: pulls one image version, waits until every container is healthy, starts the previous version again if one is not |
 | [Deploy workflow](.github/workflows/deploy.yml) | After CI passed on `main`: copies `infra/` to the server over SSH and runs `deploy.sh` with the image of the tested commit (`sha-<commit>`, never `latest`), then calls the public URL |
 
@@ -708,6 +709,13 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │   ├── order-service/      cart and orders of the logged-in user, stock reserved in product-service
 │   ├── payment-service/    simulated card payments, sets the order to PAID
 │   └── api-gateway/        single entry point, routes to the services and the monolith
+├── frontend/        React + TypeScript web shop (Vite), with its Dockerfile and nginx config
+│   └── src/
+│       ├── api/         fetch client (JWT, ErrorResponse → ApiError), one function per endpoint, JSON types
+│       ├── auth/        session read from the JWT, kept in localStorage
+│       ├── cart/        cart count shown in the header
+│       ├── pages/       catalog, product, cart, orders, payments, login, register, admin
+│       └── admin/       ADMIN forms for categories and products
 ├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices), .env.example,
 │                    docker-compose.ghcr.yml (same stack from the images published on ghcr.io),
 │                    docker-compose.prod.yml and deploy.sh (the server)
