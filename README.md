@@ -713,7 +713,7 @@ If an ADMIN deletes a product, `order_items.product_id` becomes `NULL` (`ON DELE
 │                    docker-compose.prod.yml and deploy.sh (the server)
 │   ├── caddy/       Caddyfile: HTTPS entry point of the server
 │   └── postgres/    init-databases.sql: one database per service
-├── docs/            HTTP request examples, architecture decisions (adr/), deployment guide
+├── docs/            architecture overview, architecture decisions (adr/), deployment guide, HTTP request examples
 └── .github/         CI and deploy workflows (workflows/), issue and pull request templates
 ```
 
