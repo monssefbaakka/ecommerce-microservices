@@ -99,3 +99,54 @@ CI fails if any port other than Caddy's is published on every interface.
 No service reads another one's tables and there is no foreign key between databases. A row keeps the
 `productId`, `orderId` or user email it refers to, and the owner is asked over HTTP when the current value
 matters (price, stock, order status).
+
+## A request through the stack
+
+Placing an order, then paying it, touches every layer. The JWT travels with each request from the browser;
+the calls between services carry a short-lived `SERVICE` token instead.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor U as Browser
+    participant C as Caddy
+    participant G as api-gateway
+    participant O as order-service
+    participant P as product-service
+    participant Pay as payment-service
+
+    U->>C: POST /api/orders (Bearer user JWT)
+    C->>G: POST /api/orders
+    G->>O: lb://order-service (found in Eureka)
+    O->>O: check the JWT, lock the cart of its email
+    O->>P: POST /internal/stock/reservations (SERVICE token)
+    P->>P: SELECT ... FOR UPDATE on the products, take the units
+    P-->>O: 200 reserved lines (name, price) or 409 / 404
+    O->>O: save the PENDING order, empty the cart
+    Note over O,P: if the save fails, POST /internal/stock/releases gives the units back
+    O-->>U: 201 Location: /api/orders/{id}
+
+    U->>C: POST /api/payments {orderId, cardNumber}
+    C->>G: POST /api/payments
+    G->>Pay: lb://payment-service
+    Pay->>Pay: check the JWT, pg_advisory_xact_lock(orderId)
+    Pay->>O: GET /internal/orders/{id} (SERVICE token)
+    O-->>Pay: owner, status, total
+    Pay->>Pay: simulate the card, save the payment
+    Pay->>O: POST /internal/orders/{id}/paid
+    O-->>Pay: order PAID
+    Pay-->>U: 201 SUCCEEDED (or DECLINED, order stays PENDING)
+```
+
+What can go wrong on the way, and what the user gets:
+
+| Failure | Where it is caught | Answer |
+|---|---|---|
+| Product short on stock | product-service, under the row lock | **409**, nothing reserved, cart untouched |
+| Two clicks on "order" | order-service, cart lock | One order; the second request finds the cart empty (**400**) |
+| Two clicks on "pay" | payment-service, advisory lock | One payment; the second finds the order `PAID` (**409**) |
+| product-service or order-service down, slow or failing | Feign client, retries then circuit breaker | **503** at once while the breaker is open ([ADR 0002](adr/0002-circuit-breaker-and-retries-around-feign-calls.md)) |
+| product-service down while showing the cart | order-service fallback | **200** with the last known names and prices, `productsUpToDate: false` ([ADR 0003](adr/0003-fallback-for-the-cart-only.md)) |
+| Service not registered in Eureka | gateway | **503** |
+| Service answers after 15 s | gateway | **504** |
+| Crash between the stock reservation and the order save, or `PAID` call lost after an accepted card | nowhere yet | Not compensated: the card is simulated. A saga or an outbox would cover it |
