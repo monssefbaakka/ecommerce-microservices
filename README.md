@@ -7,9 +7,9 @@
 [![Docker images](https://img.shields.io/badge/images-ghcr.io-2496ED?logo=docker&logoColor=white)](#published-images)
 [![License](https://img.shields.io/github/license/monssefbaakka/ecommerce-microservices)](LICENSE)
 
-A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD.
+A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD, with a small React web shop on top.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 done (catalog, JWT security, cart and orders). Phase 4 done: unit and integration tests, Docker image and health checks. Phase 5 done: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on three networks (PostgreSQL only reachable by the services that own a database, the public side only by the gateway), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS, and a React [frontend](#frontend) (catalog, cart, orders, payments, catalog admin) is served next to the API. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -20,7 +20,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Database | PostgreSQL 16 |
 | Build | Maven (wrapper included) |
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
-| Containers | Docker, Docker Compose (health checks, two networks, memory limits, log rotation) |
+| Containers | Docker, Docker Compose (health checks, three networks, memory limits, log rotation) |
 | API docs | OpenAPI 3 / Swagger UI (springdoc 3) |
 | Security | Spring Security, JWT (jjwt) |
 | Microservices | Spring Cloud 2025.1: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
@@ -28,6 +28,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers 2, WireMock (fake services for the Feign clients), JaCoCo |
 | Resilience | Resilience4j 2.4 (resilience4j-spring-boot4): circuit breaker and retries around the Feign calls, last known products as fallback for the cart |
 | CI | GitHub Actions: build, tests and Docker images of every project on each pull request, images published to GitHub Container Registry (ghcr.io) |
+| Frontend | React 19, TypeScript, Vite, React Router, Vitest; built into static files served by nginx |
 | Deployment | Docker Compose on a single Linux server, Caddy (HTTPS, Let's Encrypt), deployed over SSH by GitHub Actions after each green CI run on `main` |
 
 ## Getting started
@@ -62,7 +63,7 @@ To try the endpoints, open `docs/requests.http` in VS Code (REST Client extensio
 
 ### Run with Docker
 
-The whole stack (PostgreSQL, the monolith and the [microservices](#microservices)) can also run in containers, without Java on the machine:
+The whole stack (PostgreSQL, the monolith, the [microservices](#microservices) and the [frontend](#frontend)) can also run in containers, without Java or Node.js on the machine:
 
 ```bash
 docker compose -f infra/docker-compose.yml --profile app up -d --build --wait
@@ -70,7 +71,8 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build --wait
 
 | Container | URL | Role |
 |---|---|---|
-| `ecommerce-api-gateway` | `http://localhost:8090` | Single entry point: use this one |
+| `ecommerce-frontend` | `http://localhost:3000` | The web shop, in a browser |
+| `ecommerce-api-gateway` | `http://localhost:8090` | Single entry point of the API: use this one |
 | `ecommerce-app` | `http://localhost:8080` | The monolith, still reachable directly |
 | `ecommerce-auth-service` | `http://localhost:8081` | Register and login |
 | `ecommerce-product-service` | `http://localhost:8082` | Categories and products |
@@ -87,6 +89,7 @@ The containers do not share one network. Each joins only the ones it needs:
 |---|---|---|
 | `ecommerce-backend` | the monolith, Eureka, the gateway and the four services | They find each other through Eureka and call each other (gateway routes, Feign clients) |
 | `ecommerce-database` | PostgreSQL, the monolith and the four services | Only the containers that own a database reach PostgreSQL |
+| `ecommerce-edge` | the gateway and the frontend (and Caddy on the server) | The public side: the frontend reaches the gateway, nothing behind it |
 
 The gateway, the public entry point, and Eureka cannot even resolve the `postgres` host name: `docker exec ecommerce-api-gateway wget -qO- -T 2 http://postgres:5432` answers `bad address`. The published ports (`8090`, `5432`...) are not affected: the host still reaches every container.
 
@@ -165,7 +168,7 @@ The **CI** badge at the top of this page shows the last run on `main` (pushes on
 
 ### Build job
 
-One job per Maven project (the monolith and the six services), run in parallel. A failing project does not stop the others, so every broken project shows up in the same run.
+One job per Maven project (the monolith and the six services), run in parallel. The frontend has a job of its own ([below](#frontend-job)). A failing project does not stop the others, so every broken project shows up in the same run.
 
 | Step | What it does |
 |---|---|
@@ -176,9 +179,13 @@ One job per Maven project (the monolith and the six services), run in parallel. 
 
 The Maven dependencies are cached per project, keyed on its `pom.xml`: they are downloaded again only when that file changes. A new push on a pull request cancels the run still in progress for it.
 
+### Frontend job
+
+`npm ci` (exactly the versions of `package-lock.json`), the Vitest unit tests, then `npm run build`: the strict TypeScript check of the whole app and the Vite build. The size of each built file goes into the job summary and the `dist/` folder is kept as the `frontend-dist` artifact (7 days). The npm cache is keyed on `package-lock.json`.
+
 ### Docker job
 
-Once every build job has passed, the Docker image of each project is built from its own `Dockerfile`, as `ghcr.io/monssefbaakka/ecommerce-<project>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
+Once every build job and the frontend job have passed, the Docker image of each project is built from its own `Dockerfile`, as `ghcr.io/monssefbaakka/ecommerce-<project>`. An image is never built from code that fails its tests. The image is then checked: it must not run as root and must have a `HEALTHCHECK` (needed by Docker Compose to wait for it). Its user, health check and size go into the job summary.
 
 On `main` and on a release tag, the checked image is then pushed to GitHub Container Registry (see [Published images](#published-images)). On a pull request it is only built and checked: the run never logs in to the registry.
 
@@ -188,7 +195,7 @@ A separate job validates `infra/docker-compose.yml` with every service of the `a
 
 ### Published images
 
-The seven images are on GitHub Container Registry, under the [packages of the repository](https://github.com/monssefbaakka?tab=packages&repo_name=ecommerce-microservices): `ghcr.io/monssefbaakka/ecommerce-<project>`, with `<project>` one of `monolith`, `discovery-server`, `auth-service`, `product-service`, `order-service`, `payment-service`, `api-gateway`.
+The eight images are on GitHub Container Registry, under the [packages of the repository](https://github.com/monssefbaakka?tab=packages&repo_name=ecommerce-microservices): `ghcr.io/monssefbaakka/ecommerce-<project>`, with `<project>` one of `monolith`, `discovery-server`, `auth-service`, `product-service`, `order-service`, `payment-service`, `api-gateway`, `frontend`.
 
 | Tag | Published by | Points to |
 |---|---|---|
@@ -213,16 +220,26 @@ The stack runs on a single Linux server with Docker, from the images published o
 
 | Piece | Role |
 |---|---|
-| [infra/docker-compose.prod.yml](infra/docker-compose.prod.yml) | Merged over `docker-compose.yml` and `docker-compose.ghcr.yml`: no port of the stack published, `JWT_SECRET` and `POSTGRES_PASSWORD` required, Caddy in front of the gateway |
-| [infra/caddy/Caddyfile](infra/caddy/Caddyfile) | The only public entry point: HTTPS for `DOMAIN` with a Let's Encrypt certificate renewed by Caddy, everything sent to the gateway |
+| [infra/docker-compose.prod.yml](infra/docker-compose.prod.yml) | Merged over `docker-compose.yml` and `docker-compose.ghcr.yml`: no port of the stack published, `JWT_SECRET` and `POSTGRES_PASSWORD` required, Caddy in front of the gateway and the frontend |
+| [infra/caddy/Caddyfile](infra/caddy/Caddyfile) | The only public entry point: HTTPS for `DOMAIN` with a Let's Encrypt certificate renewed by Caddy, `/api/**` sent to the gateway, the other paths to the frontend |
 | [infra/deploy.sh](infra/deploy.sh) | On the server: pulls one image version, waits until every container is healthy, starts the previous version again if one is not |
 | [Deploy workflow](.github/workflows/deploy.yml) | After CI passed on `main`: copies `infra/` to the server over SSH and runs `deploy.sh` with the image of the tested commit (`sha-<commit>`, never `latest`), then calls the public URL |
 
 The secrets stay in `infra/.env` on the server; GitHub only holds the SSH key of the deploy user (secret `DEPLOY_SSH_KEY`) and the address of the server (variables `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_URL`). Without `DEPLOY_HOST` the workflow is skipped. A roll back is a manual run of the workflow (*Actions* → *Deploy* → *Run workflow*) with an older tag.
 
+## Documentation
+
+| Document | What is in it |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | Architecture diagram, containers and networks, data ownership, an order and its payment across the services, security model, pipeline from a commit to the server |
+| [docs/adr/](docs/adr/README.md) | Architecture decision records: why OpenFeign, the circuit breaker and retry rules, the cart-only fallback, the single-server deployment |
+| [docs/deployment.md](docs/deployment.md) | Setting up the server, the first deploy, roll back and backups |
+| [docs/requests.http](docs/requests.http) | Ready-to-run requests for the monolith and, through the gateway, the microservices |
+| Swagger UI | `/swagger-ui.html` on the monolith (`:8080`) and on each service (`:8081` to `:8084`) |
+
 ## Microservices
 
-Phase 5 extracts the monolith step by step. The first services are in [services/](services/):
+Phase 5 extracted the monolith into the services in [services/](services/). The diagram below shows the routes and the calls between services; the full picture, with Caddy, the frontend and the Docker networks, is in [docs/architecture.md](docs/architecture.md).
 
 ```mermaid
 flowchart LR
@@ -285,126 +302,126 @@ The requests in `docs/requests.http` (section *MICROSERVICES*) go through the ga
 
 ### Auth
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| POST | /api/auth/register | Créer un compte (rôle USER) | 201, 400, 409 |
-| POST | /api/auth/login | Se connecter et obtenir un token JWT | 200, 400, 401 |
+| POST | /api/auth/register | Create an account (role USER) | 201, 400, 409 |
+| POST | /api/auth/login | Log in and get a JWT | 200, 400, 401 |
 
-Corps de la requête : `{ "email": "john@example.com", "password": "secret123" }`.
-Le mot de passe doit contenir entre 8 et 72 caractères. Il est stocké hashé (BCrypt) et n'est jamais renvoyé.
+Request body: `{ "email": "john@example.com", "password": "secret123" }`.
+The password must be 8 to 72 characters long. It is stored hashed (BCrypt) and never returned.
 
-Le login prend le même corps et renvoie :
+Login takes the same body and returns:
 
 ```json
 { "token": "eyJhbGciOiJIUzI1NiJ9...", "tokenType": "Bearer", "expiresIn": 3600 }
 ```
 
-Le token est signé en HMAC-SHA (HS256 avec une clé de 256 bits). Il contient l'email (`sub`), le rôle (`role`) et expire après 1 h.
-Un email inconnu et un mauvais mot de passe renvoient le même 401, pour ne pas révéler quels comptes existent.
+The token is signed with HMAC-SHA (HS256 with a 256-bit key). It holds the email (`sub`) and the role (`role`), and expires after 1 h.
+An unknown email and a wrong password return the same 401, so the API does not reveal which accounts exist.
 
-| Variable | Rôle | Défaut |
+| Variable | Role | Default |
 |---|---|---|
-| `JWT_SECRET` | Clé de signature, en Base64, 256 bits minimum (`openssl rand -base64 32`) | clé de dev dans `application.yml` |
-| `JWT_EXPIRATION` | Durée de vie du token (`30m`, `1h`, `1d`...) | `1h` |
+| `JWT_SECRET` | Signing key, Base64, 256 bits at least (`openssl rand -base64 32`) | dev key in `application.yml` |
+| `JWT_EXPIRATION` | Lifetime of the token (`30m`, `1h`, `1d`...) | `1h` |
 
-> La clé par défaut sert uniquement en local. Hors dev, définis toujours `JWT_SECRET`.
+> The default key is for local use only. Outside dev, always set `JWT_SECRET`.
 
-Pour s'authentifier, envoie le token dans l'en-tête de chaque requête :
+To authenticate, send the token in the header of each request:
 
     Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
 
-Un filtre (`JwtAuthenticationFilter`) vérifie la signature et l'expiration, puis authentifie la requête avec l'email et le rôle du token, sans accès à la base.
-L'API est stateless : pas de session ni de cookie. Un token absent, invalide ou expiré laisse la requête anonyme.
+A filter (`JwtAuthenticationFilter`) checks the signature and the expiry date, then authenticates the request with the email and role of the token, without a database call.
+The API is stateless: no session, no cookie. A missing, invalid or expired token leaves the request anonymous.
 
-### Rôles et accès
+### Roles and access
 
-| Endpoints | Accès |
+| Endpoints | Access |
 |---|---|
 | `POST /api/auth/register`, `POST /api/auth/login` | Public |
 | `GET /api/categories/**`, `GET /api/products/**` | Public |
-| `POST`, `PUT`, `DELETE` sur `/api/categories/**` et `/api/products/**` | `ADMIN` |
+| `POST`, `PUT`, `DELETE` on `/api/categories/**` and `/api/products/**` | `ADMIN` |
 | Swagger UI, `/v3/api-docs` | Public |
-| `/api/cart/**`, `/api/orders/**`, `/api/payments/**` et tout le reste | Connecté (`USER` ou `ADMIN`) |
+| `/api/cart/**`, `/api/orders/**`, `/api/payments/**` and everything else | Logged in (`USER` or `ADMIN`) |
 
-Sans token valide, un endpoint protégé renvoie **401**. Avec un token valide mais le mauvais rôle, il renvoie **403**.
-Les deux réponses ont le même format JSON que les autres erreurs (`status`, `error`, `message`, `path`).
+Without a valid token, a protected endpoint returns **401**. With a valid token but the wrong role, it returns **403**.
+Both answers use the same JSON format as the other errors (`status`, `error`, `message`, `path`).
 
-L'inscription crée toujours un compte `USER`. Pour avoir un compte `ADMIN`, lance l'application avec :
+Registering always creates a `USER` account. To get an `ADMIN` account, start the application with:
 
-| Variable | Rôle |
+| Variable | Role |
 |---|---|
-| `ADMIN_EMAIL` | Email du compte admin créé au démarrage |
-| `ADMIN_PASSWORD` | Son mot de passe (8 à 72 caractères) |
+| `ADMIN_EMAIL` | Email of the admin account created at start-up |
+| `ADMIN_PASSWORD` | Its password (8 to 72 characters) |
 
 ```bash
 ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=admin-pass ./mvnw spring-boot:run
 ```
 
-Le compte est créé seulement si les deux variables sont définies et que l'email est libre. Un compte existant n'est jamais promu ADMIN.
+The account is created only if both variables are set and the email is free. An existing account is never promoted to ADMIN.
 
-Dans Swagger UI, clique sur **Authorize** et colle le token (sans `Bearer `) pour appeler les endpoints protégés.
+In Swagger UI, click **Authorize** and paste the token (without `Bearer `) to call the protected endpoints.
 
 ### Categories
 
-> Via la gateway (port 8090), les catégories et les produits sont servis par [product-service](#microservices), avec les mêmes URLs, règles, rôles et codes que le monolithe. Son Swagger UI est sur `http://localhost:8082/swagger-ui.html`.
+> Through the gateway (port 8090), categories and products are served by [product-service](#microservices), with the same URLs, rules, roles and codes as the monolith. Its Swagger UI is on `http://localhost:8082/swagger-ui.html`.
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| GET | /api/categories | Liste des catégories | 200 |
-| GET | /api/categories/{id} | Détail d'une catégorie | 200, 404 |
-| POST | /api/categories | Créer une catégorie | 201, 400, 409 |
-| PUT | /api/categories/{id} | Modifier une catégorie | 200, 404, 409 |
-| DELETE | /api/categories/{id} | Supprimer une catégorie | 204, 404, 409 |
+| GET | /api/categories | List the categories | 200 |
+| GET | /api/categories/{id} | One category | 200, 404 |
+| POST | /api/categories | Create a category | 201, 400, 409 |
+| PUT | /api/categories/{id} | Update a category | 200, 404, 409 |
+| DELETE | /api/categories/{id} | Delete a category | 204, 404, 409 |
 
 ### Products
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| GET | /api/products | Liste paginée, avec recherche et filtre | 200 |
-| GET | /api/products/{id} | Détail d'un produit | 200, 404 |
-| POST | /api/products | Créer un produit | 201, 400, 404 |
-| PUT | /api/products/{id} | Modifier un produit | 200, 400, 404 |
-| DELETE | /api/products/{id} | Supprimer un produit | 204, 404 |
+| GET | /api/products | Paged list, with search and filter | 200 |
+| GET | /api/products/{id} | One product | 200, 404 |
+| POST | /api/products | Create a product | 201, 400, 404 |
+| PUT | /api/products/{id} | Update a product | 200, 400, 404 |
+| DELETE | /api/products/{id} | Delete a product | 204, 404 |
 
-Corps de `POST` et `PUT` :
+Body of `POST` and `PUT`:
 
 ```json
 { "name": "iPhone 15", "description": "128 GB", "price": 999.99, "categoryId": 1, "stock": 25 }
 ```
 
-`stock` est le nombre d'unités disponibles. Il est obligatoire et ne peut pas être négatif (400 sinon). Il est renvoyé dans chaque produit.
-Seul un ADMIN le modifie, avec `PUT`. Passer commande le diminue automatiquement.
+`stock` is the number of units available. It is required and cannot be negative (400 otherwise). It is returned with each product.
+Only an ADMIN changes it, with `PUT`. Placing an order lowers it automatically.
 
-#### Paramètres de `GET /api/products`
+#### Parameters of `GET /api/products`
 
-| Paramètre | Type | Description | Défaut |
+| Parameter | Type | Description | Default |
 |---|---|---|---|
-| name | string | Recherche partielle sur le nom (insensible à la casse) | - |
-| categoryId | number | Filtre par catégorie | - |
-| page | number | Numéro de page (commence à 0) | 0 |
-| size | number | Nombre d'éléments par page | 10 |
-| sort | string | Tri, par exemple `price,desc` | id |
+| name | string | Partial match on the name (case-insensitive) | - |
+| categoryId | number | Filter by category | - |
+| page | number | Page number (starts at 0) | 0 |
+| size | number | Items per page | 10 |
+| sort | string | Sort, for example `price,desc` | id |
 
-Exemple :
+Example:
 
     GET /api/products?name=phone&categoryId=1&page=0&size=5&sort=price,desc
 
 ### Cart
 
-> Via la gateway (port 8090), le panier et les commandes sont servis par [order-service](#microservices), avec les mêmes URLs, règles et codes que le monolithe. Son Swagger UI est sur `http://localhost:8083/swagger-ui.html`.
+> Through the gateway (port 8090), the cart and the orders are served by [order-service](#microservices), with the same URLs, rules and codes as the monolith. Its Swagger UI is on `http://localhost:8083/swagger-ui.html`.
 
-Chaque utilisateur connecté a un seul panier, créé au premier ajout. L'email du token identifie le panier : on ne peut voir ou modifier que le sien.
+Each logged-in user has a single cart, created on the first addition. The email of the token picks the cart: a user can only see or change their own.
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| GET | /api/cart | Voir mon panier (vide s'il n'existe pas encore) | 200, 401 |
-| POST | /api/cart/items | Ajouter un produit, ou augmenter sa quantité s'il y est déjà | 200, 400, 401, 404, 409 |
-| PUT | /api/cart/items/{productId} | Changer la quantité d'un produit | 200, 400, 401, 404, 409 |
-| DELETE | /api/cart/items/{productId} | Retirer un produit | 200, 401, 404 |
-| DELETE | /api/cart | Vider le panier | 204, 401 |
+| GET | /api/cart | My cart (empty if it does not exist yet) | 200, 401 |
+| POST | /api/cart/items | Add a product, or raise its quantity if it is already there | 200, 400, 401, 404, 409 |
+| PUT | /api/cart/items/{productId} | Change the quantity of a product | 200, 400, 401, 404, 409 |
+| DELETE | /api/cart/items/{productId} | Remove a product | 200, 401, 404 |
+| DELETE | /api/cart | Empty the cart | 204, 401 |
 
-Corps de `POST /api/cart/items` : `{ "productId": 1, "quantity": 2 }`. Pour `PUT`, seulement `{ "quantity": 5 }`.
-La quantité va de 1 à 100 par produit, sans dépasser le stock du produit (**409** sinon). Chaque réponse renvoie le panier complet :
+Body of `POST /api/cart/items`: `{ "productId": 1, "quantity": 2 }`. For `PUT`, only `{ "quantity": 5 }`.
+The quantity goes from 1 to 100 per product, without going over the stock of the product (**409** otherwise). Each answer returns the whole cart:
 
 ```json
 {
@@ -416,25 +433,25 @@ La quantité va de 1 à 100 par produit, sans dépasser le stock du produit (**4
 }
 ```
 
-Le panier affiche toujours le prix actuel du produit. Si un ADMIN supprime un produit, il disparaît des paniers.
+The cart always shows the current price of the product. If an ADMIN deletes a product, it disappears from the carts.
 
-Via order-service, la réponse contient aussi `productsUpToDate` : `true` d'habitude. Si product-service est indisponible, le panier s'affiche quand même (**200**) avec les derniers noms et prix connus et `productsUpToDate: false` ; une ligne dont le produit n'a jamais été vu garde sa quantité, sans nom ni prix, et `total` vaut `null`. Ajouter un produit ou changer une quantité répond alors **503** : le stock doit être à jour.
+Through order-service, the answer also holds `productsUpToDate`: usually `true`. If product-service is unavailable, the cart is still shown (**200**) with the last known names and prices and `productsUpToDate: false`; a line whose product was never seen keeps its quantity, without name nor price, and `total` is `null`. Adding a product or changing a quantity then answers **503**: the stock must be current.
 
 ### Orders
 
-Passer commande transforme le panier de l'utilisateur connecté en commande `PENDING`, puis vide le panier. On ne peut voir que ses propres commandes.
+Placing an order turns the cart of the logged-in user into a `PENDING` order, then empties the cart. A user can only see their own orders.
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| POST | /api/orders | Passer commande avec le contenu de mon panier (sans corps) | 201, 400, 401, 409 |
-| GET | /api/orders | Historique de mes commandes (paginé) | 200, 401 |
-| GET | /api/orders/{id} | Voir une de mes commandes | 200, 401, 404 |
+| POST | /api/orders | Place an order with the content of my cart (no body) | 201, 400, 401, 409 |
+| GET | /api/orders | History of my orders (paged) | 200, 401 |
+| GET | /api/orders/{id} | One of my orders | 200, 401, 404 |
 
-`GET /api/orders` renvoie uniquement mes commandes, les plus récentes d'abord, 10 par page (`?page=0&size=10`, `sort` modifiable comme pour les produits). Chaque élément de `content` a le même format qu'une commande ci-dessous.
+`GET /api/orders` only returns my orders, most recent first, 10 per page (`?page=0&size=10`, `sort` can be changed as for products). Each item of `content` has the same format as an order below.
 
-`POST` renvoie **400** si le panier est vide, **409** si un produit n'a plus assez de stock, et **201** avec l'en-tête `Location: /api/orders/{id}` sinon.
-La commande retire les unités du stock. Le stock est vérifié à nouveau à ce moment, car il a pu baisser depuis l'ajout au panier : si un seul produit manque, rien n'est modifié (ni stock, ni panier).
-Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'existe pas.
+`POST` returns **400** if the cart is empty, **409** if a product does not have enough stock left, and **201** with the header `Location: /api/orders/{id}` otherwise.
+The order takes the units out of the stock. The stock is checked again at that moment, since it may have dropped since the product was added to the cart: if a single product is short, nothing changes (neither the stock nor the cart).
+Another user's order returns **404**, like an order that does not exist.
 
 ```json
 {
@@ -449,36 +466,36 @@ Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'ex
 }
 ```
 
-Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (dans le monolithe, `productId` devient `null` si le produit est supprimé ; dans order-service, il est gardé). Un produit supprimé disparaît du panier et n'est pas commandé.
-Deux commandes passées au même moment sont traitées l'une après l'autre : les produits sont verrouillés (`SELECT ... FOR UPDATE`, dans product-service pour order-service) le temps de retirer le stock. La seconde voit le stock laissé par la première : deux clients ne peuvent pas prendre la même dernière unité (**409** pour le second). Un double clic sur « Commander » crée une seule commande : le panier est verrouillé, la seconde requête le trouve déjà vidé (**400**). Via order-service, **503** si product-service ne répond pas : rien n'est modifié.
+The name and price are copied when the order is placed: changing or deleting the product later does not change the order (in the monolith, `productId` becomes `null` if the product is deleted; in order-service, it is kept). A deleted product disappears from the cart and is not ordered.
+Two orders placed at the same moment are handled one after the other: the products are locked (`SELECT ... FOR UPDATE`, in product-service for order-service) while the stock is taken. The second one sees the stock left by the first: two customers cannot take the same last unit (**409** for the second). A double click on "Order" creates a single order: the cart is locked, and the second request finds it already empty (**400**). Through order-service, **503** if product-service does not answer: nothing changes.
 
 ### Payments
 
-Servis par [payment-service](#microservices) via la gateway (Swagger UI sur `http://localhost:8084/swagger-ui.html`). Payer une de mes commandes `PENDING` débite son total ; un paiement accepté la passe `PAID`. Le paiement est **simulé** : aucune banque n'est appelée.
+Served by [payment-service](#microservices) through the gateway (Swagger UI on `http://localhost:8084/swagger-ui.html`). Paying one of my `PENDING` orders charges its total; an accepted payment sets it to `PAID`. The payment is **simulated**: no bank is called.
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| POST | /api/payments | Payer une de mes commandes | 201, 400, 401, 404, 409 |
-| GET | /api/payments | Historique de mes paiements, refusés compris (paginé) | 200, 401 |
-| GET | /api/payments/{id} | Voir un de mes paiements | 200, 401, 404 |
+| POST | /api/payments | Pay one of my orders | 201, 400, 401, 404, 409 |
+| GET | /api/payments | History of my payments, declined ones included (paged) | 200, 401 |
+| GET | /api/payments/{id} | One of my payments | 200, 401, 404 |
 
-Corps de `POST` : `{ "orderId": 1, "cardNumber": "4242424242424242" }` (16 chiffres). Le montant n'est pas envoyé : c'est le total enregistré avec la commande.
+Body of `POST`: `{ "orderId": 1, "cardNumber": "4242424242424242" }` (16 digits). The amount is not sent: it is the total saved with the order.
 
-| Carte | Résultat |
+| Card | Result |
 |---|---|
-| Se termine par `0002` (ex. `4000000000000002`) | **201**, `status: DECLINED` : la commande reste `PENDING`, un autre essai est possible |
-| Toute autre carte | **201**, `status: SUCCEEDED` : la commande passe `PAID` |
+| Ends with `0002` (e.g. `4000000000000002`) | **201**, `status: DECLINED`: the order stays `PENDING`, another attempt is possible |
+| Any other card | **201**, `status: SUCCEEDED`: the order becomes `PAID` |
 
 ```json
 { "id": 1, "orderId": 1, "amount": 1999.98, "status": "SUCCEEDED", "cardLast4": "4242", "createdAt": "2026-11-03T10:00:00Z" }
 ```
 
-Seuls les 4 derniers chiffres de la carte sont gardés. Une commande déjà `PAID` ou `CANCELLED` renvoie **409**, une commande d'un autre utilisateur **404**.
-Les paiements d'une même commande passent l'un après l'autre (verrou PostgreSQL `pg_advisory_xact_lock` sur l'id de la commande) : un double clic sur « Payer » ne débite qu'une fois, la seconde requête trouve la commande déjà `PAID` (**409**). **503** si order-service ne répond pas : rien n'est débité.
+Only the last 4 digits of the card are kept. An order already `PAID` or `CANCELLED` returns **409**, another user's order **404**.
+Payments of the same order go one after the other (PostgreSQL lock `pg_advisory_xact_lock` on the order id): a double click on "Pay" charges only once, the second request finds the order already `PAID` (**409**). **503** if order-service does not answer: nothing is charged.
 
-### Erreurs
+### Errors
 
-Toutes les erreurs ont le même format JSON, qu'elles viennent d'un service, de Spring MVC ou de Spring Security :
+Every error has the same JSON format, whether it comes from a service, from Spring MVC or from Spring Security. The messages themselves are in French, as returned by the API:
 
 ```json
 {
@@ -492,78 +509,100 @@ Toutes les erreurs ont le même format JSON, qu'elles viennent d'un service, de 
 }
 ```
 
-`errors` détaille les champs invalides d'un `@Valid` ; il est vide pour les autres erreurs.
+`errors` lists the invalid fields of a `@Valid` body; it is empty for the other errors.
 
-| Code | Cas |
+| Code | When |
 |---|---|
-| 400 | Champ invalide, JSON malformé, mauvais type dans l'URL (`/api/products/abc`), paramètre obligatoire manquant, tri inconnu (`?sort=foo`), règle métier (panier vide...) |
-| 401 / 403 | Token absent ou invalide / rôle insuffisant |
-| 404 | Ressource introuvable ou URL inconnue |
-| 405 | Méthode non supportée (en-tête `Allow` avec les méthodes possibles) |
-| 409 | Conflit : nom déjà pris, stock insuffisant, contrainte de base de données |
-| 415 | `Content-Type` non supporté (le JSON est attendu) |
-| 500 | Erreur inattendue |
-| 503 | Service appelé arrêté, non enregistré dans Eureka, en erreur, trop lent, ou circuit breaker ouvert. Sauf `GET /api/cart` via order-service : **200** avec `productsUpToDate: false` |
-| 504 | La gateway n'a pas reçu la réponse du service en 15 s |
+| 400 | Invalid field, malformed JSON, wrong type in the URL (`/api/products/abc`), missing required parameter, unknown sort (`?sort=foo`), business rule (empty cart...) |
+| 401 / 403 | Missing or invalid token / role not allowed |
+| 404 | Resource not found or unknown URL |
+| 405 | Method not supported (`Allow` header with the possible methods) |
+| 409 | Conflict: name already taken, not enough stock, database constraint |
+| 415 | `Content-Type` not supported (JSON is expected) |
+| 500 | Unexpected error |
+| 503 | Called service stopped, not registered in Eureka, failing, too slow, or its circuit breaker open. Except `GET /api/cart` through order-service: **200** with `productsUpToDate: false` |
+| 504 | The gateway did not get the answer of the service within 15 s |
 
-Les détails internes (message SQL, stack trace) ne sont jamais renvoyés au client : ils sont écrits dans les logs de l'application.
+Internal details (SQL message, stack trace) are never sent to the client: they go to the application logs.
 
-### Santé (Actuator)
+### Health (Actuator)
 
-| Méthode | URL | Accès | Description | Code |
+| Method | URL | Access | Description | Code |
 |---|---|---|---|---|
-| GET | `/actuator/health` | Public | État global : `{"status":"UP"}` ; avec un token ADMIN, détail de chaque composant (`db`, `diskSpace`...) | 200 / 503 |
-| GET | `/actuator/health/liveness` | Public | Le processus fonctionne. Ne vérifie **jamais** la base : une panne de PostgreSQL ne doit pas faire redémarrer l'application | 200 / 503 |
-| GET | `/actuator/health/readiness` | Public | L'application peut servir des requêtes : vérifie la base | 200 / 503 |
-| GET | `/actuator/info` | Public | Nom, version et date du build, version de Java | 200 |
-| GET | `/actuator/metrics` | ADMIN | Noms des métriques (requêtes HTTP, JVM, pool de connexions...) | 200 / 401 / 403 |
-| GET | `/actuator/metrics/{nom}` | ADMIN | Valeur d'une métrique, filtrable par tag : `?tag=status:200` | 200 / 401 / 403 / 404 |
+| GET | `/actuator/health` | Public | Overall status: `{"status":"UP"}`; with an ADMIN token, the details of each component (`db`, `diskSpace`...) | 200 / 503 |
+| GET | `/actuator/health/liveness` | Public | The process is running. **Never** checks the database: a PostgreSQL outage must not restart the application | 200 / 503 |
+| GET | `/actuator/health/readiness` | Public | The application can serve requests: checks the database | 200 / 503 |
+| GET | `/actuator/info` | Public | Name, version and date of the build, Java version | 200 |
+| GET | `/actuator/metrics` | ADMIN | Names of the metrics (HTTP requests, JVM, connection pool...) | 200 / 401 / 403 |
+| GET | `/actuator/metrics/{name}` | ADMIN | Value of a metric, filtered by tag: `?tag=status:200` | 200 / 401 / 403 / 404 |
 
-Seuls `health`, `info` et `metrics` sont exposés en HTTP : `env`, `beans`, `heapdump`... restent fermés (**404**, même pour un ADMIN). Toute autre URL `/actuator/**` que `health` et `info` demande le rôle ADMIN (**401** sans token, **403** avec un token USER).
+Only `health`, `info` and `metrics` are exposed over HTTP: `env`, `beans`, `heapdump`... stay closed (**404**, even for an ADMIN). Any `/actuator/**` URL other than `health` and `info` needs the ADMIN role (**401** without a token, **403** with a USER token).
 
-L'image Docker a un `HEALTHCHECK` sur la readiness : `docker ps` affiche `healthy` quand l'application répond et voit la base, `unhealthy` si PostgreSQL tombe.
+The Docker image has a `HEALTHCHECK` on the readiness probe: `docker ps` shows `healthy` when the application answers and sees the database, `unhealthy` if PostgreSQL goes down.
 
-#### Métriques
+#### Metrics
 
-Le monolithe et les quatre services publient leurs métriques avec Micrometer, sur `/actuator/metrics`, pour un token ADMIN. Chaque métrique porte le tag `application` (`order-service`, `ecommerce-monolith`...) : une fois les métriques de tous les services réunies au même endroit, on sait d'où vient chacune.
+The monolith and the four services publish their metrics with Micrometer, on `/actuator/metrics`, for an ADMIN token. Each metric carries the `application` tag (`order-service`, `ecommerce-monolith`...): once the metrics of every service are gathered in one place, the origin of each one is known.
 
-| Métrique | Où | Ce qu'elle mesure |
+| Metric | Where | What it measures |
 |---|---|---|
-| `http.server.requests` | Partout | Requêtes reçues : nombre, durée, par URL, méthode et code de réponse |
-| `jvm.memory.used`, `jvm.threads.live`, `process.cpu.usage`... | Partout | Mémoire, threads et CPU de la JVM |
-| `hikaricp.connections.active`, `hikaricp.connections.pending` | Partout | Connexions à PostgreSQL utilisées, et requêtes qui attendent une connexion libre |
-| `resilience4j.circuitbreaker.state`, `resilience4j.retry.calls` | order-service, payment-service | État du circuit breaker (tag `state`) et appels réessayés ou non, pour chaque client Feign |
-| `orders.placed` | order-service | Commandes passées : stock réservé et commande enregistrée |
-| `cart.fallback` | order-service | Paniers affichés avec les derniers produits connus parce que product-service était indisponible |
-| `payments` | payment-service | Paiements enregistrés, avec le tag `status` (`succeeded` / `declined`) |
+| `http.server.requests` | Everywhere | Requests received: count and duration, per URL, method and status |
+| `jvm.memory.used`, `jvm.threads.live`, `process.cpu.usage`... | Everywhere | Memory, threads and CPU of the JVM |
+| `hikaricp.connections.active`, `hikaricp.connections.pending` | Everywhere | PostgreSQL connections in use, and requests waiting for a free connection |
+| `resilience4j.circuitbreaker.state`, `resilience4j.retry.calls` | order-service, payment-service | State of the circuit breaker (`state` tag) and calls retried or not, for each Feign client |
+| `orders.placed` | order-service | Orders placed: stock reserved and order saved |
+| `cart.fallback` | order-service | Carts shown with the last known products because product-service was unavailable |
+| `payments` | payment-service | Payments saved, with the `status` tag (`succeeded` / `declined`) |
 
-Les compteurs métier existent dès le démarrage, à 0 : un compteur absent voudrait dire « pas mesuré », pas « rien ne s'est passé ».
+The business counters exist from start-up, at 0: a missing counter would mean "not measured", not "nothing happened".
 
 ```bash
-# Avec un token ADMIN (POST /api/auth/login) :
+# With an ADMIN token (POST /api/auth/login):
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8083/actuator/metrics/orders.placed
 curl -H "Authorization: Bearer $TOKEN" "http://localhost:8084/actuator/metrics/payments?tag=status:declined"
 ```
 
-La gateway et Eureka ne vérifient aucun token : leurs métriques seraient publiques, elles ne sont donc pas exposées (**404**). La gateway ne route pas `/actuator/**` : depuis `:8090`, les métriques des services restent inaccessibles.
+The gateway and Eureka check no token: their metrics would be public, so they are not exposed (**404**). The gateway does not route `/actuator/**`: from `:8090`, the metrics of the services stay out of reach.
 
-### Categories
-| Méthode | URL | Description | Code |
-|---|---|---|---|
-| GET | /api/categories | Liste des catégories | 200 |
-| GET | /api/categories/{id} | Détail d'une catégorie | 200 / 404 |
-| POST | /api/categories | Créer | 201 / 409 |
-| PUT | /api/categories/{id} | Modifier | 200 / 404 |
-| DELETE | /api/categories/{id} | Supprimer | 204 / 409 |
+## Frontend
 
-### Products
-| Méthode | URL | Description | Code |
-|---|---|---|---|
-| GET | /api/products | Liste des produits | 200 |
-| GET | /api/products/{id} | Détail d'un produit | 200 / 404 |
-| POST | /api/products | Créer | 201 / 400 / 404 |
-| PUT | /api/products/{id} | Modifier | 200 / 400 / 404 |
-| DELETE | /api/products/{id} | Supprimer | 204 / 404 |
+A small web shop in [frontend/](frontend/), on top of the gateway: React 19 and TypeScript, built by Vite, no UI library. It only calls `/api/**` on its own origin, so the gateway needs no CORS setting.
+
+| Page | Path | Who |
+|---|---|---|
+| Catalog: search by name, filter by category, sort, pages (kept in the URL) | `/` | everyone |
+| Product, add to cart (up to the stock left) | `/products/:id` | everyone, cart once logged in |
+| Login, register (then logged in at once) | `/login`, `/register` | visitors |
+| Cart: quantities, remove, empty, place the order | `/cart` | logged in |
+| Order history, and one order with its payment form while `PENDING` | `/orders`, `/orders/:id` | logged in |
+| Payment history, declined attempts included | `/payments` | logged in |
+| Categories and products: create, edit, delete | `/admin` | `ADMIN` |
+
+The JWT of auth-service is kept in `localStorage` and sent as `Authorization: Bearer` with each request. The app only reads its claims (email, role, expiry date) to show the right links; the services still check the signature and the role on every request. The user is logged out at the expiry date of the token, or as soon as a request sent with it gets a 401. The messages of the services (`ErrorResponse`) are shown as they come, under the right field for a 400. When product-service is down, the cart says that its prices are the last known ones and the order button waits for it to come back.
+
+Payments are simulated by payment-service: a card number ending in `0002` is declined, any other one of 16 digits is accepted (`4242 4242 4242 4242`). The first `ADMIN` account comes from `ADMIN_EMAIL` and `ADMIN_PASSWORD` in `infra/.env`.
+
+### Run it in development
+
+The stack must be running (at least the gateway on `:8090`, see [Run with Docker](#run-with-docker)). Node.js 22.12 or later:
+
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:5173, /api/** forwarded to http://localhost:8090
+```
+
+Pages reload on each save. `API_URL=https://shop.example.com npm run dev` points the dev server to another gateway.
+
+| Command | What it does |
+|---|---|
+| `npm test` | Vitest unit tests (JWT reading, fetch client, query strings, formatting) |
+| `npm run typecheck` | TypeScript check, strict mode |
+| `npm run build` | Type check, then the static files in `dist/` |
+
+### In a container
+
+[frontend/Dockerfile](frontend/Dockerfile) builds the app with Node.js, then keeps only the static files and nginx (unprivileged image: never root, port 8080, about 26 MB). [frontend/nginx/default.conf.template](frontend/nginx/default.conf.template) answers `index.html` for every route of the app (a reload on `/orders/12` works), lets the browser keep the hashed assets for a year, and forwards `/api/**` to `API_GATEWAY_URL` (`http://api-gateway:8090` by default), looking up the address of the gateway again every 10 s so that recreating the gateway does not break it. On the server, Caddy sends `/api/**` to the gateway itself and only the pages to this container.
 
 ## Database schema
 
@@ -633,11 +672,11 @@ erDiagram
     }
 ```
 
-Ce schéma est celui du monolithe (base `ecommerce`). Les microservices reprennent ces tables, chacun dans sa base : `users` dans `auth_db`, `categories` et `products` dans `product_db`, `carts`, `cart_items`, `orders` et `order_items` dans `order_db`, `payments` dans `payment_db`. Entre deux bases il n'y a pas de clé étrangère : `user_id` devient `user_email`, et `product_id` / `order_id` sont de simples colonnes.
+This is the schema of the monolith (database `ecommerce`). The microservices use the same tables, each in its own database: `users` in `auth_db`, `categories` and `products` in `product_db`, `carts`, `cart_items`, `orders` and `order_items` in `order_db`, `payments` in `payment_db`. There is no foreign key between two databases: `user_id` becomes `user_email`, and `product_id` / `order_id` are plain columns.
 
-Une commande garde une copie du nom et du prix de chaque produit au moment de l'achat : elle ne change pas si le produit est modifié ensuite.
-Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON DELETE SET NULL`) et la ligne reste dans l'historique.
-`payments` garde chaque tentative de paiement (acceptée ou refusée) ; elle est créée par payment-service, qui passe aussi `orders.status` à `PAID`.
+An order keeps a copy of the name and price of each product at purchase time: it does not change if the product is updated later.
+If an ADMIN deletes a product, `order_items.product_id` becomes `NULL` (`ON DELETE SET NULL`) and the line stays in the history.
+`payments` keeps each payment attempt (accepted or declined); it is created by payment-service, which also sets `orders.status` to `PAID`.
 
 ## Project structure
 
@@ -662,12 +701,19 @@ Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON D
 │   ├── order-service/      cart and orders of the logged-in user, stock reserved in product-service
 │   ├── payment-service/    simulated card payments, sets the order to PAID
 │   └── api-gateway/        single entry point, routes to the services and the monolith
+├── frontend/        React + TypeScript web shop (Vite), with its Dockerfile and nginx config
+│   └── src/
+│       ├── api/         fetch client (JWT, ErrorResponse → ApiError), one function per endpoint, JSON types
+│       ├── auth/        session read from the JWT, kept in localStorage
+│       ├── cart/        cart count shown in the header
+│       ├── pages/       catalog, product, cart, orders, payments, login, register, admin
+│       └── admin/       ADMIN forms for categories and products
 ├── infra/           Docker Compose file (PostgreSQL; app profile: monolith and microservices), .env.example,
 │                    docker-compose.ghcr.yml (same stack from the images published on ghcr.io),
 │                    docker-compose.prod.yml and deploy.sh (the server)
 │   ├── caddy/       Caddyfile: HTTPS entry point of the server
 │   └── postgres/    init-databases.sql: one database per service
-├── docs/            HTTP request examples, architecture decisions (adr/), deployment guide
+├── docs/            architecture overview, architecture decisions (adr/), deployment guide, HTTP request examples
 └── .github/         CI and deploy workflows (workflows/), issue and pull request templates
 ```
 
@@ -682,8 +728,8 @@ Controllers only ever receive and return DTOs, never entities. Each feature has 
 | 1 | Monolith CRUD (products and categories) | Done |
 | 2 | Spring Security, JWT, roles (USER / ADMIN) | Done |
 | 3 | Cart, orders, stock management | Done |
-| 4 | Tests, Docker, Actuator | In progress |
-| 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | In progress |
+| 4 | Tests, Docker, Actuator | Done |
+| 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | Done |
 | 6 | OpenFeign, Resilience4j, advanced Docker Compose | Done |
 | 7 | CI/CD with GitHub Actions | Done |
 | 8 | Deployment and frontend (bonus) | In progress |

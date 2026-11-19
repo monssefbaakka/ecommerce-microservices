@@ -1,0 +1,54 @@
+# Read by the entrypoint of the nginx image at each start: ${...} is replaced by the environment variable of
+# that name (only the ones that exist, so $uri and the other nginx variables are left alone), then written to
+# /etc/nginx/conf.d/default.conf
+server {
+    # Port above 1024: the unprivileged image runs as the "nginx" user, which cannot bind 80
+    listen 8080;
+    server_name _;
+    root /usr/share/nginx/html;
+
+    # Sent with every answer of this server, and only set here: an add_header inside a location would drop them
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-Frame-Options "DENY" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    gzip on;
+    gzip_types text/css application/javascript application/json image/svg+xml;
+
+    # The DNS servers of the container (Docker's own, 127.0.0.11, on a Compose network), found by the
+    # entrypoint (NGINX_ENTRYPOINT_LOCAL_RESOLVERS=1). Through a variable, the gateway's address is looked up
+    # again every 10 s instead of once at startup: it changes each time its container is recreated, and nginx
+    # starts even while the gateway is not there yet
+    resolver ${NGINX_LOCAL_RESOLVERS} valid=10s ipv6=off;
+    set $api_gateway ${API_GATEWAY_URL};
+
+    # The API, on the same origin as the pages: no CORS, like the Vite dev server. In production Caddy sends
+    # /api/** to the gateway itself and never reaches this block
+    location /api/ {
+        proxy_pass $api_gateway;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+
+    # Built by Vite with a hash of their content in the name (index-D_NG4ykK.js): a new build has new names,
+    # so the browser may keep these for a year
+    location /assets/ {
+        expires 1y;
+        try_files $uri =404;
+    }
+
+    # The routes of the app (/cart, /orders/12...) are not files: index.html for all of them, and React Router
+    # shows the page. "expires epoch" (no-cache): index.html is checked at each visit, it names the new assets
+    location / {
+        expires epoch;
+        try_files $uri /index.html;
+    }
+
+    # HEALTHCHECK of the Dockerfile: nginx answers, without logging every probe
+    location = /healthz {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+}

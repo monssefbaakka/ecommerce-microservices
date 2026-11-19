@@ -42,3 +42,7 @@ services:
   api-gateway:
     <<: *ghcr-image
     image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-api-gateway:${IMAGE_TAG:-latest}
+
+  frontend:
+    <<: *ghcr-image
+    image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-frontend:${IMAGE_TAG:-latest}

@@ -128,10 +128,61 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  frontend:
+    name: Build (frontend)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Set up Node.js 24
+        uses: actions/setup-node@v5
+        with:
+          node-version: "24"
+          # ~/.npm restored between runs, keyed on package-lock.json: the packages are downloaded again
+          # only when it changes
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # Exactly the versions of package-lock.json; fails if it does not match package.json
+      - name: Install the dependencies
+        run: npm ci --no-audit --no-fund
+
+      # Vitest: the JWT reading, the fetch client, the query strings and the formatting
+      - name: Run the unit tests
+        run: npm test
+
+      # tsc --noEmit (strict type check of the whole app), then the Vite build into dist/
+      - name: Type check and build
+        run: npm run build
+
+      - name: Write the job summary
+        run: |
+          {
+            echo "### frontend"
+            echo
+            echo "| File | Size | Gzipped |"
+            echo "|---|---|---|"
+            for file in dist/index.html dist/assets/*; do
+              echo "| \`${file#dist/}\` | $(wc -c < "$file") B | $(gzip -c "$file" | wc -c) B |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # The static files as served by nginx in the image, kept with the run
+      - name: Upload the build
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-dist
+          path: frontend/dist/
+          retention-days: 7
+          if-no-files-found: error
+
   docker:
     name: Docker image (${{ matrix.name }})
     # Only once every project is built and tested: an image is never made from code that fails its tests
-    needs: build
+    needs: [build, frontend]
     runs-on: ubuntu-latest
     # Only this job may write to GitHub Container Registry (ghcr.io), with the GITHUB_TOKEN of the run:
     # no personal token or secret to create. The other jobs keep the read-only token
@@ -141,7 +192,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Same projects as the build job. "name" also names the image, like in infra/docker-compose.yml
+        # Same projects as the build and frontend jobs. "name" also names the image, like in
+        # infra/docker-compose.yml
         include:
           - { name: monolith, path: monolith }
           - { name: discovery-server, path: services/discovery-server }
@@ -150,6 +202,7 @@ jobs:
           - { name: order-service, path: services/order-service }
           - { name: payment-service, path: services/payment-service }
           - { name: api-gateway, path: services/api-gateway }
+          - { name: frontend, path: frontend }
     steps:
       - uses: actions/checkout@v5
 
@@ -193,7 +246,8 @@ jobs:
         uses: docker/setup-buildx-action@v3
 
       # The project's own multi-stage Dockerfile: it builds the jar again from the sources (tests
-      # skipped, they ran in the build job) and keeps only the JRE and the Spring Boot layers
+      # skipped, they ran in the build job) and keeps only the JRE and the Spring Boot layers. For the
+      # frontend: the Vite build again, and only nginx with the static files
       - name: Build the image
         uses: docker/build-push-action@v6
         env:

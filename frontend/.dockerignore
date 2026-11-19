@@ -1,0 +1,11 @@
+# Only package.json, package-lock.json, the config files and the sources are needed to build the image.
+# node_modules is installed again inside the image: the one of a Windows or macOS machine would not run there
+node_modules/
+dist/
+coverage/
+*.log
+.idea/
+.vscode/
+.env
+Dockerfile
+.dockerignore
