@@ -9,7 +9,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD, with a small React web shop on top.
 
-> **Status:** Phases 1 to 3 completed (catalog, JWT security, cart and orders). Phase 4 in progress: tests, Docker image and health checks are done. Phase 5 in progress: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on two networks (PostgreSQL only reachable by the services that own a database), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS, and a React [frontend](#frontend) (catalog, cart, orders, payments, catalog admin) is served next to the API. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 done (catalog, JWT security, cart and orders). Phase 4 done: unit and integration tests, Docker image and health checks. Phase 5 done: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on three networks (PostgreSQL only reachable by the services that own a database, the public side only by the gateway), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS, and a React [frontend](#frontend) (catalog, cart, orders, payments, catalog admin) is served next to the API. See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -736,8 +736,8 @@ Controllers only ever receive and return DTOs, never entities. Each feature has 
 | 1 | Monolith CRUD (products and categories) | Done |
 | 2 | Spring Security, JWT, roles (USER / ADMIN) | Done |
 | 3 | Cart, orders, stock management | Done |
-| 4 | Tests, Docker, Actuator | In progress |
-| 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | In progress |
+| 4 | Tests, Docker, Actuator | Done |
+| 5 | Split into microservices (auth, product, order, payment, gateway, Eureka) | Done |
 | 6 | OpenFeign, Resilience4j, advanced Docker Compose | Done |
 | 7 | CI/CD with GitHub Actions | Done |
 | 8 | Deployment and frontend (bonus) | In progress |
