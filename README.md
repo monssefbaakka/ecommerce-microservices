@@ -363,46 +363,46 @@ In Swagger UI, click **Authorize** and paste the token (without `Bearer `) to ca
 
 ### Categories
 
-> Via la gateway (port 8090), les catégories et les produits sont servis par [product-service](#microservices), avec les mêmes URLs, règles, rôles et codes que le monolithe. Son Swagger UI est sur `http://localhost:8082/swagger-ui.html`.
+> Through the gateway (port 8090), categories and products are served by [product-service](#microservices), with the same URLs, rules, roles and codes as the monolith. Its Swagger UI is on `http://localhost:8082/swagger-ui.html`.
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| GET | /api/categories | Liste des catégories | 200 |
-| GET | /api/categories/{id} | Détail d'une catégorie | 200, 404 |
-| POST | /api/categories | Créer une catégorie | 201, 400, 409 |
-| PUT | /api/categories/{id} | Modifier une catégorie | 200, 404, 409 |
-| DELETE | /api/categories/{id} | Supprimer une catégorie | 204, 404, 409 |
+| GET | /api/categories | List the categories | 200 |
+| GET | /api/categories/{id} | One category | 200, 404 |
+| POST | /api/categories | Create a category | 201, 400, 409 |
+| PUT | /api/categories/{id} | Update a category | 200, 404, 409 |
+| DELETE | /api/categories/{id} | Delete a category | 204, 404, 409 |
 
 ### Products
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| GET | /api/products | Liste paginée, avec recherche et filtre | 200 |
-| GET | /api/products/{id} | Détail d'un produit | 200, 404 |
-| POST | /api/products | Créer un produit | 201, 400, 404 |
-| PUT | /api/products/{id} | Modifier un produit | 200, 400, 404 |
-| DELETE | /api/products/{id} | Supprimer un produit | 204, 404 |
+| GET | /api/products | Paged list, with search and filter | 200 |
+| GET | /api/products/{id} | One product | 200, 404 |
+| POST | /api/products | Create a product | 201, 400, 404 |
+| PUT | /api/products/{id} | Update a product | 200, 400, 404 |
+| DELETE | /api/products/{id} | Delete a product | 204, 404 |
 
-Corps de `POST` et `PUT` :
+Body of `POST` and `PUT`:
 
 ```json
 { "name": "iPhone 15", "description": "128 GB", "price": 999.99, "categoryId": 1, "stock": 25 }
 ```
 
-`stock` est le nombre d'unités disponibles. Il est obligatoire et ne peut pas être négatif (400 sinon). Il est renvoyé dans chaque produit.
-Seul un ADMIN le modifie, avec `PUT`. Passer commande le diminue automatiquement.
+`stock` is the number of units available. It is required and cannot be negative (400 otherwise). It is returned with each product.
+Only an ADMIN changes it, with `PUT`. Placing an order lowers it automatically.
 
-#### Paramètres de `GET /api/products`
+#### Parameters of `GET /api/products`
 
-| Paramètre | Type | Description | Défaut |
+| Parameter | Type | Description | Default |
 |---|---|---|---|
-| name | string | Recherche partielle sur le nom (insensible à la casse) | - |
-| categoryId | number | Filtre par catégorie | - |
-| page | number | Numéro de page (commence à 0) | 0 |
-| size | number | Nombre d'éléments par page | 10 |
-| sort | string | Tri, par exemple `price,desc` | id |
+| name | string | Partial match on the name (case-insensitive) | - |
+| categoryId | number | Filter by category | - |
+| page | number | Page number (starts at 0) | 0 |
+| size | number | Items per page | 10 |
+| sort | string | Sort, for example `price,desc` | id |
 
-Exemple :
+Example:
 
     GET /api/products?name=phone&categoryId=1&page=0&size=5&sort=price,desc
 
