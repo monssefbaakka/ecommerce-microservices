@@ -168,3 +168,36 @@ What can go wrong on the way, and what the user gets:
 
 The same `JWT_SECRET` must be set in auth-service, product-service, order-service, payment-service and the
 monolith: a token signed by one is accepted by all of them.
+
+## From a commit to the server
+
+```mermaid
+flowchart LR
+    pr["Pull request"] --> ci
+    push["Push to main"] --> ci
+    tag["Tag v1.2.0"] --> ci
+
+    subgraph ci["CI workflow"]
+        build["Build x7<br/>mvnw verify, Testcontainers ITs, JaCoCo"]
+        fe["Build frontend<br/>Vitest, tsc, Vite"]
+        compose["Validate Compose files,<br/>Caddyfile, deploy.sh"]
+        docker["Docker images x8<br/>non-root + HEALTHCHECK checked"]
+        build --> docker
+        fe --> docker
+    end
+
+    docker -- "main, tags only" --> ghcr[("ghcr.io<br/>latest, sha-&lt;commit&gt;, 1.2.0")]
+    docker -- "pull request" --> stop(["built and checked, not pushed"])
+    ghcr --> deploy["Deploy workflow<br/>after a green CI run on main"]
+    deploy -- "SSH: copy infra/, run deploy.sh sha-&lt;commit&gt;" --> server["Server<br/>pull, wait until healthy,<br/>roll back if not"]
+    server --> smoke["Call the public URL"]
+```
+
+- An image is only built from code whose tests passed, and only pushed from `main` or a release tag.
+- The server always runs an exact commit (`sha-<commit>`), never `latest`. A roll back is a manual run of the
+  *Deploy* workflow with an older tag.
+- `deploy.sh` keeps the previous version and starts it again if a container of the new one never becomes
+  healthy.
+
+Details: [Continuous integration](../README.md#continuous-integration) in the README and the
+[deployment guide](deployment.md).
