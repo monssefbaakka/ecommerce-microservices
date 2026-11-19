@@ -525,44 +525,44 @@ Every error has the same JSON format, whether it comes from a service, from Spri
 
 Internal details (SQL message, stack trace) are never sent to the client: they go to the application logs.
 
-### Santé (Actuator)
+### Health (Actuator)
 
-| Méthode | URL | Accès | Description | Code |
+| Method | URL | Access | Description | Code |
 |---|---|---|---|---|
-| GET | `/actuator/health` | Public | État global : `{"status":"UP"}` ; avec un token ADMIN, détail de chaque composant (`db`, `diskSpace`...) | 200 / 503 |
-| GET | `/actuator/health/liveness` | Public | Le processus fonctionne. Ne vérifie **jamais** la base : une panne de PostgreSQL ne doit pas faire redémarrer l'application | 200 / 503 |
-| GET | `/actuator/health/readiness` | Public | L'application peut servir des requêtes : vérifie la base | 200 / 503 |
-| GET | `/actuator/info` | Public | Nom, version et date du build, version de Java | 200 |
-| GET | `/actuator/metrics` | ADMIN | Noms des métriques (requêtes HTTP, JVM, pool de connexions...) | 200 / 401 / 403 |
-| GET | `/actuator/metrics/{nom}` | ADMIN | Valeur d'une métrique, filtrable par tag : `?tag=status:200` | 200 / 401 / 403 / 404 |
+| GET | `/actuator/health` | Public | Overall status: `{"status":"UP"}`; with an ADMIN token, the details of each component (`db`, `diskSpace`...) | 200 / 503 |
+| GET | `/actuator/health/liveness` | Public | The process is running. **Never** checks the database: a PostgreSQL outage must not restart the application | 200 / 503 |
+| GET | `/actuator/health/readiness` | Public | The application can serve requests: checks the database | 200 / 503 |
+| GET | `/actuator/info` | Public | Name, version and date of the build, Java version | 200 |
+| GET | `/actuator/metrics` | ADMIN | Names of the metrics (HTTP requests, JVM, connection pool...) | 200 / 401 / 403 |
+| GET | `/actuator/metrics/{name}` | ADMIN | Value of a metric, filtered by tag: `?tag=status:200` | 200 / 401 / 403 / 404 |
 
-Seuls `health`, `info` et `metrics` sont exposés en HTTP : `env`, `beans`, `heapdump`... restent fermés (**404**, même pour un ADMIN). Toute autre URL `/actuator/**` que `health` et `info` demande le rôle ADMIN (**401** sans token, **403** avec un token USER).
+Only `health`, `info` and `metrics` are exposed over HTTP: `env`, `beans`, `heapdump`... stay closed (**404**, even for an ADMIN). Any `/actuator/**` URL other than `health` and `info` needs the ADMIN role (**401** without a token, **403** with a USER token).
 
-L'image Docker a un `HEALTHCHECK` sur la readiness : `docker ps` affiche `healthy` quand l'application répond et voit la base, `unhealthy` si PostgreSQL tombe.
+The Docker image has a `HEALTHCHECK` on the readiness probe: `docker ps` shows `healthy` when the application answers and sees the database, `unhealthy` if PostgreSQL goes down.
 
-#### Métriques
+#### Metrics
 
-Le monolithe et les quatre services publient leurs métriques avec Micrometer, sur `/actuator/metrics`, pour un token ADMIN. Chaque métrique porte le tag `application` (`order-service`, `ecommerce-monolith`...) : une fois les métriques de tous les services réunies au même endroit, on sait d'où vient chacune.
+The monolith and the four services publish their metrics with Micrometer, on `/actuator/metrics`, for an ADMIN token. Each metric carries the `application` tag (`order-service`, `ecommerce-monolith`...): once the metrics of every service are gathered in one place, the origin of each one is known.
 
-| Métrique | Où | Ce qu'elle mesure |
+| Metric | Where | What it measures |
 |---|---|---|
-| `http.server.requests` | Partout | Requêtes reçues : nombre, durée, par URL, méthode et code de réponse |
-| `jvm.memory.used`, `jvm.threads.live`, `process.cpu.usage`... | Partout | Mémoire, threads et CPU de la JVM |
-| `hikaricp.connections.active`, `hikaricp.connections.pending` | Partout | Connexions à PostgreSQL utilisées, et requêtes qui attendent une connexion libre |
-| `resilience4j.circuitbreaker.state`, `resilience4j.retry.calls` | order-service, payment-service | État du circuit breaker (tag `state`) et appels réessayés ou non, pour chaque client Feign |
-| `orders.placed` | order-service | Commandes passées : stock réservé et commande enregistrée |
-| `cart.fallback` | order-service | Paniers affichés avec les derniers produits connus parce que product-service était indisponible |
-| `payments` | payment-service | Paiements enregistrés, avec le tag `status` (`succeeded` / `declined`) |
+| `http.server.requests` | Everywhere | Requests received: count and duration, per URL, method and status |
+| `jvm.memory.used`, `jvm.threads.live`, `process.cpu.usage`... | Everywhere | Memory, threads and CPU of the JVM |
+| `hikaricp.connections.active`, `hikaricp.connections.pending` | Everywhere | PostgreSQL connections in use, and requests waiting for a free connection |
+| `resilience4j.circuitbreaker.state`, `resilience4j.retry.calls` | order-service, payment-service | State of the circuit breaker (`state` tag) and calls retried or not, for each Feign client |
+| `orders.placed` | order-service | Orders placed: stock reserved and order saved |
+| `cart.fallback` | order-service | Carts shown with the last known products because product-service was unavailable |
+| `payments` | payment-service | Payments saved, with the `status` tag (`succeeded` / `declined`) |
 
-Les compteurs métier existent dès le démarrage, à 0 : un compteur absent voudrait dire « pas mesuré », pas « rien ne s'est passé ».
+The business counters exist from start-up, at 0: a missing counter would mean "not measured", not "nothing happened".
 
 ```bash
-# Avec un token ADMIN (POST /api/auth/login) :
+# With an ADMIN token (POST /api/auth/login):
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8083/actuator/metrics/orders.placed
 curl -H "Authorization: Bearer $TOKEN" "http://localhost:8084/actuator/metrics/payments?tag=status:declined"
 ```
 
-La gateway et Eureka ne vérifient aucun token : leurs métriques seraient publiques, elles ne sont donc pas exposées (**404**). La gateway ne route pas `/actuator/**` : depuis `:8090`, les métriques des services restent inaccessibles.
+The gateway and Eureka check no token: their metrics would be public, so they are not exposed (**404**). The gateway does not route `/actuator/**`: from `:8090`, the metrics of the services stay out of reach.
 
 ### Categories
 | Méthode | URL | Description | Code |
