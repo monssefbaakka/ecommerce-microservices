@@ -186,10 +186,10 @@ flowchart LR
         fe --> docker
     end
 
-    docker -- "main, tags only" --> ghcr[("ghcr.io<br/>latest, sha-&lt;commit&gt;, 1.2.0")]
+    docker -- "main, tags only" --> ghcr[("ghcr.io<br/>latest, sha-#lt;commit#gt;, 1.2.0")]
     docker -- "pull request" --> stop(["built and checked, not pushed"])
     ghcr --> deploy["Deploy workflow<br/>after a green CI run on main"]
-    deploy -- "SSH: copy infra/, run deploy.sh sha-&lt;commit&gt;" --> server["Server<br/>pull, wait until healthy,<br/>roll back if not"]
+    deploy -- "SSH: copy infra/, run deploy.sh sha-#lt;commit#gt;" --> server["Server<br/>pull, wait until healthy,<br/>roll back if not"]
     server --> smoke["Call the public URL"]
 ```
 
