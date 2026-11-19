@@ -672,11 +672,11 @@ erDiagram
     }
 ```
 
-Ce schéma est celui du monolithe (base `ecommerce`). Les microservices reprennent ces tables, chacun dans sa base : `users` dans `auth_db`, `categories` et `products` dans `product_db`, `carts`, `cart_items`, `orders` et `order_items` dans `order_db`, `payments` dans `payment_db`. Entre deux bases il n'y a pas de clé étrangère : `user_id` devient `user_email`, et `product_id` / `order_id` sont de simples colonnes.
+This is the schema of the monolith (database `ecommerce`). The microservices use the same tables, each in its own database: `users` in `auth_db`, `categories` and `products` in `product_db`, `carts`, `cart_items`, `orders` and `order_items` in `order_db`, `payments` in `payment_db`. There is no foreign key between two databases: `user_id` becomes `user_email`, and `product_id` / `order_id` are plain columns.
 
-Une commande garde une copie du nom et du prix de chaque produit au moment de l'achat : elle ne change pas si le produit est modifié ensuite.
-Si un ADMIN supprime un produit, `order_items.product_id` passe à `NULL` (`ON DELETE SET NULL`) et la ligne reste dans l'historique.
-`payments` garde chaque tentative de paiement (acceptée ou refusée) ; elle est créée par payment-service, qui passe aussi `orders.status` à `PAID`.
+An order keeps a copy of the name and price of each product at purchase time: it does not change if the product is updated later.
+If an ADMIN deletes a product, `order_items.product_id` becomes `NULL` (`ON DELETE SET NULL`) and the line stays in the history.
+`payments` keeps each payment attempt (accepted or declined); it is created by payment-service, which also sets `orders.status` to `PAID`.
 
 ## Project structure
 
