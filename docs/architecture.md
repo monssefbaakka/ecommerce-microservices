@@ -150,3 +150,21 @@ What can go wrong on the way, and what the user gets:
 | Service not registered in Eureka | gateway | **503** |
 | Service answers after 15 s | gateway | **504** |
 | Crash between the stock reservation and the order save, or `PAID` call lost after an accepted card | nowhere yet | Not compensated: the card is simulated. A saga or an outbox would cover it |
+
+## Security
+
+| Layer | How it is protected |
+|---|---|
+| Transport | Caddy terminates HTTPS with a Let's Encrypt certificate it renews itself; HTTP is redirected |
+| Exposure | Only Caddy publishes a port on the server; Eureka listens on the loopback, reached through an SSH tunnel |
+| Identity | auth-service hashes passwords with BCrypt and signs a JWT (HS256, `sub` = email, `role`, 1 h) |
+| Authorization | Each service checks the signature, expiry and role of the token itself, without a database call: the gateway forwards the `Authorization` header and checks nothing |
+| Roles | `USER` for every account created by `/register`; `ADMIN` only for the account created at start-up from `ADMIN_EMAIL` / `ADMIN_PASSWORD`; `SERVICE` only for tokens a service signs for its own calls |
+| Internal endpoints | `/internal/**` is not routed by the gateway and only accepts a `SERVICE` token |
+| Ownership | The email of the token picks the cart, orders and payments: another user's order answers **404**, like a missing one |
+| Secrets | `JWT_SECRET` and `POSTGRES_PASSWORD` live in `infra/.env` on the server; the production Compose file refuses to start without them. GitHub only holds the SSH key of the deploy user |
+| Containers | Every image runs as a non-root user and has a `HEALTHCHECK`; CI fails an image that does not |
+| Actuator | `health` and `info` are public, `metrics` needs an `ADMIN` token, every other endpoint is closed. The gateway and Eureka do not expose their metrics |
+
+The same `JWT_SECRET` must be set in auth-service, product-service, order-service, payment-service and the
+monolith: a token signed by one is accepted by all of them.
