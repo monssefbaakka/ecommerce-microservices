@@ -493,9 +493,9 @@ Body of `POST`: `{ "orderId": 1, "cardNumber": "4242424242424242" }` (16 digits)
 Only the last 4 digits of the card are kept. An order already `PAID` or `CANCELLED` returns **409**, another user's order **404**.
 Payments of the same order go one after the other (PostgreSQL lock `pg_advisory_xact_lock` on the order id): a double click on "Pay" charges only once, the second request finds the order already `PAID` (**409**). **503** if order-service does not answer: nothing is charged.
 
-### Erreurs
+### Errors
 
-Toutes les erreurs ont le même format JSON, qu'elles viennent d'un service, de Spring MVC ou de Spring Security :
+Every error has the same JSON format, whether it comes from a service, from Spring MVC or from Spring Security. The messages themselves are in French, as returned by the API:
 
 ```json
 {
@@ -509,21 +509,21 @@ Toutes les erreurs ont le même format JSON, qu'elles viennent d'un service, de 
 }
 ```
 
-`errors` détaille les champs invalides d'un `@Valid` ; il est vide pour les autres erreurs.
+`errors` lists the invalid fields of a `@Valid` body; it is empty for the other errors.
 
-| Code | Cas |
+| Code | When |
 |---|---|
-| 400 | Champ invalide, JSON malformé, mauvais type dans l'URL (`/api/products/abc`), paramètre obligatoire manquant, tri inconnu (`?sort=foo`), règle métier (panier vide...) |
-| 401 / 403 | Token absent ou invalide / rôle insuffisant |
-| 404 | Ressource introuvable ou URL inconnue |
-| 405 | Méthode non supportée (en-tête `Allow` avec les méthodes possibles) |
-| 409 | Conflit : nom déjà pris, stock insuffisant, contrainte de base de données |
-| 415 | `Content-Type` non supporté (le JSON est attendu) |
-| 500 | Erreur inattendue |
-| 503 | Service appelé arrêté, non enregistré dans Eureka, en erreur, trop lent, ou circuit breaker ouvert. Sauf `GET /api/cart` via order-service : **200** avec `productsUpToDate: false` |
-| 504 | La gateway n'a pas reçu la réponse du service en 15 s |
+| 400 | Invalid field, malformed JSON, wrong type in the URL (`/api/products/abc`), missing required parameter, unknown sort (`?sort=foo`), business rule (empty cart...) |
+| 401 / 403 | Missing or invalid token / role not allowed |
+| 404 | Resource not found or unknown URL |
+| 405 | Method not supported (`Allow` header with the possible methods) |
+| 409 | Conflict: name already taken, not enough stock, database constraint |
+| 415 | `Content-Type` not supported (JSON is expected) |
+| 500 | Unexpected error |
+| 503 | Called service stopped, not registered in Eureka, failing, too slow, or its circuit breaker open. Except `GET /api/cart` through order-service: **200** with `productsUpToDate: false` |
+| 504 | The gateway did not get the answer of the service within 15 s |
 
-Les détails internes (message SQL, stack trace) ne sont jamais renvoyés au client : ils sont écrits dans les logs de l'application.
+Internal details (SQL message, stack trace) are never sent to the client: they go to the application logs.
 
 ### Santé (Actuator)
 
