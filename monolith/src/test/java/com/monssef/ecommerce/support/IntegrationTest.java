@@ -1,14 +1,12 @@
 package com.monssef.ecommerce.support;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.monssef.ecommerce.user.Role;
 import com.monssef.ecommerce.user.User;
 import com.monssef.ecommerce.user.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -18,6 +16,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 
 import java.util.Map;
 
@@ -80,7 +80,7 @@ public abstract class IntegrationTest {
         MvcResult result = mockMvc.perform(json(post("/api/auth/login"), Map.of("email", email, "password", PASSWORD)))
                 .andExpect(status().isOk())
                 .andReturn();
-        return "Bearer " + body(result).get("token").asText();
+        return "Bearer " + body(result).get("token").asString();
     }
 
     protected long createCategory(String adminToken, String name) throws Exception {

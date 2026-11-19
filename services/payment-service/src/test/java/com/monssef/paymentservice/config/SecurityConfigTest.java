@@ -1,6 +1,5 @@
 package com.monssef.paymentservice.config;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.monssef.paymentservice.auth.JwtService;
 import com.monssef.paymentservice.payment.PaymentController;
 import com.monssef.paymentservice.payment.PaymentService;
@@ -13,15 +12,16 @@ import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -52,7 +52,7 @@ class SecurityConfigTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-    @MockBean
+    @MockitoBean
     private PaymentService paymentService;
 
     // --- Any valid token, whatever the role ---

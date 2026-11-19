@@ -16,17 +16,17 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Area | Technology |
 |---|---|
 | Language | Java 21 |
-| Framework | Spring Boot 3.5, Spring Web, Spring Data JPA, Bean Validation |
+| Framework | Spring Boot 4.1 (Spring Framework 7, Jackson 3, Hibernate 7), Spring Web MVC, Spring Data JPA, Bean Validation |
 | Database | PostgreSQL 16 |
 | Build | Maven (wrapper included) |
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
 | Containers | Docker, Docker Compose (health checks, three networks, memory limits, log rotation) |
-| API docs | OpenAPI 3 / Swagger UI (springdoc) |
+| API docs | OpenAPI 3 / Swagger UI (springdoc 3) |
 | Security | Spring Security, JWT (jjwt) |
-| Microservices | Spring Cloud 2025.0: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
+| Microservices | Spring Cloud 2025.1: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
 | Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info, metrics), Micrometer (business counters) |
-| Tests | JUnit 5, Mockito, MockMvc, Testcontainers, WireMock (fake services for the Feign clients), JaCoCo |
-| Resilience | Resilience4j 2.2: circuit breaker and retries around the Feign calls, last known products as fallback for the cart |
+| Tests | JUnit 5, Mockito, MockMvc, Testcontainers 2, WireMock (fake services for the Feign clients), JaCoCo |
+| Resilience | Resilience4j 2.4 (resilience4j-spring-boot4): circuit breaker and retries around the Feign calls, last known products as fallback for the cart |
 | CI | GitHub Actions: build, tests and Docker images of every project on each pull request, images published to GitHub Container Registry (ghcr.io) |
 | Frontend | React 19, TypeScript, Vite, React Router, Vitest; built into static files served by nginx |
 | Deployment | Docker Compose on a single Linux server, Caddy (HTTPS, Let's Encrypt), deployed over SSH by GitHub Actions after each green CI run on `main` |

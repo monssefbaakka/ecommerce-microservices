@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.web.reactive.server.WebTestClient;
@@ -17,6 +18,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         properties = {"eureka.client.enabled=false",
                 // Shorter than in application.yml, so the test does not wait 15 s
                 "spring.cloud.gateway.server.webflux.httpclient.response-timeout=500ms"})
+@AutoConfigureWebTestClient
 class GatewayTimeoutTest {
 
     private static final StubService PRODUCT_SERVICE = new StubService("product");

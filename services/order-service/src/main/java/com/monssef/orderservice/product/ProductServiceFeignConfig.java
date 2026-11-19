@@ -1,12 +1,12 @@
 package com.monssef.orderservice.product;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.monssef.orderservice.auth.ServiceTokenInterceptor;
 import com.monssef.orderservice.auth.ServiceTokenProvider;
 import com.monssef.orderservice.client.RemoteErrorDecoder;
 import feign.RequestInterceptor;
 import feign.codec.ErrorDecoder;
 import org.springframework.context.annotation.Bean;
+import tools.jackson.databind.ObjectMapper;
 
 /**
  * Beans of the product-service Feign client only. Not a @Configuration on purpose: picked up by the

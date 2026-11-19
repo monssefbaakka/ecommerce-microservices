@@ -3,11 +3,13 @@ package com.monssef.gateway;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webtestclient.autoconfigure.AutoConfigureWebTestClient;
 import org.springframework.test.web.reactive.server.WebTestClient;
 
 // Health checks are answered by the gateway itself, never routed to a service
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "eureka.client.enabled=false")
+@AutoConfigureWebTestClient
 class GatewayActuatorTest {
 
     @Autowired

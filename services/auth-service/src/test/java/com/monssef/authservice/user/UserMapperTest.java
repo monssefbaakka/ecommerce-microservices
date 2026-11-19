@@ -1,10 +1,9 @@
 package com.monssef.authservice.user;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.monssef.authservice.user.dto.UserDTO;
 import org.junit.jupiter.api.Test;
 import org.mapstruct.factory.Mappers;
+import tools.jackson.databind.ObjectMapper;
 
 import java.time.Instant;
 
@@ -29,7 +28,7 @@ class UserMapperTest {
     void toDto_shouldNeverExposePassword() throws Exception {
         UserDTO dto = mapper.toDto(user());
 
-        String json = new ObjectMapper().registerModule(new JavaTimeModule()).writeValueAsString(dto);
+        String json = new ObjectMapper().writeValueAsString(dto);
 
         assertThat(json).doesNotContain("password").doesNotContain("hashed");
     }

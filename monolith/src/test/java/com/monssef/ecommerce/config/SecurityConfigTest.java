@@ -9,21 +9,21 @@ import com.monssef.ecommerce.product.dto.ProductDTO;
 import com.monssef.ecommerce.product.dto.ProductRequest;
 import com.monssef.ecommerce.user.Role;
 import com.monssef.ecommerce.user.User;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.data.domain.Page;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
+import tools.jackson.databind.ObjectMapper;
 
 import java.math.BigDecimal;
 import java.time.Duration;
@@ -61,10 +61,10 @@ class SecurityConfigTest {
     @Autowired
     private JwtService jwtService;
 
-    @MockBean
+    @MockitoBean
     private ProductService productService;
 
-    @MockBean
+    @MockitoBean
     private CategoryService categoryService;
 
     // --- Public reads ---

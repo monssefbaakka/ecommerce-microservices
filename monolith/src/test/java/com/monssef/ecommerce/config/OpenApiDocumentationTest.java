@@ -8,8 +8,8 @@ import com.monssef.ecommerce.user.UserRepository;
 import jakarta.persistence.EntityManager;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -22,12 +22,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 // Full application context (controllers, services, mappers, security, springdoc) without a database:
 // the JPA auto-configuration is left out and the repositories are mocks.
-// No DataSource means no "db" health indicator, which the readiness group lists: skip that check here
+// No DataSource means no "db" health indicator, which the readiness group lists: skip that check here.
+// Spring Boot 4 package names: a name that does not exist is ignored without a word, and the test would then
+// need a PostgreSQL on localhost
 @SpringBootTest(properties = {
         "spring.autoconfigure.exclude="
-                + "org.springframework.boot.autoconfigure.jdbc.DataSourceAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.orm.jpa.HibernateJpaAutoConfiguration,"
-                + "org.springframework.boot.autoconfigure.data.jpa.JpaRepositoriesAutoConfiguration",
+                + "org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration,"
+                + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
+                + "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration",
         "management.endpoint.health.validate-group-membership=false"
 })
 @AutoConfigureMockMvc
