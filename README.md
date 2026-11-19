@@ -564,24 +564,6 @@ curl -H "Authorization: Bearer $TOKEN" "http://localhost:8084/actuator/metrics/p
 
 The gateway and Eureka check no token: their metrics would be public, so they are not exposed (**404**). The gateway does not route `/actuator/**`: from `:8090`, the metrics of the services stay out of reach.
 
-### Categories
-| Méthode | URL | Description | Code |
-|---|---|---|---|
-| GET | /api/categories | Liste des catégories | 200 |
-| GET | /api/categories/{id} | Détail d'une catégorie | 200 / 404 |
-| POST | /api/categories | Créer | 201 / 409 |
-| PUT | /api/categories/{id} | Modifier | 200 / 404 |
-| DELETE | /api/categories/{id} | Supprimer | 204 / 409 |
-
-### Products
-| Méthode | URL | Description | Code |
-|---|---|---|---|
-| GET | /api/products | Liste des produits | 200 |
-| GET | /api/products/{id} | Détail d'un produit | 200 / 404 |
-| POST | /api/products | Créer | 201 / 400 / 404 |
-| PUT | /api/products/{id} | Modifier | 200 / 400 / 404 |
-| DELETE | /api/products/{id} | Supprimer | 204 / 404 |
-
 ## Frontend
 
 A small web shop in [frontend/](frontend/), on top of the gateway: React 19 and TypeScript, built by Vite, no UI library. It only calls `/api/**` on its own origin, so the gateway needs no CORS setting.
