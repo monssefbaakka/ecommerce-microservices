@@ -227,9 +227,19 @@ The stack runs on a single Linux server with Docker, from the images published o
 
 The secrets stay in `infra/.env` on the server; GitHub only holds the SSH key of the deploy user (secret `DEPLOY_SSH_KEY`) and the address of the server (variables `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_KNOWN_HOSTS`, `DEPLOY_URL`). Without `DEPLOY_HOST` the workflow is skipped. A roll back is a manual run of the workflow (*Actions* → *Deploy* → *Run workflow*) with an older tag.
 
+## Documentation
+
+| Document | What is in it |
+|---|---|
+| [docs/architecture.md](docs/architecture.md) | Architecture diagram, containers and networks, data ownership, an order and its payment across the services, security model, pipeline from a commit to the server |
+| [docs/adr/](docs/adr/README.md) | Architecture decision records: why OpenFeign, the circuit breaker and retry rules, the cart-only fallback, the single-server deployment |
+| [docs/deployment.md](docs/deployment.md) | Setting up the server, the first deploy, roll back and backups |
+| [docs/requests.http](docs/requests.http) | Ready-to-run requests for the monolith and, through the gateway, the microservices |
+| Swagger UI | `/swagger-ui.html` on the monolith (`:8080`) and on each service (`:8081` to `:8084`) |
+
 ## Microservices
 
-Phase 5 extracts the monolith step by step. The first services are in [services/](services/):
+Phase 5 extracted the monolith into the services in [services/](services/). The diagram below shows the routes and the calls between services; the full picture, with Caddy, the frontend and the Docker networks, is in [docs/architecture.md](docs/architecture.md).
 
 ```mermaid
 flowchart LR
