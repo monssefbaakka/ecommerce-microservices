@@ -173,9 +173,9 @@ monolith: a token signed by one is accepted by all of them.
 
 ```mermaid
 flowchart LR
-    pr["Pull request"] --> ci
-    push["Push to main"] --> ci
-    tag["Tag v1.2.0"] --> ci
+    pr["Pull request"]
+    push["Push to main"]
+    tag["Tag v1.2.0"]
 
     subgraph ci["CI workflow"]
         build["Build x7<br/>mvnw verify, Testcontainers ITs, JaCoCo"]
@@ -185,6 +185,10 @@ flowchart LR
         build --> docker
         fe --> docker
     end
+
+    pr --> ci
+    push --> ci
+    tag --> ci
 
     docker -- "main, tags only" --> ghcr[("ghcr.io<br/>latest, sha-#lt;commit#gt;, 1.2.0")]
     docker -- "pull request" --> stop(["built and checked, not pushed"])
