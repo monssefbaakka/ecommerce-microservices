@@ -439,19 +439,19 @@ Through order-service, the answer also holds `productsUpToDate`: usually `true`.
 
 ### Orders
 
-Passer commande transforme le panier de l'utilisateur connecté en commande `PENDING`, puis vide le panier. On ne peut voir que ses propres commandes.
+Placing an order turns the cart of the logged-in user into a `PENDING` order, then empties the cart. A user can only see their own orders.
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| POST | /api/orders | Passer commande avec le contenu de mon panier (sans corps) | 201, 400, 401, 409 |
-| GET | /api/orders | Historique de mes commandes (paginé) | 200, 401 |
-| GET | /api/orders/{id} | Voir une de mes commandes | 200, 401, 404 |
+| POST | /api/orders | Place an order with the content of my cart (no body) | 201, 400, 401, 409 |
+| GET | /api/orders | History of my orders (paged) | 200, 401 |
+| GET | /api/orders/{id} | One of my orders | 200, 401, 404 |
 
-`GET /api/orders` renvoie uniquement mes commandes, les plus récentes d'abord, 10 par page (`?page=0&size=10`, `sort` modifiable comme pour les produits). Chaque élément de `content` a le même format qu'une commande ci-dessous.
+`GET /api/orders` only returns my orders, most recent first, 10 per page (`?page=0&size=10`, `sort` can be changed as for products). Each item of `content` has the same format as an order below.
 
-`POST` renvoie **400** si le panier est vide, **409** si un produit n'a plus assez de stock, et **201** avec l'en-tête `Location: /api/orders/{id}` sinon.
-La commande retire les unités du stock. Le stock est vérifié à nouveau à ce moment, car il a pu baisser depuis l'ajout au panier : si un seul produit manque, rien n'est modifié (ni stock, ni panier).
-Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'existe pas.
+`POST` returns **400** if the cart is empty, **409** if a product does not have enough stock left, and **201** with the header `Location: /api/orders/{id}` otherwise.
+The order takes the units out of the stock. The stock is checked again at that moment, since it may have dropped since the product was added to the cart: if a single product is short, nothing changes (neither the stock nor the cart).
+Another user's order returns **404**, like an order that does not exist.
 
 ```json
 {
@@ -466,8 +466,8 @@ Une commande d'un autre utilisateur renvoie **404**, comme une commande qui n'ex
 }
 ```
 
-Le nom et le prix sont copiés au moment de la commande : modifier ou supprimer le produit ensuite ne change pas la commande (dans le monolithe, `productId` devient `null` si le produit est supprimé ; dans order-service, il est gardé). Un produit supprimé disparaît du panier et n'est pas commandé.
-Deux commandes passées au même moment sont traitées l'une après l'autre : les produits sont verrouillés (`SELECT ... FOR UPDATE`, dans product-service pour order-service) le temps de retirer le stock. La seconde voit le stock laissé par la première : deux clients ne peuvent pas prendre la même dernière unité (**409** pour le second). Un double clic sur « Commander » crée une seule commande : le panier est verrouillé, la seconde requête le trouve déjà vidé (**400**). Via order-service, **503** si product-service ne répond pas : rien n'est modifié.
+The name and price are copied when the order is placed: changing or deleting the product later does not change the order (in the monolith, `productId` becomes `null` if the product is deleted; in order-service, it is kept). A deleted product disappears from the cart and is not ordered.
+Two orders placed at the same moment are handled one after the other: the products are locked (`SELECT ... FOR UPDATE`, in product-service for order-service) while the stock is taken. The second one sees the stock left by the first: two customers cannot take the same last unit (**409** for the second). A double click on "Order" creates a single order: the cart is locked, and the second request finds it already empty (**400**). Through order-service, **503** if product-service does not answer: nothing changes.
 
 ### Payments
 
