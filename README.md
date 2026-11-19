@@ -408,20 +408,20 @@ Example:
 
 ### Cart
 
-> Via la gateway (port 8090), le panier et les commandes sont servis par [order-service](#microservices), avec les mêmes URLs, règles et codes que le monolithe. Son Swagger UI est sur `http://localhost:8083/swagger-ui.html`.
+> Through the gateway (port 8090), the cart and the orders are served by [order-service](#microservices), with the same URLs, rules and codes as the monolith. Its Swagger UI is on `http://localhost:8083/swagger-ui.html`.
 
-Chaque utilisateur connecté a un seul panier, créé au premier ajout. L'email du token identifie le panier : on ne peut voir ou modifier que le sien.
+Each logged-in user has a single cart, created on the first addition. The email of the token picks the cart: a user can only see or change their own.
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| GET | /api/cart | Voir mon panier (vide s'il n'existe pas encore) | 200, 401 |
-| POST | /api/cart/items | Ajouter un produit, ou augmenter sa quantité s'il y est déjà | 200, 400, 401, 404, 409 |
-| PUT | /api/cart/items/{productId} | Changer la quantité d'un produit | 200, 400, 401, 404, 409 |
-| DELETE | /api/cart/items/{productId} | Retirer un produit | 200, 401, 404 |
-| DELETE | /api/cart | Vider le panier | 204, 401 |
+| GET | /api/cart | My cart (empty if it does not exist yet) | 200, 401 |
+| POST | /api/cart/items | Add a product, or raise its quantity if it is already there | 200, 400, 401, 404, 409 |
+| PUT | /api/cart/items/{productId} | Change the quantity of a product | 200, 400, 401, 404, 409 |
+| DELETE | /api/cart/items/{productId} | Remove a product | 200, 401, 404 |
+| DELETE | /api/cart | Empty the cart | 204, 401 |
 
-Corps de `POST /api/cart/items` : `{ "productId": 1, "quantity": 2 }`. Pour `PUT`, seulement `{ "quantity": 5 }`.
-La quantité va de 1 à 100 par produit, sans dépasser le stock du produit (**409** sinon). Chaque réponse renvoie le panier complet :
+Body of `POST /api/cart/items`: `{ "productId": 1, "quantity": 2 }`. For `PUT`, only `{ "quantity": 5 }`.
+The quantity goes from 1 to 100 per product, without going over the stock of the product (**409** otherwise). Each answer returns the whole cart:
 
 ```json
 {
@@ -433,9 +433,9 @@ La quantité va de 1 à 100 par produit, sans dépasser le stock du produit (**4
 }
 ```
 
-Le panier affiche toujours le prix actuel du produit. Si un ADMIN supprime un produit, il disparaît des paniers.
+The cart always shows the current price of the product. If an ADMIN deletes a product, it disappears from the carts.
 
-Via order-service, la réponse contient aussi `productsUpToDate` : `true` d'habitude. Si product-service est indisponible, le panier s'affiche quand même (**200**) avec les derniers noms et prix connus et `productsUpToDate: false` ; une ligne dont le produit n'a jamais été vu garde sa quantité, sans nom ni prix, et `total` vaut `null`. Ajouter un produit ou changer une quantité répond alors **503** : le stock doit être à jour.
+Through order-service, the answer also holds `productsUpToDate`: usually `true`. If product-service is unavailable, the cart is still shown (**200**) with the last known names and prices and `productsUpToDate: false`; a line whose product was never seen keeps its quantity, without name nor price, and `total` is `null`. Adding a product or changing a quantity then answers **503**: the stock must be current.
 
 ### Orders
 
