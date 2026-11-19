@@ -471,27 +471,27 @@ Two orders placed at the same moment are handled one after the other: the produc
 
 ### Payments
 
-Servis par [payment-service](#microservices) via la gateway (Swagger UI sur `http://localhost:8084/swagger-ui.html`). Payer une de mes commandes `PENDING` débite son total ; un paiement accepté la passe `PAID`. Le paiement est **simulé** : aucune banque n'est appelée.
+Served by [payment-service](#microservices) through the gateway (Swagger UI on `http://localhost:8084/swagger-ui.html`). Paying one of my `PENDING` orders charges its total; an accepted payment sets it to `PAID`. The payment is **simulated**: no bank is called.
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| POST | /api/payments | Payer une de mes commandes | 201, 400, 401, 404, 409 |
-| GET | /api/payments | Historique de mes paiements, refusés compris (paginé) | 200, 401 |
-| GET | /api/payments/{id} | Voir un de mes paiements | 200, 401, 404 |
+| POST | /api/payments | Pay one of my orders | 201, 400, 401, 404, 409 |
+| GET | /api/payments | History of my payments, declined ones included (paged) | 200, 401 |
+| GET | /api/payments/{id} | One of my payments | 200, 401, 404 |
 
-Corps de `POST` : `{ "orderId": 1, "cardNumber": "4242424242424242" }` (16 chiffres). Le montant n'est pas envoyé : c'est le total enregistré avec la commande.
+Body of `POST`: `{ "orderId": 1, "cardNumber": "4242424242424242" }` (16 digits). The amount is not sent: it is the total saved with the order.
 
-| Carte | Résultat |
+| Card | Result |
 |---|---|
-| Se termine par `0002` (ex. `4000000000000002`) | **201**, `status: DECLINED` : la commande reste `PENDING`, un autre essai est possible |
-| Toute autre carte | **201**, `status: SUCCEEDED` : la commande passe `PAID` |
+| Ends with `0002` (e.g. `4000000000000002`) | **201**, `status: DECLINED`: the order stays `PENDING`, another attempt is possible |
+| Any other card | **201**, `status: SUCCEEDED`: the order becomes `PAID` |
 
 ```json
 { "id": 1, "orderId": 1, "amount": 1999.98, "status": "SUCCEEDED", "cardLast4": "4242", "createdAt": "2026-11-03T10:00:00Z" }
 ```
 
-Seuls les 4 derniers chiffres de la carte sont gardés. Une commande déjà `PAID` ou `CANCELLED` renvoie **409**, une commande d'un autre utilisateur **404**.
-Les paiements d'une même commande passent l'un après l'autre (verrou PostgreSQL `pg_advisory_xact_lock` sur l'id de la commande) : un double clic sur « Payer » ne débite qu'une fois, la seconde requête trouve la commande déjà `PAID` (**409**). **503** si order-service ne répond pas : rien n'est débité.
+Only the last 4 digits of the card are kept. An order already `PAID` or `CANCELLED` returns **409**, another user's order **404**.
+Payments of the same order go one after the other (PostgreSQL lock `pg_advisory_xact_lock` on the order id): a double click on "Pay" charges only once, the second request finds the order already `PAID` (**409**). **503** if order-service does not answer: nothing is charged.
 
 ### Erreurs
 
