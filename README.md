@@ -302,64 +302,64 @@ The requests in `docs/requests.http` (section *MICROSERVICES*) go through the ga
 
 ### Auth
 
-| Méthode | URL | Description | Codes |
+| Method | URL | Description | Codes |
 |---|---|---|---|
-| POST | /api/auth/register | Créer un compte (rôle USER) | 201, 400, 409 |
-| POST | /api/auth/login | Se connecter et obtenir un token JWT | 200, 400, 401 |
+| POST | /api/auth/register | Create an account (role USER) | 201, 400, 409 |
+| POST | /api/auth/login | Log in and get a JWT | 200, 400, 401 |
 
-Corps de la requête : `{ "email": "john@example.com", "password": "secret123" }`.
-Le mot de passe doit contenir entre 8 et 72 caractères. Il est stocké hashé (BCrypt) et n'est jamais renvoyé.
+Request body: `{ "email": "john@example.com", "password": "secret123" }`.
+The password must be 8 to 72 characters long. It is stored hashed (BCrypt) and never returned.
 
-Le login prend le même corps et renvoie :
+Login takes the same body and returns:
 
 ```json
 { "token": "eyJhbGciOiJIUzI1NiJ9...", "tokenType": "Bearer", "expiresIn": 3600 }
 ```
 
-Le token est signé en HMAC-SHA (HS256 avec une clé de 256 bits). Il contient l'email (`sub`), le rôle (`role`) et expire après 1 h.
-Un email inconnu et un mauvais mot de passe renvoient le même 401, pour ne pas révéler quels comptes existent.
+The token is signed with HMAC-SHA (HS256 with a 256-bit key). It holds the email (`sub`) and the role (`role`), and expires after 1 h.
+An unknown email and a wrong password return the same 401, so the API does not reveal which accounts exist.
 
-| Variable | Rôle | Défaut |
+| Variable | Role | Default |
 |---|---|---|
-| `JWT_SECRET` | Clé de signature, en Base64, 256 bits minimum (`openssl rand -base64 32`) | clé de dev dans `application.yml` |
-| `JWT_EXPIRATION` | Durée de vie du token (`30m`, `1h`, `1d`...) | `1h` |
+| `JWT_SECRET` | Signing key, Base64, 256 bits at least (`openssl rand -base64 32`) | dev key in `application.yml` |
+| `JWT_EXPIRATION` | Lifetime of the token (`30m`, `1h`, `1d`...) | `1h` |
 
-> La clé par défaut sert uniquement en local. Hors dev, définis toujours `JWT_SECRET`.
+> The default key is for local use only. Outside dev, always set `JWT_SECRET`.
 
-Pour s'authentifier, envoie le token dans l'en-tête de chaque requête :
+To authenticate, send the token in the header of each request:
 
     Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
 
-Un filtre (`JwtAuthenticationFilter`) vérifie la signature et l'expiration, puis authentifie la requête avec l'email et le rôle du token, sans accès à la base.
-L'API est stateless : pas de session ni de cookie. Un token absent, invalide ou expiré laisse la requête anonyme.
+A filter (`JwtAuthenticationFilter`) checks the signature and the expiry date, then authenticates the request with the email and role of the token, without a database call.
+The API is stateless: no session, no cookie. A missing, invalid or expired token leaves the request anonymous.
 
-### Rôles et accès
+### Roles and access
 
-| Endpoints | Accès |
+| Endpoints | Access |
 |---|---|
 | `POST /api/auth/register`, `POST /api/auth/login` | Public |
 | `GET /api/categories/**`, `GET /api/products/**` | Public |
-| `POST`, `PUT`, `DELETE` sur `/api/categories/**` et `/api/products/**` | `ADMIN` |
+| `POST`, `PUT`, `DELETE` on `/api/categories/**` and `/api/products/**` | `ADMIN` |
 | Swagger UI, `/v3/api-docs` | Public |
-| `/api/cart/**`, `/api/orders/**`, `/api/payments/**` et tout le reste | Connecté (`USER` ou `ADMIN`) |
+| `/api/cart/**`, `/api/orders/**`, `/api/payments/**` and everything else | Logged in (`USER` or `ADMIN`) |
 
-Sans token valide, un endpoint protégé renvoie **401**. Avec un token valide mais le mauvais rôle, il renvoie **403**.
-Les deux réponses ont le même format JSON que les autres erreurs (`status`, `error`, `message`, `path`).
+Without a valid token, a protected endpoint returns **401**. With a valid token but the wrong role, it returns **403**.
+Both answers use the same JSON format as the other errors (`status`, `error`, `message`, `path`).
 
-L'inscription crée toujours un compte `USER`. Pour avoir un compte `ADMIN`, lance l'application avec :
+Registering always creates a `USER` account. To get an `ADMIN` account, start the application with:
 
-| Variable | Rôle |
+| Variable | Role |
 |---|---|
-| `ADMIN_EMAIL` | Email du compte admin créé au démarrage |
-| `ADMIN_PASSWORD` | Son mot de passe (8 à 72 caractères) |
+| `ADMIN_EMAIL` | Email of the admin account created at start-up |
+| `ADMIN_PASSWORD` | Its password (8 to 72 characters) |
 
 ```bash
 ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=admin-pass ./mvnw spring-boot:run
 ```
 
-Le compte est créé seulement si les deux variables sont définies et que l'email est libre. Un compte existant n'est jamais promu ADMIN.
+The account is created only if both variables are set and the email is free. An existing account is never promoted to ADMIN.
 
-Dans Swagger UI, clique sur **Authorize** et colle le token (sans `Bearer `) pour appeler les endpoints protégés.
+In Swagger UI, click **Authorize** and paste the token (without `Bearer `) to call the protected endpoints.
 
 ### Categories
 
