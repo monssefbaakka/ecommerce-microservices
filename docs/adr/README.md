@@ -10,6 +10,7 @@ links back.
 | [0002](0002-circuit-breaker-and-retries-around-feign-calls.md) | Circuit breaker and retries around the Feign calls | Accepted | #49, #50 |
 | [0003](0003-fallback-for-the-cart-only.md) | A fallback for showing the cart only | Accepted | #51 |
 | [0004](0004-deploy-on-a-single-server-with-docker-compose.md) | Deploy on a single server with Docker Compose | Accepted | #59 |
+| [0005](0005-flyway-migrations-instead-of-hibernate-ddl.md) | Flyway migrations instead of Hibernate DDL | Accepted | #114, #115, #116 |
 
 To add one, copy the layout of the last file (title, status, date, issue, then *Context*, *Decision*,
 *Alternatives not chosen* when there were some, *Consequences*), take the next number and add a row here. See
