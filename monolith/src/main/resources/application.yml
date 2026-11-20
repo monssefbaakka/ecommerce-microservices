@@ -13,7 +13,9 @@ spring:
     baseline-description: schema created by Hibernate before Flyway
   jpa:
     hibernate:
-      ddl-auto: update                  # dev: Hibernate creates/updates the tables
+      # Flyway owns the schema: Hibernate only checks that every entity has its table and columns,
+      # and stops the startup otherwise (a migration forgotten next to an entity change)
+      ddl-auto: validate
     open-in-view: false                 # best practice: no open session in controllers
     properties:
       hibernate:
