@@ -5,6 +5,12 @@ spring:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/ecommerce}   # in Docker: the postgres service host
     username: ${DB_USER:ecommerce}      # default value if the variable is not set
     password: ${DB_PASSWORD:ecommerce}
+  flyway:
+    # A database created by Hibernate before Flyway (#114) already has the tables of V1 to V5:
+    # instead of failing on a non-empty schema, Flyway records it as version 5 and runs what comes after
+    baseline-on-migrate: true
+    baseline-version: 5
+    baseline-description: schema created by Hibernate before Flyway
   jpa:
     hibernate:
       ddl-auto: update                  # dev: Hibernate creates/updates the tables
