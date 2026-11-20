@@ -209,6 +209,13 @@ were published) or a release like `1.0.0`. Or directly on the server:
 The Compose files used are those of the branch picked in *Run workflow* (or those already on the server), not
 those of the old version: fine as long as they did not change in an incompatible way in between.
 
+Rolling back never undoes a migration: the database keeps the schema of the newest version that ran. The older
+image still starts, because Flyway ignores the scripts it does not know and Hibernate only validates the tables
+and columns its entities use. That is why a migration must keep working with the previous version of the code:
+a new column is nullable or has a default, and a column is dropped only in a later release, once no version that
+could be rolled back to reads it ([ADR 0005](adr/0005-flyway-migrations-instead-of-hibernate-ddl.md)). Going back
+to an image from before Flyway works too: Hibernate's `update` ignores `flyway_schema_history` and the new indexes.
+
 ## On the server
 
 ```bash
