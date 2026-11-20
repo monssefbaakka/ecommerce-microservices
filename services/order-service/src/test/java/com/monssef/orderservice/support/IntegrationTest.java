@@ -25,7 +25,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Base class of the integration tests: the whole service (security, JPA, Hibernate DDL)
+ * Base class of the integration tests: the whole service (security, JPA, Flyway schema)
  * on a real PostgreSQL, called through MockMvc. No Eureka server in the tests: registration is off.
  * product-service is not started: the ProductClient is a mock answered by an in-memory
  * FakeProductService. The accounts live in auth-service: a signed token is all this service sees.
