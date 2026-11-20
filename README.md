@@ -690,6 +690,26 @@ An order keeps a copy of the name and price of each product at purchase time: it
 If an ADMIN deletes a product, `order_items.product_id` becomes `NULL` (`ON DELETE SET NULL`) and the line stays in the history.
 `payments` keeps each payment attempt (accepted or declined); it is created by payment-service, which also sets `orders.status` to `PAID`.
 
+### Migrations
+
+The tables are created by [Flyway](https://documentation.red-gate.com/flyway), not by Hibernate. Each application that owns a database has its scripts in `src/main/resources/db/migration`, run in order at startup, before JPA:
+
+| Application | Database | Scripts |
+|---|---|---|
+| monolith | `ecommerce` | `V1` users, `V2` categories, `V3` products, `V4` carts, `V5` orders, `V6` indexes on the foreign keys, `V7` index on `upper(email)` |
+| auth-service | `auth_db` | `V1` users, `V2` index on `upper(email)` |
+| product-service | `product_db` | `V1` categories, `V2` products, `V3` index on `products.category_id` |
+| order-service | `order_db` | `V1` carts, `V2` orders, `V3` indexes on `orders.user_email` and `order_items.order_id` |
+| payment-service | `payment_db` | `V1` payments, `V2` index on `payments.user_email` |
+
+Flyway records each script it ran, with a checksum, in the `flyway_schema_history` table of that database, and never runs it again. Hibernate only checks the result (`ddl-auto: validate`): if an entity has a column that no script created, the application stops at startup instead of failing on the first query.
+
+**Changing the schema:** add a new script with the next version, for example `V8__add_product_image_url.sql` in the monolith, next to the entity change. Never edit a script that is already on `main`: it has run on the server, its checksum would no longer match and the application would refuse to start (the CI [rejects it](#migrations-job)). The integration tests run every script on an empty PostgreSQL and validate the entities against the result, so `./mvnw verify` catches a script that fails or one that was forgotten.
+
+**Databases created before Flyway:** until #114 and #115, Hibernate created the tables (`ddl-auto: update`). The first scripts create exactly the same tables, with the same constraint names. On a database that already has them and no `flyway_schema_history`, Flyway does not fail: it records the existing schema as the last of those scripts (`baseline-version`: 5 for the monolith, 1 for auth-service and payment-service, 2 for product-service and order-service) and only runs the scripts after it, the indexes. `FlywayMigrationIT` in each project loads the DDL that Hibernate used to run, baselines it, and checks that it ends with the same columns, constraints and indexes as a database migrated from `V1`.
+
+To see what ran on a database: `SELECT version, description, installed_on, success FROM flyway_schema_history ORDER BY installed_rank;` in `psql`, or [`/actuator/flyway`](#health-actuator) with an ADMIN token.
+
 ## Project structure
 
 ```
