@@ -52,7 +52,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics    # metrics: ADMIN token only; env, beans, heapdump... stay closed
+        include: health,info,metrics,flyway   # metrics, flyway: ADMIN token only; env, beans, heapdump... stay closed
   endpoint:
     health:
       # Anyone sees {"status":"UP"}; only an ADMIN token sees each component (db, disk space...)
