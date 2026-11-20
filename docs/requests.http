@@ -455,6 +455,10 @@ Authorization: Bearer {{adminLogin.response.body.$.token}}
 GET {{host}}/actuator/metrics/http.server.requests?tag=status:200
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 
+### H9. Flyway migrations of the monolith database: V1 to V7, state SUCCESS (expect 200; 401 without token, 403 with a USER token)
+GET {{host}}/actuator/flyway
+Authorization: Bearer {{adminLogin.response.body.$.token}}
+
 
 ############################################################
 # MICROSERVICES (docker compose --profile app up: gateway 8090, auth-service 8081, product-service 8082,
@@ -722,6 +726,14 @@ Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
 
 ### M5. The gateway has no JWT check: its metrics are not exposed (expect 404)
 GET {{gateway}}/actuator/metrics
+
+### F1. Migrations of order_db, run by order-service: V1 to V3 (expect 200; a BASELINE first on a database created before Flyway)
+GET {{orderService}}/actuator/flyway
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
+### F2. Migrations of product_db, run by product-service: V1 to V3 (expect 200)
+GET {{productService}}/actuator/flyway
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
 
 ### R1. Instances registered in Eureka: API-GATEWAY, AUTH-SERVICE, PRODUCT-SERVICE, ORDER-SERVICE and PAYMENT-SERVICE, status UP (expect 200)
 GET {{eureka}}/eureka/apps
