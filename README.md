@@ -726,7 +726,9 @@ To see what ran on a database: `SELECT version, description, installed_on, succe
 │       │   ├── exceptions/  ResourceNotFoundException, GlobalExceptionHandler, ErrorResponse
 │       │   └── shared classes
 │       └── test/          Unit, MockMvc and Testcontainers integration tests (support/ holds the IT base)
+│   └── src/main/resources/db/migration/   Flyway scripts V1__*.sql, V2__*.sql... (one per schema change)
 ├── services/        microservices (Phase 5 and later), each a Maven project with its Dockerfile
+│                    (and its own db/migration folder for the four that own a database)
 │   ├── discovery-server/   Eureka registry
 │   ├── auth-service/       register, login, JWT
 │   ├── product-service/    categories and products, ADMIN writes checked from the JWT
