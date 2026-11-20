@@ -168,16 +168,20 @@ The **CI** badge at the top of this page shows the last run on `main` (pushes on
 
 ### Build job
 
-One job per Maven project (the monolith and the six services), run in parallel. The frontend has a job of its own ([below](#frontend-job)). A failing project does not stop the others, so every broken project shows up in the same run.
+One job per Maven project (the monolith and the six services), run in parallel. The migrations and the frontend have a job of their own ([below](#migrations-job)). A failing project does not stop the others, so every broken project shows up in the same run.
 
 | Step | What it does |
 |---|---|
-| Build, test and package | `./mvnw -B verify`: compile, unit and slice tests, executable jar, integration tests on PostgreSQL with Testcontainers, coverage report |
+| Build, test and package | `./mvnw -B verify`: compile, unit and slice tests, executable jar, integration tests on PostgreSQL with Testcontainers, coverage report. Each integration test starts the application on an empty database: the Flyway migrations run, then Hibernate validates the tables against the entities, so a broken migration or a forgotten one fails the build |
 | No integration test skipped | Fails the job if any `*IT` was skipped. On a laptop without Docker they are skipped on purpose, but in CI a green run must mean they ran |
 | Job summary | Number of unit and integration tests, line coverage and jar size, shown on the run page |
 | Artifacts | The tested jar (`jar-<project>`) and the JaCoCo report (`coverage-<project>`), kept 7 days. When a job fails, the Surefire / Failsafe reports too (`test-reports-<project>`) |
 
 The Maven dependencies are cached per project, keyed on its `pom.xml`: they are downloaded again only when that file changes. A new push on a pull request cancels the run still in progress for it.
+
+### Migrations job
+
+On a pull request only. Fails if the branch edits, renames or deletes a Flyway script that is already on `main` (`*/db/migration/V*.sql`): that script has run on the server, Flyway stored its checksum, and the next deploy would refuse to start. A schema change is always a new script ([Database schema](#database-schema)).
 
 ### Frontend job
 
