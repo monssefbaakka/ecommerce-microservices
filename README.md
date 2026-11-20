@@ -539,8 +539,16 @@ Internal details (SQL message, stack trace) are never sent to the client: they g
 | GET | `/actuator/info` | Public | Name, version and date of the build, Java version | 200 |
 | GET | `/actuator/metrics` | ADMIN | Names of the metrics (HTTP requests, JVM, connection pool...) | 200 / 401 / 403 |
 | GET | `/actuator/metrics/{name}` | ADMIN | Value of a metric, filtered by tag: `?tag=status:200` | 200 / 401 / 403 / 404 |
+| GET | `/actuator/flyway` | ADMIN | Migrations of the database: version, description, state and date each script ran | 200 / 401 / 403 |
 
-Only `health`, `info` and `metrics` are exposed over HTTP: `env`, `beans`, `heapdump`... stay closed (**404**, even for an ADMIN). Any `/actuator/**` URL other than `health` and `info` needs the ADMIN role (**401** without a token, **403** with a USER token).
+Only `health`, `info`, `metrics` and `flyway` are exposed over HTTP: `env`, `beans`, `heapdump`... stay closed (**404**, even for an ADMIN). Any `/actuator/**` URL other than `health` and `info` needs the ADMIN role (**401** without a token, **403** with a USER token).
+
+`/actuator/flyway` exists on the monolith and the four services that own a database. It tells which version of the schema a running instance has, without opening `psql`:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8083/actuator/flyway \
+  | jq '.contexts[].flywayBeans.flyway.migrations[] | {version, description, state}'
+```
 
 The Docker image has a `HEALTHCHECK` on the readiness probe: `docker ps` shows `healthy` when the application answers and sees the database, `unhealthy` if PostgreSQL goes down.
 
