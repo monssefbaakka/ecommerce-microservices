@@ -215,4 +215,5 @@ Details: [Continuous integration](../README.md#continuous-integration) in the RE
 
 The choices that shaped this design, with the alternatives considered, are recorded as ADRs in
 [adr/](adr/README.md): OpenFeign between services, the circuit breaker and retry rules, why only the cart has a
-fallback, and why the stack runs on a single server with Docker Compose.
+fallback, why the stack runs on a single server with Docker Compose, and why Flyway owns the schema instead of
+Hibernate.
