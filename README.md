@@ -17,7 +17,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 |---|---|
 | Language | Java 21 |
 | Framework | Spring Boot 4.1 (Spring Framework 7, Jackson 3, Hibernate 7), Spring Web MVC, Spring Data JPA, Bean Validation |
-| Database | PostgreSQL 16 |
+| Database | PostgreSQL 16, Flyway (versioned SQL migrations, schema validated by Hibernate at startup) |
 | Build | Maven (wrapper included) |
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
 | Containers | Docker, Docker Compose (health checks, three networks, memory limits, log rotation) |
