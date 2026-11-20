@@ -25,8 +25,8 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * Base class of the integration tests: the whole application (security, JPA, Hibernate DDL)
- * on a real PostgreSQL, called through MockMvc with real JWTs.
+ * Base class of the integration tests: the whole application (security, JPA, the Flyway
+ * migrations validated by Hibernate) on a real PostgreSQL, called through MockMvc with real JWTs.
  * Skipped, not failed, when Docker is not running.
  */
 @SpringBootTest
