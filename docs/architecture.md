@@ -100,6 +100,11 @@ No service reads another one's tables and there is no foreign key between databa
 `productId`, `orderId` or user email it refers to, and the owner is asked over HTTP when the current value
 matters (price, stock, order status).
 
+Each owner also owns the **schema** of its database: its Flyway scripts (`src/main/resources/db/migration`) run
+when it starts, before JPA, and are recorded in the `flyway_schema_history` table of that database. Hibernate
+only validates the tables against the entities. A schema change is deployed with the service that needs it,
+never as a separate step ([ADR 0005](adr/0005-flyway-migrations-instead-of-hibernate-ddl.md)).
+
 ## A request through the stack
 
 Placing an order, then paying it, touches every layer. The JWT travels with each request from the browser;
@@ -210,4 +215,5 @@ Details: [Continuous integration](../README.md#continuous-integration) in the RE
 
 The choices that shaped this design, with the alternatives considered, are recorded as ADRs in
 [adr/](adr/README.md): OpenFeign between services, the circuit breaker and retry rules, why only the cart has a
-fallback, and why the stack runs on a single server with Docker Compose.
+fallback, why the stack runs on a single server with Docker Compose, and why Flyway owns the schema instead of
+Hibernate.

@@ -3,8 +3,10 @@ package com.monssef.paymentservice.config;
 import com.monssef.paymentservice.support.IntegrationTest;
 import org.junit.jupiter.api.Test;
 
+import static org.hamcrest.Matchers.everyItem;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.hasItems;
+import static org.hamcrest.Matchers.is;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -88,5 +90,18 @@ class ActuatorIT extends IntegrationTest {
         mockMvc.perform(auth(get("/actuator/metrics/jvm.memory.used"), adminToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.availableTags[?(@.tag == 'application')].values[*]", hasItem("payment-service")));
+    }
+
+    @Test
+    void flyway_shouldListTheMigrationsToAdminOnly() throws Exception {
+        mockMvc.perform(get("/actuator/flyway"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(auth(get("/actuator/flyway"), userToken("john@example.com")))
+                .andExpect(status().isForbidden());
+        // Which scripts ran on this database, and when: the schema version of a deployed instance
+        mockMvc.perform(auth(get("/actuator/flyway"), adminToken()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.contexts.*.flywayBeans.flyway.migrations[*].version", hasItems("1", "2")))
+                .andExpect(jsonPath("$.contexts.*.flywayBeans.flyway.migrations[*].state", everyItem(is("SUCCESS"))));
     }
 }

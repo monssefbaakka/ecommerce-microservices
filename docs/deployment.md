@@ -172,6 +172,25 @@ one is healthy (5 min at most). If one never gets healthy, the version that ran 
 `infra/.deployed-tag`) is started again and the deploy fails: the server is left with a working stack.
 Finally, the images no container uses and older than a week are deleted.
 
+Each application migrates its own database when it starts (Flyway, before JPA): a new `V<n>__*.sql` in a
+service runs on the server when that service's container is recreated, and the container only gets healthy once
+the migration succeeded. A failed migration therefore fails the deploy and the previous version is started again.
+Flyway runs each script in a transaction on PostgreSQL, so a failed one leaves no half-applied change behind.
+
+**The first deploy with Flyway** (#114, #115) finds databases that Hibernate created, with no
+`flyway_schema_history` table. Each application records the existing tables as its baseline version instead of
+failing, then creates the new indexes. No data is touched and nothing has to be done by hand. To check it
+afterwards:
+
+```bash
+docker exec ecommerce-postgres psql -U ecommerce -d order_db \
+  -c "SELECT version, description, type, success FROM flyway_schema_history ORDER BY installed_rank"
+```
+
+The first row is the `BASELINE` (`schema created by Hibernate before Flyway`), the next ones the scripts that ran.
+On a server deployed for the first time, the databases are empty: every script runs from `V1` and there is no
+baseline row.
+
 While a container is recreated, its service is unavailable for a few seconds: the gateway answers **503**
 for it, and Caddy holds the requests for up to 30 s while the gateway or the frontend itself restarts (no **502**).
 
@@ -189,6 +208,13 @@ were published) or a release like `1.0.0`. Or directly on the server:
 
 The Compose files used are those of the branch picked in *Run workflow* (or those already on the server), not
 those of the old version: fine as long as they did not change in an incompatible way in between.
+
+Rolling back never undoes a migration: the database keeps the schema of the newest version that ran. The older
+image still starts, because Flyway ignores the scripts it does not know and Hibernate only validates the tables
+and columns its entities use. That is why a migration must keep working with the previous version of the code:
+a new column is nullable or has a default, and a column is dropped only in a later release, once no version that
+could be rolled back to reads it ([ADR 0005](adr/0005-flyway-migrations-instead-of-hibernate-ddl.md)). Going back
+to an image from before Flyway works too: Hibernate's `update` ignores `flyway_schema_history` and the new indexes.
 
 ## On the server
 

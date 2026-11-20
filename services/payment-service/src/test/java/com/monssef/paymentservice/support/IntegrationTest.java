@@ -24,7 +24,7 @@ import java.util.Map;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
- * Base class of the integration tests: the whole service (security, JPA, Hibernate DDL)
+ * Base class of the integration tests: the whole service (security, JPA, Flyway schema)
  * on a real PostgreSQL, called through MockMvc. No Eureka server in the tests: registration is off.
  * order-service is not started: the OrderClient is a mock answered by an in-memory FakeOrderService.
  * The accounts live in auth-service: a signed token is all this service sees.

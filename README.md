@@ -17,7 +17,7 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 |---|---|
 | Language | Java 21 |
 | Framework | Spring Boot 4.1 (Spring Framework 7, Jackson 3, Hibernate 7), Spring Web MVC, Spring Data JPA, Bean Validation |
-| Database | PostgreSQL 16 |
+| Database | PostgreSQL 16, Flyway (versioned SQL migrations, schema validated by Hibernate at startup) |
 | Build | Maven (wrapper included) |
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
 | Containers | Docker, Docker Compose (health checks, three networks, memory limits, log rotation) |
@@ -168,16 +168,20 @@ The **CI** badge at the top of this page shows the last run on `main` (pushes on
 
 ### Build job
 
-One job per Maven project (the monolith and the six services), run in parallel. The frontend has a job of its own ([below](#frontend-job)). A failing project does not stop the others, so every broken project shows up in the same run.
+One job per Maven project (the monolith and the six services), run in parallel. The migrations and the frontend have a job of their own ([below](#migrations-job)). A failing project does not stop the others, so every broken project shows up in the same run.
 
 | Step | What it does |
 |---|---|
-| Build, test and package | `./mvnw -B verify`: compile, unit and slice tests, executable jar, integration tests on PostgreSQL with Testcontainers, coverage report |
+| Build, test and package | `./mvnw -B verify`: compile, unit and slice tests, executable jar, integration tests on PostgreSQL with Testcontainers, coverage report. Each integration test starts the application on an empty database: the Flyway migrations run, then Hibernate validates the tables against the entities, so a broken migration or a forgotten one fails the build |
 | No integration test skipped | Fails the job if any `*IT` was skipped. On a laptop without Docker they are skipped on purpose, but in CI a green run must mean they ran |
 | Job summary | Number of unit and integration tests, line coverage and jar size, shown on the run page |
 | Artifacts | The tested jar (`jar-<project>`) and the JaCoCo report (`coverage-<project>`), kept 7 days. When a job fails, the Surefire / Failsafe reports too (`test-reports-<project>`) |
 
 The Maven dependencies are cached per project, keyed on its `pom.xml`: they are downloaded again only when that file changes. A new push on a pull request cancels the run still in progress for it.
+
+### Migrations job
+
+On a pull request only. Fails if the branch edits, renames or deletes a Flyway script that is already on `main` (`*/db/migration/V*.sql`): that script has run on the server, Flyway stored its checksum, and the next deploy would refuse to start. A schema change is always a new script ([Database schema](#database-schema)).
 
 ### Frontend job
 
@@ -535,8 +539,16 @@ Internal details (SQL message, stack trace) are never sent to the client: they g
 | GET | `/actuator/info` | Public | Name, version and date of the build, Java version | 200 |
 | GET | `/actuator/metrics` | ADMIN | Names of the metrics (HTTP requests, JVM, connection pool...) | 200 / 401 / 403 |
 | GET | `/actuator/metrics/{name}` | ADMIN | Value of a metric, filtered by tag: `?tag=status:200` | 200 / 401 / 403 / 404 |
+| GET | `/actuator/flyway` | ADMIN | Migrations of the database: version, description, state and date each script ran | 200 / 401 / 403 |
 
-Only `health`, `info` and `metrics` are exposed over HTTP: `env`, `beans`, `heapdump`... stay closed (**404**, even for an ADMIN). Any `/actuator/**` URL other than `health` and `info` needs the ADMIN role (**401** without a token, **403** with a USER token).
+Only `health`, `info`, `metrics` and `flyway` are exposed over HTTP: `env`, `beans`, `heapdump`... stay closed (**404**, even for an ADMIN). Any `/actuator/**` URL other than `health` and `info` needs the ADMIN role (**401** without a token, **403** with a USER token).
+
+`/actuator/flyway` exists on the monolith and the four services that own a database. It tells which version of the schema a running instance has, without opening `psql`:
+
+```bash
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8083/actuator/flyway \
+  | jq '.contexts[].flywayBeans.flyway.migrations[] | {version, description, state}'
+```
 
 The Docker image has a `HEALTHCHECK` on the readiness probe: `docker ps` shows `healthy` when the application answers and sees the database, `unhealthy` if PostgreSQL goes down.
 
@@ -678,6 +690,26 @@ An order keeps a copy of the name and price of each product at purchase time: it
 If an ADMIN deletes a product, `order_items.product_id` becomes `NULL` (`ON DELETE SET NULL`) and the line stays in the history.
 `payments` keeps each payment attempt (accepted or declined); it is created by payment-service, which also sets `orders.status` to `PAID`.
 
+### Migrations
+
+The tables are created by [Flyway](https://documentation.red-gate.com/flyway), not by Hibernate. Each application that owns a database has its scripts in `src/main/resources/db/migration`, run in order at startup, before JPA:
+
+| Application | Database | Scripts |
+|---|---|---|
+| monolith | `ecommerce` | `V1` users, `V2` categories, `V3` products, `V4` carts, `V5` orders, `V6` indexes on the foreign keys, `V7` index on `upper(email)` |
+| auth-service | `auth_db` | `V1` users, `V2` index on `upper(email)` |
+| product-service | `product_db` | `V1` categories, `V2` products, `V3` index on `products.category_id` |
+| order-service | `order_db` | `V1` carts, `V2` orders, `V3` indexes on `orders.user_email` and `order_items.order_id` |
+| payment-service | `payment_db` | `V1` payments, `V2` index on `payments.user_email` |
+
+Flyway records each script it ran, with a checksum, in the `flyway_schema_history` table of that database, and never runs it again. Hibernate only checks the result (`ddl-auto: validate`): if an entity has a column that no script created, the application stops at startup instead of failing on the first query.
+
+**Changing the schema:** add a new script with the next version, for example `V8__add_product_image_url.sql` in the monolith, next to the entity change. Never edit a script that is already on `main`: it has run on the server, its checksum would no longer match and the application would refuse to start (the CI [rejects it](#migrations-job)). The integration tests run every script on an empty PostgreSQL and validate the entities against the result, so `./mvnw verify` catches a script that fails or one that was forgotten.
+
+**Databases created before Flyway:** until #114 and #115, Hibernate created the tables (`ddl-auto: update`). The first scripts create exactly the same tables, with the same constraint names. On a database that already has them and no `flyway_schema_history`, Flyway does not fail: it records the existing schema as the last of those scripts (`baseline-version`: 5 for the monolith, 1 for auth-service and payment-service, 2 for product-service and order-service) and only runs the scripts after it, the indexes. `FlywayMigrationIT` in each project loads the DDL that Hibernate used to run, baselines it, and checks that it ends with the same columns, constraints and indexes as a database migrated from `V1`.
+
+To see what ran on a database: `SELECT version, description, installed_on, success FROM flyway_schema_history ORDER BY installed_rank;` in `psql`, or [`/actuator/flyway`](#health-actuator) with an ADMIN token.
+
 ## Project structure
 
 ```
@@ -694,7 +726,9 @@ If an ADMIN deletes a product, `order_items.product_id` becomes `NULL` (`ON DELE
 │       │   ├── exceptions/  ResourceNotFoundException, GlobalExceptionHandler, ErrorResponse
 │       │   └── shared classes
 │       └── test/          Unit, MockMvc and Testcontainers integration tests (support/ holds the IT base)
+│   └── src/main/resources/db/migration/   Flyway scripts V1__*.sql, V2__*.sql... (one per schema change)
 ├── services/        microservices (Phase 5 and later), each a Maven project with its Dockerfile
+│                    (and its own db/migration folder for the four that own a database)
 │   ├── discovery-server/   Eureka registry
 │   ├── auth-service/       register, login, JWT
 │   ├── product-service/    categories and products, ADMIN writes checked from the JWT

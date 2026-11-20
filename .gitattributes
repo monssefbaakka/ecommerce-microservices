@@ -7,3 +7,7 @@ mvnw text eol=lf
 
 # Windows scripts keep CRLF
 *.cmd text eol=crlf
+
+# SQL scripts (Flyway migrations, PostgreSQL init) are read on Linux, in the containers and CI: always LF.
+# Flyway's checksum ignores line endings, but a migration then has the same bytes on every machine
+*.sql text eol=lf
