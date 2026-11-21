@@ -93,6 +93,12 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
+        <!-- Each Feign call observed by Micrometer: it carries the trace of the request (traceparent header)
+             to the other service, gets a span of its own in Zipkin and an http.client.requests metric -->
+        <dependency>
+            <groupId>io.github.openfeign</groupId>
+            <artifactId>feign-micrometer</artifactId>
+        </dependency>
         <!-- Circuit breaker and retries around the calls to product-service (resilience4j modules from its BOM) -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>
