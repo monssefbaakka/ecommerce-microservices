@@ -314,7 +314,7 @@
       "type": "timeseries",
       "id": 7,
       "title": "Slowest endpoints (p95)",
-      "description": "The 10 slowest endpoints over the selected applications. Open the trace of a slow request in Explore \u2192 Zipkin.",
+      "description": "The 10 slowest endpoints over the selected applications. Open the trace of a slow request in Explore → Zipkin.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -406,8 +406,8 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "histogram_quantile(0.95, sum by (application, clientName, le) (rate(http_client_requests_seconds_bucket{application=~\"$application\"}[$__rate_interval])))",
-          "legendFormat": "{{application}} \u2192 {{clientName}}",
+          "expr": "label_replace(histogram_quantile(0.95, sum by (application, clientName, le) (rate(http_client_requests_seconds_bucket{application=~\"$application\"}[$__rate_interval]))), \"client\", \"$1\", \"clientName\", \".*[.]([^.]+)\")",
+          "legendFormat": "{{application}} → {{client}}",
           "range": true
         }
       ]
