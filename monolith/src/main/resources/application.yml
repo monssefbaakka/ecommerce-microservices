@@ -44,6 +44,7 @@ app:
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
 
+
 management:
   tracing:
     sampling:
@@ -60,10 +61,17 @@ management:
     tags:
       # Added to every metric: tells the services apart once their metrics are collected in one place
       application: ${spring.application.name}
+    distribution:
+      # Latency buckets on the HTTP requests: Prometheus computes the percentiles (p95,
+      # p99) over any time range and every instance, which the count and total of /actuator/metrics cannot
+      percentiles-histogram:
+        http.server.requests: true
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,flyway   # metrics, flyway: ADMIN token only; env, beans, heapdump... stay closed
+        # metrics, flyway: ADMIN token only; prometheus: the scraper account only (MetricsScrapeSecurityConfig);
+        # env, beans, heapdump... stay closed
+        include: health,info,metrics,flyway,prometheus
   endpoint:
     health:
       # Anyone sees {"status":"UP"}; only an ADMIN token sees each component (db, disk space...)
