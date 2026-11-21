@@ -544,8 +544,9 @@ Internal details (SQL message, stack trace) are never sent to the client: they g
 | GET | `/actuator/metrics` | ADMIN | Names of the metrics (HTTP requests, JVM, connection pool...) | 200 / 401 / 403 |
 | GET | `/actuator/metrics/{name}` | ADMIN | Value of a metric, filtered by tag: `?tag=status:200` | 200 / 401 / 403 / 404 |
 | GET | `/actuator/flyway` | ADMIN | Migrations of the database: version, description, state and date each script ran | 200 / 401 / 403 |
+| GET | `/actuator/prometheus` | Scraper account | Every metric in the Prometheus text format, read by the [Prometheus](#observability) container with HTTP Basic (`METRICS_USERNAME` / `METRICS_PASSWORD`) | 200 / 401 |
 
-Only `health`, `info`, `metrics` and `flyway` are exposed over HTTP: `env`, `beans`, `heapdump`... stay closed (**404**, even for an ADMIN). Any `/actuator/**` URL other than `health` and `info` needs the ADMIN role (**401** without a token, **403** with a USER token).
+Only `health`, `info`, `metrics`, `flyway` and `prometheus` are exposed over HTTP: `env`, `beans`, `heapdump`... stay closed (**404**, even for an ADMIN). Any `/actuator/**` URL other than `health`, `info` and `prometheus` needs the ADMIN role (**401** without a token, **403** with a USER token). `/actuator/prometheus` is the other way round: only the scraper account opens it, a token never does (**401**, even an ADMIN one), and that account opens nothing else.
 
 `/actuator/flyway` exists on the monolith and the four services that own a database. It tells which version of the schema a running instance has, without opening `psql`:
 
@@ -571,6 +572,8 @@ The monolith and the four services publish their metrics with Micrometer, on `/a
 | `payments` | payment-service | Payments saved, with the `status` tag (`succeeded` / `declined`) |
 
 The business counters exist from start-up, at 0: a missing counter would mean "not measured", not "nothing happened".
+
+`http.server.requests` (and `http.client.requests`, the Feign calls) only count the traffic of the shop: the `/actuator` requests (health checks of Docker and Eureka, scrapes of Prometheus) and the calls of the Eureka client are left out. Both publish histogram buckets, from which Prometheus computes the latency percentiles of the [Grafana dashboard](#observability).
 
 ```bash
 # With an ADMIN token (POST /api/auth/login):
