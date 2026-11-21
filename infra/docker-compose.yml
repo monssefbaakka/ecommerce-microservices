@@ -348,7 +348,10 @@ services:
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
       GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
     volumes:
-      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      # The two folders only: mounting all of provisioning/ would hide the empty plugins/ and alerting/
+      # folders of the image, and Grafana logs an error for each at every start
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./grafana/dashboards:/etc/grafana/dashboards:ro
     networks:   # Prometheus and Zipkin only: Grafana cannot reach a service, Eureka or PostgreSQL
       - monitoring
