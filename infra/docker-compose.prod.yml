@@ -74,6 +74,13 @@ services:
   frontend:
     ports: !reset []
 
+  # Zipkin UI on the server's loopback only, like the Eureka dashboard: "ssh -L 9411:localhost:9411
+  # <user>@<server>", then http://localhost:9411 on your machine. The traces show the URLs and timings of
+  # every request: never on the internet
+  zipkin:
+    ports: !override
+      - "127.0.0.1:9411:9411"
+
   caddy:
     image: caddy:2.11-alpine
     container_name: ecommerce-caddy
