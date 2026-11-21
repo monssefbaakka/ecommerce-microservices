@@ -50,6 +50,12 @@ eureka:
     lease-renewal-interval-in-seconds: 10
     lease-expiration-duration-in-seconds: 30
 
+metrics:
+  scraper:
+    # Account the Prometheus container reads /actuator/prometheus with (HTTP Basic), and nothing else.
+    # dev only default: set METRICS_PASSWORD outside local dev, the same in Prometheus
+    username: ${METRICS_USERNAME:prometheus}
+    password: ${METRICS_PASSWORD:metrics-dev-only}
 
 management:
   tracing:
