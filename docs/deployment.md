@@ -36,8 +36,11 @@ flowchart LR
 - A domain name pointing to its IP address (an `A` record), or none: `<IP with dashes>.sslip.io` resolves
   to the IP written in it (`203-0-113-10.sslip.io` → `203.0.113.10`), and Let's Encrypt gives it a certificate.
 
-Seven JVMs are limited to 512 MB each in Compose, plus PostgreSQL, Caddy and the nginx of the frontend (64 MB). Once started they use about
-2 to 2.5 GB together (`docker stats`): 4 GB leaves room for the system and the peaks.
+Seven JVMs are limited to 512 MB each in Compose, plus PostgreSQL, Caddy, the nginx of the frontend (64 MB), and
+Zipkin, Prometheus and Grafana (about 530 MB together). Once started they use about 3 GB together
+(`docker stats`): 4 GB leaves room for the system and the peaks, not much more. On a tight server, the three
+observability containers are the first ones to stop (`dc stop zipkin prometheus grafana`): the shop does not
+depend on them, the spans are dropped and the metrics no longer recorded until they start again.
 
 ## 1. Prepare the server (once)
 
