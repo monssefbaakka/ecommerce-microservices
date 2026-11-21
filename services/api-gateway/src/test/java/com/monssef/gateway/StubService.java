@@ -16,7 +16,8 @@ import java.util.stream.Collectors;
 /**
  * A fake downstream service on a free port, with the HTTP server of the JDK (no extra dependency).
  * It answers every request with what it received, so a test sees where the gateway sent it:
- * {"service": "auth", "method": "POST", "path": "/api/auth/login", "authorization": "...", "body": "..."}.
+ * {"service": "auth", "method": "POST", "path": "/api/auth/login", "authorization": "...", "traceparent": "...",
+ * "body": "..."}.
  * A "status" query parameter sets the response status, e.g. /api/cart?status=401,
  * a "delay" one makes it wait before answering, in ms, e.g. /api/products?delay=2000.
  */
@@ -51,9 +52,10 @@ class StubService implements AutoCloseable {
         int status = Integer.parseInt(params.getOrDefault("status", "200"));
         pause(Long.parseLong(params.getOrDefault("delay", "0")));
         String json = """
-                {"service": "%s", "method": "%s", "path": "%s", "authorization": "%s", "body": "%s"}"""
+                {"service": "%s", "method": "%s", "path": "%s", "authorization": "%s", "traceparent": "%s", "body": "%s"}"""
                 .formatted(name, exchange.getRequestMethod(), exchange.getRequestURI().getPath(),
                         valueOrEmpty(exchange.getRequestHeaders().getFirst("Authorization")),
+                        valueOrEmpty(exchange.getRequestHeaders().getFirst("traceparent")),
                         body.replace("\"", "\\\""));
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().add("Content-Type", "application/json");
