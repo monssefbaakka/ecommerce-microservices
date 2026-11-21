@@ -413,6 +413,30 @@ jobs:
               caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           done
 
+      # infra/prometheus/prometheus.yml checked by promtool, from the Prometheus image of docker-compose.yml:
+      # a wrong key or relabel rule fails here instead of stopping the Prometheus container on the server
+      - name: Check the Prometheus configuration
+        run: |
+          image=$(sed -n 's/^ *image: *\(prom\/prometheus:.*\)$/\1/p' infra/docker-compose.yml)
+          docker run --rm --entrypoint promtool -v "$PWD/infra/prometheus:/config:ro" "$image" \
+            check config /config/prometheus.yml
+
+      # The Grafana files are loaded at each start: a dashboard that is not valid JSON, or a panel that queries
+      # a data source not provisioned, would only show up as an empty dashboard
+      - name: Check the Grafana dashboards and data sources
+        run: |
+          provisioned=$(yq -r '.datasources[].uid' infra/grafana/provisioning/datasources/datasources.yml)
+          yq -e '.providers | length > 0' infra/grafana/provisioning/dashboards/dashboards.yml > /dev/null
+          for dashboard in infra/grafana/dashboards/*.json; do
+            jq -e '.uid and .title and (.panels | length > 0)' "$dashboard" > /dev/null
+            for uid in $(jq -r '[.. | objects | .datasource? | objects | .uid] | unique[]' "$dashboard"); do
+              if ! echo "$provisioned" | grep -qx "$uid"; then
+                echo "::error file=$dashboard::data source \"$uid\" is not in datasources.yml"
+                exit 1
+              fi
+            done
+            echo "$dashboard: $(jq '[.panels[] | select(.type != "row")] | length' "$dashboard") panels"
+          done
 
       # The script run on the server over SSH: plain POSIX sh, checked by ShellCheck (installed on the runners)
       - name: Check deploy.sh
