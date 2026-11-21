@@ -44,6 +44,12 @@ app:
     email: ${ADMIN_EMAIL:}
     password: ${ADMIN_PASSWORD:}
 
+metrics:
+  scraper:
+    # Account the Prometheus container reads /actuator/prometheus with (HTTP Basic), and nothing else.
+    # dev only default: set METRICS_PASSWORD outside local dev, the same in Prometheus
+    username: ${METRICS_USERNAME:prometheus}
+    password: ${METRICS_PASSWORD:metrics-dev-only}
 
 management:
   tracing:
