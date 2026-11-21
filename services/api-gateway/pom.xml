@@ -56,6 +56,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Micrometer Tracing with Brave: a trace id for each request, in every log line, and the spans sent
+             to Zipkin (when management.tracing.export.zipkin.enabled is set) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-zipkin</artifactId>
+        </dependency>
         <!-- WebTestClient (now asked for with @AutoConfigureWebTestClient) and reactor-test: the webflux test starter since Spring Boot 4 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
