@@ -169,6 +169,12 @@
             <artifactId>spring-boot-starter-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- @AutoConfigureMetrics: the tests only keep an in-memory registry unless asked, this brings the annotation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-micrometer-metrics-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- @AutoConfigureTracing: the tests turn tracing off unless asked, this brings the annotation -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
