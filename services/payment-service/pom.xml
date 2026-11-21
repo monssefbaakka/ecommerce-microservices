@@ -116,6 +116,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-zipkin</artifactId>
         </dependency>
+        <!-- The metrics in the Prometheus text format on /actuator/prometheus, read by the Prometheus container -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
         <!-- Only checks the tokens issued by auth-service (same key) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
