@@ -239,8 +239,8 @@ The secrets stay in `infra/.env` on the server; GitHub only holds the SSH key of
 
 | Document | What is in it |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | Architecture diagram, containers and networks, data ownership, an order and its payment across the services, security model, pipeline from a commit to the server |
-| [docs/adr/](docs/adr/README.md) | Architecture decision records: why OpenFeign, the circuit breaker and retry rules, the cart-only fallback, the single-server deployment |
+| [docs/architecture.md](docs/architecture.md) | Architecture diagram, containers and networks, data ownership, an order and its payment across the services, traces and metrics, security model, pipeline from a commit to the server |
+| [docs/adr/](docs/adr/README.md) | Architecture decision records: why OpenFeign, the circuit breaker and retry rules, the cart-only fallback, the single-server deployment, Flyway, the observability stack |
 | [docs/deployment.md](docs/deployment.md) | Setting up the server, the first deploy, roll back and backups |
 | [docs/requests.http](docs/requests.http) | Ready-to-run requests for the monolith and, through the gateway, the microservices |
 | Swagger UI | `/swagger-ui.html` on the monolith (`:8080`) and on each service (`:8081` to `:8084`) |
@@ -754,7 +754,9 @@ To see what ran on a database: `SELECT version, description, installed_on, succe
 │                    docker-compose.ghcr.yml (same stack from the images published on ghcr.io),
 │                    docker-compose.prod.yml and deploy.sh (the server)
 │   ├── caddy/       Caddyfile: HTTPS entry point of the server
-│   └── postgres/    init-databases.sql: one database per service
+│   ├── grafana/     data sources (provisioning/) and dashboards (dashboards/), loaded at each start
+│   ├── postgres/    init-databases.sql: one database per service
+│   └── prometheus/  prometheus.yml: what Prometheus scrapes (services found through Eureka, the monolith)
 ├── docs/            architecture overview, architecture decisions (adr/), deployment guide, HTTP request examples
 └── .github/         CI and deploy workflows (workflows/), issue and pull request templates
 ```
