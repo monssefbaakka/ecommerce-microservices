@@ -80,6 +80,9 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build --wait
 | `ecommerce-payment-service` | `http://localhost:8084` | Payments |
 | `ecommerce-discovery-server` | `http://localhost:8761` | Eureka dashboard |
 | `ecommerce-postgres` | `localhost:5432` | PostgreSQL |
+| `ecommerce-grafana` | `http://localhost:3001` | Dashboards (`admin` / `admin` in dev), see [Observability](#observability) |
+| `ecommerce-prometheus` | `http://localhost:9090` | Metrics history and queries |
+| `ecommerce-zipkin` | `http://localhost:9411` | Traces: one per request, across the services |
 
 `--wait` returns once every container is `healthy`, i.e. answers on `/actuator/health/readiness` (`docker ps` shows the same status). The services wait for Eureka and PostgreSQL, the gateway starts last, once all of them are healthy: when the command returns, the first request through `:8090` gets an answer, not a 503 from a service still starting (about 1 min, plus the build the first time). Each one has its own database (`auth_db`, `product_db`, `order_db`, `payment_db`, next to the monolith's `ecommerce`), created by `infra/postgres/init-databases.sql` the first time the volume starts. With a volume created before, the services stop on `database "auth_db" does not exist`: run `docker compose -f infra/docker-compose.yml down -v` once (it deletes the data, the databases are created on the next `up`), or keep the data and create them by hand with `docker exec ecommerce-postgres psql -U ecommerce -d ecommerce -c "CREATE DATABASE auth_db"` (same for `product_db`, `order_db`, `payment_db`). Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
@@ -87,9 +90,10 @@ The containers do not share one network. Each joins only the ones it needs:
 
 | Network | Containers | Why |
 |---|---|---|
-| `ecommerce-backend` | the monolith, Eureka, the gateway and the four services | They find each other through Eureka and call each other (gateway routes, Feign clients) |
+| `ecommerce-backend` | the monolith, Eureka, the gateway and the four services, Prometheus and Zipkin | They find each other through Eureka and call each other (gateway routes, Feign clients); Prometheus reads their metrics, Zipkin receives their spans |
 | `ecommerce-database` | PostgreSQL, the monolith and the four services | Only the containers that own a database reach PostgreSQL |
 | `ecommerce-edge` | the gateway and the frontend (and Caddy on the server) | The public side: the frontend reaches the gateway, nothing behind it |
+| `ecommerce-monitoring` | Grafana, Prometheus and Zipkin | Grafana queries the other two, and reaches no service, Eureka or PostgreSQL |
 
 The gateway, the public entry point, and Eureka cannot even resolve the `postgres` host name: `docker exec ecommerce-api-gateway wget -qO- -T 2 http://postgres:5432` answers `bad address`. The published ports (`8090`, `5432`...) are not affected: the host still reaches every container.
 
