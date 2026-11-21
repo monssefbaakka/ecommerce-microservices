@@ -112,6 +112,12 @@
             <artifactId>spring-boot-starter-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- @AutoConfigureMetrics: the tests only keep an in-memory registry unless asked, this brings the annotation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-micrometer-metrics-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Integration tests against a real PostgreSQL started in Docker (versions from the Spring Boot BOM) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
