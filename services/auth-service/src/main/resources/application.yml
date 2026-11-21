@@ -63,6 +63,11 @@ metrics:
     password: ${METRICS_PASSWORD:metrics-dev-only}
 
 management:
+  observations:
+    enable:
+      # A span for each step of the Spring Security filter chain: half a dozen per request in Zipkin,
+      # around the span of the request itself, which already says how long it took and how it ended
+      spring.security: false
   tracing:
     sampling:
       # Share of the requests whose spans are sent to Zipkin: all of them in dev, lower under real traffic.
