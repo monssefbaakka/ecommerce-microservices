@@ -365,7 +365,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 256M
+          memory: 384M        # about 220 MB once started
     logging: *logging
 
 # Four networks instead of the default one, each container joins only the ones it needs:
