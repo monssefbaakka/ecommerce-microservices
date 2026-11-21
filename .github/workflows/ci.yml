@@ -387,6 +387,7 @@ jobs:
           JWT_SECRET: placeholder
           POSTGRES_PASSWORD: placeholder
           METRICS_PASSWORD: placeholder
+          GRAFANA_ADMIN_PASSWORD: placeholder
           DOMAIN: shop.example.com
         run: |
           compose="docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml -f infra/docker-compose.prod.yml --profile app"
@@ -411,6 +412,7 @@ jobs:
             docker run --rm -e DOMAIN="$domain" -v "$PWD/infra/caddy:/etc/caddy:ro" "$image" \
               caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
           done
+
 
       # The script run on the server over SSH: plain POSIX sh, checked by ShellCheck (installed on the runners)
       - name: Check deploy.sh
