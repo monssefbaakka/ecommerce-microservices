@@ -23,7 +23,8 @@ class PrometheusScrapeIT extends IntegrationTest {
 
     @Test
     void scrape_shouldGiveEveryMetricInThePrometheusFormat() throws Exception {
-        mockMvc.perform(get("/actuator/health")); // at least one request in http_server_requests
+        // At least one request in http_server_requests: the /actuator ones are not counted (ObservationConfig)
+        mockMvc.perform(get("/api/products"));
 
         mockMvc.perform(get("/actuator/prometheus").with(httpBasic(SCRAPER, SCRAPER_PASSWORD)))
                 .andExpect(status().isOk())
