@@ -11,6 +11,7 @@ links back.
 | [0003](0003-fallback-for-the-cart-only.md) | A fallback for showing the cart only | Accepted | #51 |
 | [0004](0004-deploy-on-a-single-server-with-docker-compose.md) | Deploy on a single server with Docker Compose | Accepted | #59 |
 | [0005](0005-flyway-migrations-instead-of-hibernate-ddl.md) | Flyway migrations instead of Hibernate DDL | Accepted | #114, #115, #116 |
+| [0006](0006-zipkin-prometheus-and-grafana-for-observability.md) | Zipkin, Prometheus and Grafana for observability | Accepted | #118, #119, #120 |
 
 To add one, copy the layout of the last file (title, status, date, issue, then *Context*, *Decision*,
 *Alternatives not chosen* when there were some, *Consequences*), take the next number and add a row here. See
