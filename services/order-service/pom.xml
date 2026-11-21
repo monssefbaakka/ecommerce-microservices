@@ -164,6 +164,12 @@
             <artifactId>spring-boot-starter-security-test</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- @AutoConfigureTracing: the tests turn tracing off unless asked, this brings the annotation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-zipkin-test</artifactId>
+            <scope>test</scope>
+        </dependency>
         <!-- Fake product-service over real HTTP for the Feign client tests (standalone: its Jetty stays out of the way) -->
         <dependency>
             <groupId>org.wiremock</groupId>
