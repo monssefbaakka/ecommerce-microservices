@@ -55,6 +55,7 @@ eureka:
     lease-renewal-interval-in-seconds: 10
     lease-expiration-duration-in-seconds: 30
 
+
 management:
   tracing:
     sampling:
@@ -71,6 +72,11 @@ management:
     tags:
       # Added to every metric: tells the services apart once their metrics are collected in one place
       application: ${spring.application.name}
+    distribution:
+      # Latency buckets on the HTTP requests: Prometheus computes the percentiles (p95,
+      # p99) over any time range and every instance, which the count and total of /actuator/metrics cannot
+      percentiles-histogram:
+        http.server.requests: true
   health:
     eureka:
       # This indicator reports the status Eureka holds for us, which itself comes from our health:
@@ -79,7 +85,9 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,flyway   # metrics, flyway: ADMIN token only (SecurityConfig); nothing else over HTTP
+        # metrics, flyway: ADMIN token only (SecurityConfig); prometheus: the scraper account only
+        # (MetricsScrapeSecurityConfig); nothing else over HTTP
+        include: health,info,metrics,flyway,prometheus
   endpoint:
     health:
       # Anyone sees {"status":"UP"}; only an ADMIN token sees each component (db, disk space...)
