@@ -18,6 +18,14 @@ x-spring-container: &spring-container
         memory: 512M
   logging: *logging
 
+# Tracing settings of every Spring container that serves requests, merged into its "environment" with
+# "<<: *tracing": the spans go to the Zipkin container below (http://localhost:9411)
+x-tracing: &tracing
+  ZIPKIN_ENABLED: "true"
+  ZIPKIN_URL: http://zipkin:9411/api/v2/spans
+  # Share of the requests whose spans are kept: all of them here, e.g. 0.1 under real traffic
+  TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -56,6 +64,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: *tracing
       DB_URL: jdbc:postgresql://postgres:5432/ecommerce   # the service name, not localhost
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -94,6 +103,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: *tracing
       DB_URL: jdbc:postgresql://postgres:5432/auth_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -121,6 +131,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: *tracing
       DB_URL: jdbc:postgresql://postgres:5432/product_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -148,6 +159,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: *tracing
       DB_URL: jdbc:postgresql://postgres:5432/order_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -175,6 +187,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: *tracing
       DB_URL: jdbc:postgresql://postgres:5432/payment_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -212,6 +225,7 @@ services:
       payment-service:
         condition: service_healthy
     environment:
+      <<: *tracing
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: api-gateway
       MONOLITH_URL: http://app:8080
@@ -238,6 +252,28 @@ services:
       resources:
         limits:
           memory: 64M
+    logging: *logging
+
+  # Collects the spans of the gateway, the monolith and the services: one trace per request, across every
+  # container it went through. UI on http://localhost:9411 (search by trace id, service or duration).
+  # Kept in memory: the traces are lost on a restart, fine for following requests, not for an audit
+  zipkin:
+    image: openzipkin/zipkin:3.6
+    container_name: ecommerce-zipkin
+    profiles: ["app"]
+    restart: unless-stopped
+    environment:
+      # Oldest spans dropped past this number: the memory stays under the limit below
+      MEM_MAX_SPANS: 100000
+    networks:   # receives the spans from the Spring containers only, no database
+      - backend
+    ports:
+      - "9411:9411"
+    # The image has its own HEALTHCHECK
+    deploy:
+      resources:
+        limits:
+          memory: 384M
     logging: *logging
 
 # Three networks instead of the default one, each container joins only the ones it needs:
