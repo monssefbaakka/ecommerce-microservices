@@ -111,6 +111,17 @@ logging:
     com.monssef.paymentservice.order.OrderServiceApi: DEBUG
 
 management:
+  tracing:
+    sampling:
+      # Share of the requests whose spans are sent to Zipkin: all of them in dev, lower under real traffic.
+      # The trace id is in the log lines of every request, sampled or not
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+    export:
+      zipkin:
+        # Off unless a Zipkin is there to receive the spans: "./mvnw spring-boot:run" alone sends nothing.
+        # Docker Compose turns it on with the address of its Zipkin container
+        enabled: ${ZIPKIN_ENABLED:false}
+        endpoint: ${ZIPKIN_URL:http://localhost:9411/api/v2/spans}
   metrics:
     tags:
       # Added to every metric: tells the services apart once their metrics are collected in one place
