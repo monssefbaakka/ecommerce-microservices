@@ -93,6 +93,12 @@
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-openfeign</artifactId>
         </dependency>
+        <!-- Each Feign call observed by Micrometer: it carries the trace of the request (traceparent header)
+             to the other service, gets a span of its own in Zipkin and an http.client.requests metric -->
+        <dependency>
+            <groupId>io.github.openfeign</groupId>
+            <artifactId>feign-micrometer</artifactId>
+        </dependency>
         <!-- Circuit breaker and retries around the calls to order-service (resilience4j modules from its BOM) -->
         <dependency>
             <groupId>io.github.resilience4j</groupId>
@@ -103,6 +109,17 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
+        </dependency>
+        <!-- Micrometer Tracing with Brave: a trace id for each request, in every log line, and the spans sent
+             to Zipkin (when management.tracing.export.zipkin.enabled is set) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-zipkin</artifactId>
+        </dependency>
+        <!-- The metrics in the Prometheus text format on /actuator/prometheus, read by the Prometheus container -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
         </dependency>
         <!-- Only checks the tokens issued by auth-service (same key) -->
         <dependency>
@@ -150,6 +167,18 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- @AutoConfigureMetrics: the tests only keep an in-memory registry unless asked, this brings the annotation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-micrometer-metrics-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- @AutoConfigureTracing: the tests turn tracing off unless asked, this brings the annotation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-zipkin-test</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- Fake order-service over real HTTP for the Feign client tests (standalone: its Jetty stays out of the way) -->

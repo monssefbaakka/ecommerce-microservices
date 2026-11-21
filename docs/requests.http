@@ -470,6 +470,8 @@ Authorization: Bearer {{adminLogin.response.body.$.token}}
 @orderService = http://localhost:8083
 @paymentService = http://localhost:8084
 @eureka = http://localhost:8761
+@zipkin = http://localhost:9411
+@prometheus = http://localhost:9090
 
 ### G1. Register through the gateway: routed to auth-service (expect 201, then 409 on a second run)
 POST {{gateway}}/api/auth/register
@@ -738,3 +740,34 @@ Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
 ### R1. Instances registered in Eureka: API-GATEWAY, AUTH-SERVICE, PRODUCT-SERVICE, ORDER-SERVICE and PAYMENT-SERVICE, status UP (expect 200)
 GET {{eureka}}/eureka/apps
 Accept: application/json
+
+############################################################
+# OBSERVABILITY: Prometheus, Zipkin (docker compose --profile app)
+############################################################
+
+### O1. Scrape order-service like Prometheus: scraper account, HTTP Basic (expect 200, Prometheus text format)
+GET {{orderService}}/actuator/prometheus
+Authorization: Basic prometheus metrics-dev-only
+
+### O2. Without the scraper account (expect 401)
+GET {{orderService}}/actuator/prometheus
+
+### O3. With the ADMIN token (expect 401: only the scraper account opens it)
+GET {{orderService}}/actuator/prometheus
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
+### O4. A request that brings its own trace: the gateway and product-service continue it (expect 200)
+GET {{gateway}}/api/products?size=1
+traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
+
+### O5. That trace in Zipkin, a few seconds later (expect 200: spans of api-gateway and product-service)
+GET {{zipkin}}/api/v2/trace/4bf92f3577b34da6a3ce929d0e0e4736
+
+### O6. The applications Prometheus scrapes: four services found through Eureka and the monolith (expect 200, every "health": "up")
+GET {{prometheus}}/api/v1/targets?state=active
+
+### O7. Latency p95 of each application over the last 5 minutes, as on the Grafana dashboard (expect 200)
+POST {{prometheus}}/api/v1/query
+Content-Type: application/x-www-form-urlencoded
+
+query=histogram_quantile(0.95, sum by (application, le) (rate(http_server_requests_seconds_bucket[5m])))

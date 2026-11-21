@@ -83,6 +83,17 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-actuator</artifactId>
         </dependency>
+        <!-- Micrometer Tracing with Brave: a trace id for each request, in every log line, and the spans sent
+             to Zipkin (when management.tracing.export.zipkin.enabled is set) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-zipkin</artifactId>
+        </dependency>
+        <!-- The metrics in the Prometheus text format on /actuator/prometheus, read by the Prometheus container -->
+        <dependency>
+            <groupId>io.micrometer</groupId>
+            <artifactId>micrometer-registry-prometheus</artifactId>
+        </dependency>
         <!-- Only checks the tokens issued by auth-service (same key) -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>
@@ -129,6 +140,12 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- @AutoConfigureMetrics: the tests only keep an in-memory registry unless asked, this brings the annotation -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-micrometer-metrics-test</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- Integration tests against a real PostgreSQL started in Docker (versions from the Spring Boot BOM) -->

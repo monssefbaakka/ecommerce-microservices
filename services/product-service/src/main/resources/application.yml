@@ -50,11 +50,39 @@ eureka:
     lease-renewal-interval-in-seconds: 10
     lease-expiration-duration-in-seconds: 30
 
+metrics:
+  scraper:
+    # Account the Prometheus container reads /actuator/prometheus with (HTTP Basic), and nothing else.
+    # dev only default: set METRICS_PASSWORD outside local dev, the same in Prometheus
+    username: ${METRICS_USERNAME:prometheus}
+    password: ${METRICS_PASSWORD:metrics-dev-only}
+
 management:
+  observations:
+    enable:
+      # A span for each step of the Spring Security filter chain: half a dozen per request in Zipkin,
+      # around the span of the request itself, which already says how long it took and how it ended
+      spring.security: false
+  tracing:
+    sampling:
+      # Share of the requests whose spans are sent to Zipkin: all of them in dev, lower under real traffic.
+      # The trace id is in the log lines of every request, sampled or not
+      probability: ${TRACING_SAMPLING_PROBABILITY:1.0}
+    export:
+      zipkin:
+        # Off unless a Zipkin is there to receive the spans: "./mvnw spring-boot:run" alone sends nothing.
+        # Docker Compose turns it on with the address of its Zipkin container
+        enabled: ${ZIPKIN_ENABLED:false}
+        endpoint: ${ZIPKIN_URL:http://localhost:9411/api/v2/spans}
   metrics:
     tags:
       # Added to every metric: tells the services apart once their metrics are collected in one place
       application: ${spring.application.name}
+    distribution:
+      # Latency buckets on the HTTP requests: Prometheus computes the percentiles (p95,
+      # p99) over any time range and every instance, which the count and total of /actuator/metrics cannot
+      percentiles-histogram:
+        http.server.requests: true
   health:
     eureka:
       # This indicator reports the status Eureka holds for us, which itself comes from our health:
@@ -63,7 +91,9 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,flyway   # metrics, flyway: ADMIN token only (SecurityConfig); nothing else over HTTP
+        # metrics, flyway: ADMIN token only (SecurityConfig); prometheus: the scraper account only
+        # (MetricsScrapeSecurityConfig); nothing else over HTTP
+        include: health,info,metrics,flyway,prometheus
   endpoint:
     health:
       # Anyone sees {"status":"UP"}; only an ADMIN token sees each component (db, disk space...)

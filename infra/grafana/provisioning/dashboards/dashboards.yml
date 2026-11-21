@@ -1,0 +1,13 @@
+# Loads every dashboard JSON of infra/grafana/dashboards (mounted on /etc/grafana/dashboards) at each
+# start, into an "E-commerce" folder. The JSON files in git are the source: a dashboard is changed there
+# (or exported from the UI into its file), not only in the UI
+apiVersion: 1
+
+providers:
+  - name: ecommerce
+    folder: E-commerce
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false     # a change made in the UI would be lost at the next start: export it instead
+    options:
+      path: /etc/grafana/dashboards

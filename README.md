@@ -9,7 +9,7 @@
 
 A Spring Boot e-commerce backend, built step by step from a simple monolith to a production-style microservices architecture with Docker and CI/CD, with a small React web shop on top.
 
-> **Status:** Phases 1 to 3 done (catalog, JWT security, cart and orders). Phase 4 done: unit and integration tests, Docker image and health checks. Phase 5 done: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on three networks (PostgreSQL only reachable by the services that own a database, the public side only by the gateway), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS, and a React [frontend](#frontend) (catalog, cart, orders, payments, catalog admin) is served next to the API. See the [roadmap](#roadmap).
+> **Status:** Phases 1 to 3 done (catalog, JWT security, cart and orders). Phase 4 done: unit and integration tests, Docker image and health checks. Phase 5 done: Eureka, API gateway, auth-service, product-service, order-service and payment-service run next to the monolith, each with its own database. Phase 6 done: the services call each other through OpenFeign clients, behind a circuit breaker and retries, the cart is still shown when product-service is down, and the gateway has timeouts. Each application publishes its metrics (HTTP, JVM, connection pool, circuit breakers, orders, payments) for an ADMIN token. Docker Compose runs the whole stack on three networks (PostgreSQL only reachable by the services that own a database, the public side only by the gateway), with health checks, memory limits and log rotation. Phase 7 done: GitHub Actions builds and tests every project, keeps the jars and builds the Docker images on each pull request, then publishes the images to GitHub Container Registry from `main` and release tags. Phase 8 in progress: each green run on `main` is deployed to a single server with Docker Compose, behind Caddy and HTTPS, and a React [frontend](#frontend) (catalog, cart, orders, payments, catalog admin) is served next to the API. Each request is traced across the services in Zipkin, and the metrics are collected by Prometheus and shown in Grafana ([Observability](#observability)). See the [roadmap](#roadmap).
 
 ## Tech stack
 
@@ -20,11 +20,11 @@ A Spring Boot e-commerce backend, built step by step from a simple monolith to a
 | Database | PostgreSQL 16, Flyway (versioned SQL migrations, schema validated by Hibernate at startup) |
 | Build | Maven (wrapper included) |
 | Mapping | MapStruct (entity ↔ DTO, generated at compile time) |
-| Containers | Docker, Docker Compose (health checks, three networks, memory limits, log rotation) |
+| Containers | Docker, Docker Compose (health checks, four networks, memory limits, log rotation) |
 | API docs | OpenAPI 3 / Swagger UI (springdoc 3) |
 | Security | Spring Security, JWT (jjwt) |
 | Microservices | Spring Cloud 2025.1: Netflix Eureka (service registry), Spring Cloud Gateway, LoadBalancer, OpenFeign (calls between services) |
-| Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info, metrics), Micrometer (business counters) |
+| Monitoring | Spring Boot Actuator (health, liveness / readiness probes, info, metrics), Micrometer (business counters), Micrometer Tracing with Brave and Zipkin (one trace per request across the services), Prometheus (metrics history, services found through Eureka), Grafana (provisioned dashboard) |
 | Tests | JUnit 5, Mockito, MockMvc, Testcontainers 2, WireMock (fake services for the Feign clients), JaCoCo |
 | Resilience | Resilience4j 2.4 (resilience4j-spring-boot4): circuit breaker and retries around the Feign calls, last known products as fallback for the cart |
 | CI | GitHub Actions: build, tests and Docker images of every project on each pull request, images published to GitHub Container Registry (ghcr.io) |
@@ -80,6 +80,9 @@ docker compose -f infra/docker-compose.yml --profile app up -d --build --wait
 | `ecommerce-payment-service` | `http://localhost:8084` | Payments |
 | `ecommerce-discovery-server` | `http://localhost:8761` | Eureka dashboard |
 | `ecommerce-postgres` | `localhost:5432` | PostgreSQL |
+| `ecommerce-grafana` | `http://localhost:3001` | Dashboards (`admin` / `admin` in dev), see [Observability](#observability) |
+| `ecommerce-prometheus` | `http://localhost:9090` | Metrics history and queries |
+| `ecommerce-zipkin` | `http://localhost:9411` | Traces: one per request, across the services |
 
 `--wait` returns once every container is `healthy`, i.e. answers on `/actuator/health/readiness` (`docker ps` shows the same status). The services wait for Eureka and PostgreSQL, the gateway starts last, once all of them are healthy: when the command returns, the first request through `:8090` gets an answer, not a 503 from a service still starting (about 1 min, plus the build the first time). Each one has its own database (`auth_db`, `product_db`, `order_db`, `payment_db`, next to the monolith's `ecommerce`), created by `infra/postgres/init-databases.sql` the first time the volume starts. With a volume created before, the services stop on `database "auth_db" does not exist`: run `docker compose -f infra/docker-compose.yml down -v` once (it deletes the data, the databases are created on the next `up`), or keep the data and create them by hand with `docker exec ecommerce-postgres psql -U ecommerce -d ecommerce -c "CREATE DATABASE auth_db"` (same for `product_db`, `order_db`, `payment_db`). Without `--profile app`, Compose only starts PostgreSQL, for `./mvnw spring-boot:run`.
 
@@ -87,9 +90,10 @@ The containers do not share one network. Each joins only the ones it needs:
 
 | Network | Containers | Why |
 |---|---|---|
-| `ecommerce-backend` | the monolith, Eureka, the gateway and the four services | They find each other through Eureka and call each other (gateway routes, Feign clients) |
+| `ecommerce-backend` | the monolith, Eureka, the gateway and the four services, Prometheus and Zipkin | They find each other through Eureka and call each other (gateway routes, Feign clients); Prometheus reads their metrics, Zipkin receives their spans |
 | `ecommerce-database` | PostgreSQL, the monolith and the four services | Only the containers that own a database reach PostgreSQL |
 | `ecommerce-edge` | the gateway and the frontend (and Caddy on the server) | The public side: the frontend reaches the gateway, nothing behind it |
+| `ecommerce-monitoring` | Grafana, Prometheus and Zipkin | Grafana queries the other two, and reaches no service, Eureka or PostgreSQL |
 
 The gateway, the public entry point, and Eureka cannot even resolve the `postgres` host name: `docker exec ecommerce-api-gateway wget -qO- -T 2 http://postgres:5432` answers `bad address`. The published ports (`8090`, `5432`...) are not affected: the host still reaches every container.
 
@@ -97,7 +101,7 @@ To set the JWT secret or create an ADMIN account, copy `infra/.env.example` to `
 
 Each service has its own Dockerfile, built the same way. The monolith's image is built by [monolith/Dockerfile](monolith/Dockerfile) in two stages: the JDK and Maven only exist in the build stage, the final image holds a JRE and the application, split into Spring Boot layers so that a code change only rebuilds the last one. It runs as a non-root user and sizes the heap from the container memory limit (`JAVA_TOOL_OPTIONS`).
 
-In Compose, each Spring container is limited to 512 MB, so the JVM takes at most 384 MB of heap instead of 75% of all the memory given to Docker (a started service uses about 220 to 330 MB, `docker stats`). Its logs rotate at 10 MB, 3 files kept. These settings, the `app` profile and the restart policy are written once in the `x-spring-container` block of [infra/docker-compose.yml](infra/docker-compose.yml) and merged into each service.
+In Compose, each Spring container is limited to 512 MB, so the JVM takes at most 384 MB of heap instead of 75% of all the memory given to Docker (a started service uses about 250 to 400 MB, `docker stats`). Its logs rotate at 10 MB, 3 files kept. These settings, the `app` profile and the restart policy are written once in the `x-spring-container` block of [infra/docker-compose.yml](infra/docker-compose.yml) and merged into each service.
 
 #### Without building: the published images
 
@@ -195,7 +199,7 @@ On `main` and on a release tag, the checked image is then pushed to GitHub Conta
 
 The image layers are cached between runs, one cache per image: when only the code changed, the layer holding the Maven dependencies is reused. The push reuses the same cache, so nothing is compiled twice.
 
-A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`. It does the same with `infra/docker-compose.ghcr.yml` merged over it, and fails if any service image is still a local build instead of a `ghcr.io` one. Then with the production override on top ([Deployment](#deployment)): the job fails if any port other than Caddy's is published on every interface, and it also validates the Caddyfile and runs ShellCheck on `infra/deploy.sh`.
+A separate job validates `infra/docker-compose.yml` with every service of the `app` profile (`docker compose config`), so that a broken Compose file fails the pull request rather than the next `docker compose up`. It does the same with `infra/docker-compose.ghcr.yml` merged over it, and fails if any service image is still a local build instead of a `ghcr.io` one. Then with the production override on top ([Deployment](#deployment)): the job fails if any port other than Caddy's is published on every interface (Grafana, Prometheus and Zipkin included), and it also validates the Caddyfile and runs ShellCheck on `infra/deploy.sh`. The Prometheus configuration is checked by `promtool` from the Prometheus image of the Compose file, and every Grafana dashboard must be valid JSON whose panels only query a data source of `datasources.yml`.
 
 ### Published images
 
@@ -235,8 +239,8 @@ The secrets stay in `infra/.env` on the server; GitHub only holds the SSH key of
 
 | Document | What is in it |
 |---|---|
-| [docs/architecture.md](docs/architecture.md) | Architecture diagram, containers and networks, data ownership, an order and its payment across the services, security model, pipeline from a commit to the server |
-| [docs/adr/](docs/adr/README.md) | Architecture decision records: why OpenFeign, the circuit breaker and retry rules, the cart-only fallback, the single-server deployment |
+| [docs/architecture.md](docs/architecture.md) | Architecture diagram, containers and networks, data ownership, an order and its payment across the services, traces and metrics, security model, pipeline from a commit to the server |
+| [docs/adr/](docs/adr/README.md) | Architecture decision records: why OpenFeign, the circuit breaker and retry rules, the cart-only fallback, the single-server deployment, Flyway, the observability stack |
 | [docs/deployment.md](docs/deployment.md) | Setting up the server, the first deploy, roll back and backups |
 | [docs/requests.http](docs/requests.http) | Ready-to-run requests for the monolith and, through the gateway, the microservices |
 | Swagger UI | `/swagger-ui.html` on the monolith (`:8080`) and on each service (`:8081` to `:8084`) |
@@ -540,8 +544,9 @@ Internal details (SQL message, stack trace) are never sent to the client: they g
 | GET | `/actuator/metrics` | ADMIN | Names of the metrics (HTTP requests, JVM, connection pool...) | 200 / 401 / 403 |
 | GET | `/actuator/metrics/{name}` | ADMIN | Value of a metric, filtered by tag: `?tag=status:200` | 200 / 401 / 403 / 404 |
 | GET | `/actuator/flyway` | ADMIN | Migrations of the database: version, description, state and date each script ran | 200 / 401 / 403 |
+| GET | `/actuator/prometheus` | Scraper account | Every metric in the Prometheus text format, read by the [Prometheus](#observability) container with HTTP Basic (`METRICS_USERNAME` / `METRICS_PASSWORD`) | 200 / 401 |
 
-Only `health`, `info`, `metrics` and `flyway` are exposed over HTTP: `env`, `beans`, `heapdump`... stay closed (**404**, even for an ADMIN). Any `/actuator/**` URL other than `health` and `info` needs the ADMIN role (**401** without a token, **403** with a USER token).
+Only `health`, `info`, `metrics`, `flyway` and `prometheus` are exposed over HTTP: `env`, `beans`, `heapdump`... stay closed (**404**, even for an ADMIN). Any `/actuator/**` URL other than `health`, `info` and `prometheus` needs the ADMIN role (**401** without a token, **403** with a USER token). `/actuator/prometheus` is the other way round: only the scraper account opens it, a token never does (**401**, even an ADMIN one), and that account opens nothing else.
 
 `/actuator/flyway` exists on the monolith and the four services that own a database. It tells which version of the schema a running instance has, without opening `psql`:
 
@@ -568,6 +573,8 @@ The monolith and the four services publish their metrics with Micrometer, on `/a
 
 The business counters exist from start-up, at 0: a missing counter would mean "not measured", not "nothing happened".
 
+`http.server.requests` (and `http.client.requests`, the Feign calls) only count the traffic of the shop: the `/actuator` requests (health checks of Docker and Eureka, scrapes of Prometheus) and the calls of the Eureka client are left out. Both publish histogram buckets, from which Prometheus computes the latency percentiles of the [Grafana dashboard](#observability).
+
 ```bash
 # With an ADMIN token (POST /api/auth/login):
 curl -H "Authorization: Bearer $TOKEN" http://localhost:8083/actuator/metrics/orders.placed
@@ -575,6 +582,79 @@ curl -H "Authorization: Bearer $TOKEN" "http://localhost:8084/actuator/metrics/p
 ```
 
 The gateway and Eureka check no token: their metrics would be public, so they are not exposed (**404**). The gateway does not route `/actuator/**`: from `:8090`, the metrics of the services stay out of reach.
+
+## Observability
+
+With `docker compose --profile app`, three more containers follow what the stack does: **Zipkin** for the
+traces, **Prometheus** for the metrics history, **Grafana** for the dashboards. Why these:
+[ADR 0006](docs/adr/0006-zipkin-prometheus-and-grafana-for-observability.md).
+
+### Traces (Zipkin)
+
+Every request gets a trace id, from the gateway to the last service it reaches. The gateway starts the trace (or
+continues the W3C `traceparent` header sent by the client) and passes it to the service; the Feign calls carry it
+on (order-service to product-service, payment-service to order-service). Each application sends its spans to
+Zipkin, and writes the trace id and the span id in every log line, after its name and thread:
+
+```
+2026-11-21T14:08:10.297Z DEBUG 1 --- [order-service] [nio-8083-exec-9] [6b01a5ca309b5b7f242914dc3578de05-b0709a2a8efc917e] c.m.o.product.ProductServiceApi : [ProductServiceApi#reserve] ---> POST http://product-service/internal/stock/reservations HTTP/1.1
+```
+
+To follow a request: copy the trace id of a log line into the search box of **http://localhost:9411**, or search
+Zipkin by service, endpoint, duration or error. Placing an order shows the span of the gateway, `POST
+/api/orders` in order-service and, under it, the calls to product-service with the time spent in each.
+
+The health checks, the Prometheus scrapes, the calls of the Eureka client and the steps of the Spring Security
+filter chain are not traced: they would make most of the traces.
+
+| Variable | Default | |
+|---|---|---|
+| `ZIPKIN_ENABLED` | `false` (`true` in Compose) | Send the spans. Off when an application runs alone (`./mvnw spring-boot:run`): the trace id is still in the logs |
+| `ZIPKIN_URL` | `http://localhost:9411/api/v2/spans` (`http://zipkin:9411/...` in Compose) | Where to send them |
+| `TRACING_SAMPLING_PROBABILITY` | `1.0` | Share of the requests whose spans are sent, e.g. `0.1` under real traffic. Set in `infra/.env` for the whole stack |
+
+Zipkin keeps the spans in memory (100 000 at most): they are lost when its container restarts. When Zipkin is
+down, the applications keep answering: they log one warning and drop the spans until it is back.
+
+### Metrics (Prometheus)
+
+Every 15 s, Prometheus reads `/actuator/prometheus` on the monolith and on every instance of auth, product, order
+and payment service ([infra/prometheus/prometheus.yml](infra/prometheus/prometheus.yml)). It asks Eureka which
+instances exist, like the gateway: a second instance of a service is scraped as soon as it registers. The
+monolith, which does not register, is read at its fixed address. 15 days (1 GB at most) of history are kept in
+the `prometheus_data` volume.
+
+**http://localhost:9090/targets** lists what is scraped (every line should be `UP`), and the query page runs
+PromQL, e.g. `sum by (application) (rate(http_server_requests_seconds_count[5m]))`.
+
+The scrape endpoint is protected by a dedicated account with HTTP Basic, not by a JWT (Prometheus cannot log in
+and renew a token). The applications and Prometheus read the same two variables:
+
+| Variable | Default | |
+|---|---|---|
+| `METRICS_USERNAME` | `prometheus` | Scraper account |
+| `METRICS_PASSWORD` | `metrics-dev-only` | Its password; required on the server, no default there |
+
+```bash
+curl -u prometheus:metrics-dev-only http://localhost:8083/actuator/prometheus | grep orders_placed
+```
+
+### Dashboards (Grafana)
+
+**http://localhost:3001**, `admin` / `admin` in dev (`GRAFANA_ADMIN_PASSWORD`). The home page is the
+*E-commerce overview* dashboard, filtered by application:
+
+| Row | Panels |
+|---|---|
+| Overview | Each scraped instance `UP` or `DOWN` |
+| HTTP requests | Requests per second, share of 5xx, latency p95 per application, the 10 slowest endpoints, latency of the Feign calls between services |
+| Resilience and business | Circuit breakers open or half open, orders and payments per minute (and carts shown from the fallback), error log lines per minute |
+| JVM and database | Heap used, CPU, database connections in use and waiting |
+
+The traces are in *Explore* → *Zipkin*: paste a trace id, or search by service. The data sources and the
+dashboard are files in [infra/grafana](infra/grafana), loaded at each start; Grafana has no volume, so a change
+made in the UI is lost on restart: export the dashboard (*Share* → *Export*) into
+`infra/grafana/dashboards/ecommerce-overview.json` to keep it.
 
 ## Frontend
 
@@ -746,7 +826,9 @@ To see what ran on a database: `SELECT version, description, installed_on, succe
 │                    docker-compose.ghcr.yml (same stack from the images published on ghcr.io),
 │                    docker-compose.prod.yml and deploy.sh (the server)
 │   ├── caddy/       Caddyfile: HTTPS entry point of the server
-│   └── postgres/    init-databases.sql: one database per service
+│   ├── grafana/     data sources (provisioning/) and dashboards (dashboards/), loaded at each start
+│   ├── postgres/    init-databases.sql: one database per service
+│   └── prometheus/  prometheus.yml: what Prometheus scrapes (services found through Eureka, the monolith)
 ├── docs/            architecture overview, architecture decisions (adr/), deployment guide, HTTP request examples
 └── .github/         CI and deploy workflows (workflows/), issue and pull request templates
 ```

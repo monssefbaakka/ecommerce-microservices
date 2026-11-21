@@ -1,0 +1,44 @@
+# Configuration of the Prometheus container (infra/docker-compose.yml). Every 15 s Prometheus reads
+# /actuator/prometheus on the monolith and on every instance of the services, and keeps the values.
+#
+# The scrape endpoint needs the scraper account (METRICS_USERNAME / METRICS_PASSWORD in infra/.env): Docker
+# Compose writes it into the two files below, the services read the same variables.
+#
+# Checked in CI with "promtool check config".
+
+global:
+  scrape_interval: 15s
+  scrape_timeout: 5s
+  evaluation_interval: 15s
+
+scrape_configs:
+  # auth-service, product-service, order-service and payment-service: Prometheus asks Eureka which instances
+  # are registered, like the gateway does. A second instance of a service is scraped as soon as it registers,
+  # with no address to add here
+  - job_name: services
+    metrics_path: /actuator/prometheus
+    basic_auth:
+      username_file: /etc/prometheus/metrics-username
+      password_file: /etc/prometheus/metrics-password
+    eureka_sd_configs:
+      - server: http://discovery-server:8761/eureka
+        refresh_interval: 30s
+    relabel_configs:
+      # Only the services that publish their metrics: the gateway is registered too, but it faces the
+      # internet and exposes no scrape endpoint
+      - source_labels: [__meta_eureka_app_name]
+        regex: AUTH-SERVICE|PRODUCT-SERVICE|ORDER-SERVICE|PAYMENT-SERVICE
+        action: keep
+      # "order-service:8083" rather than the Eureka instance id: the same name as in the logs and in Zipkin
+      - source_labels: [__meta_eureka_app_instance_hostname, __meta_eureka_app_instance_port]
+        separator: ":"
+        target_label: instance
+
+  # The monolith does not register in Eureka: its fixed address in the Compose network
+  - job_name: monolith
+    metrics_path: /actuator/prometheus
+    basic_auth:
+      username_file: /etc/prometheus/metrics-username
+      password_file: /etc/prometheus/metrics-password
+    static_configs:
+      - targets: ["app:8080"]

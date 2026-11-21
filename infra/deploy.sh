@@ -15,7 +15,7 @@ cd "$(dirname "$0")"
 tag=${1:?usage: ./deploy.sh <image tag>, e.g. sha-1a2b3c4 or 1.2.0}
 
 if [ ! -f .env ]; then
-  echo "infra/.env is missing: copy .env.example to .env and set at least JWT_SECRET and POSTGRES_PASSWORD" >&2
+  echo "infra/.env is missing: copy .env.example to .env and set at least JWT_SECRET, POSTGRES_PASSWORD, METRICS_PASSWORD and GRAFANA_ADMIN_PASSWORD" >&2
   exit 1
 fi
 

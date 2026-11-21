@@ -36,8 +36,11 @@ flowchart LR
 - A domain name pointing to its IP address (an `A` record), or none: `<IP with dashes>.sslip.io` resolves
   to the IP written in it (`203-0-113-10.sslip.io` → `203.0.113.10`), and Let's Encrypt gives it a certificate.
 
-Seven JVMs are limited to 512 MB each in Compose, plus PostgreSQL, Caddy and the nginx of the frontend (64 MB). Once started they use about
-2 to 2.5 GB together (`docker stats`): 4 GB leaves room for the system and the peaks.
+Seven JVMs are limited to 512 MB each in Compose, plus PostgreSQL, Caddy, the nginx of the frontend (64 MB), and
+Zipkin, Prometheus and Grafana (about 530 MB together). Once started they use about 3 GB together
+(`docker stats`): 4 GB leaves room for the system and the peaks, not much more. On a tight server, the three
+observability containers are the first ones to stop (`dc stop zipkin prometheus grafana`): the shop does not
+depend on them, the spans are dropped and the metrics no longer recorded until they start again.
 
 ## 1. Prepare the server (once)
 
@@ -78,18 +81,22 @@ cd ~/ecommerce/infra
 cat > .env <<EOF
 JWT_SECRET=$(openssl rand -base64 32)
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
+METRICS_PASSWORD=$(openssl rand -hex 24)
+GRAFANA_ADMIN_PASSWORD=$(openssl rand -hex 12)
 DOMAIN=shop.example.com
 ADMIN_EMAIL=admin@example.com
 ADMIN_PASSWORD=$(openssl rand -hex 12)
 EOF
 chmod 600 .env
-cat .env   # note the ADMIN_PASSWORD
+cat .env   # note the ADMIN_PASSWORD and the GRAFANA_ADMIN_PASSWORD
 ```
 
 | Variable | |
 |---|---|
 | `JWT_SECRET` | Required. Signs and checks the tokens in every service |
 | `POSTGRES_PASSWORD` | Required. Read by PostgreSQL when its volume is created, the first time only: to change it later, `ALTER USER ecommerce PASSWORD '...'` in `psql`, then the new value here |
+| `METRICS_PASSWORD` | Required. Password of the account Prometheus reads `/actuator/prometheus` with, in every application and in Prometheus |
+| `GRAFANA_ADMIN_PASSWORD` | Required. Password of the `admin` account of Grafana. Grafana keeps no state: a new value applies at the next restart of its container |
 | `DOMAIN` | The domain served over HTTPS. Not set: plain HTTP on port 80 (to test with the IP address only) |
 | `ADMIN_EMAIL`, `ADMIN_PASSWORD` | Optional. An ADMIN account created at startup, to manage the catalog |
 
@@ -191,6 +198,12 @@ The first row is the `BASELINE` (`schema created by Hibernate before Flyway`), t
 On a server deployed for the first time, the databases are empty: every script runs from `V1` and there is no
 baseline row.
 
+**The first deploy with Zipkin, Prometheus and Grafana** (#118, #119) needs two new variables in
+`infra/.env`, **before the merge**: `METRICS_PASSWORD` and `GRAFANA_ADMIN_PASSWORD` (see
+[2. Secrets](#2-secrets-on-the-server-only)). Without them `docker compose` stops before pulling anything
+(`required variable METRICS_PASSWORD is missing a value`): the deploy fails and the running version is not
+touched. Add them, then run the Deploy workflow again by hand. The deploy then starts three more containers.
+
 While a container is recreated, its service is unavailable for a few seconds: the gateway answers **503**
 for it, and Caddy holds the requests for up to 30 s while the gateway or the frontend itself restarts (no **502**).
 
@@ -229,9 +242,20 @@ docker stats                              # memory and CPU of each container
 docker exec -it ecommerce-postgres psql -U ecommerce -d order_db
 ```
 
-The Eureka dashboard is only on the server's loopback: `ssh -L 8761:localhost:8761 deploy@203.0.113.10`,
-then `http://localhost:8761` on your machine. The services' Actuator endpoints are not reachable from the
-internet (the gateway does not route `/actuator/**`).
+The Eureka dashboard, Grafana, Prometheus and Zipkin only listen on the server's loopback. One SSH tunnel opens
+all four on your machine:
+
+```bash
+ssh -L 8761:localhost:8761 -L 3001:localhost:3001 -L 9090:localhost:9090 -L 9411:localhost:9411 deploy@203.0.113.10
+```
+
+then `http://localhost:3001` (Grafana, `admin` / `GRAFANA_ADMIN_PASSWORD`), `http://localhost:9090/targets`
+(Prometheus: every application should be `UP`), `http://localhost:9411` (Zipkin) and `http://localhost:8761`
+(Eureka). The services' Actuator endpoints are not reachable from the internet (the gateway does not route
+`/actuator/**`).
+
+To find the trace of a failed request: the trace id is the first value between brackets after the service name
+in its log lines (`docker logs ecommerce-order-service | grep ERROR`), to paste in the search box of Zipkin.
 
 The containers restart by themselves after a crash or a reboot of the server (`restart: unless-stopped`).
 
@@ -252,5 +276,8 @@ To restore one on a fresh volume: `gunzip -c db-2026-11-13.sql.gz | docker exec 
 - **One server:** if it goes down, the site is down. No load balancing between servers, and PostgreSQL runs
   next to the applications.
 - **A few seconds of downtime per deploy** for each service whose image changed (one container per service).
-- **No central logs or metrics:** `docker logs` and `/actuator/metrics` (ADMIN token) on each service.
+- **No central logs:** `docker logs` on each container. The trace id in each line links them to the trace in
+  Zipkin, and the metrics are in Prometheus and Grafana.
+- **Traces kept in memory:** Zipkin loses them when its container restarts (each deploy that changes its image),
+  and keeps the last 100 000 spans at most. Enough to look into a recent problem, not to audit the past.
 - **amd64 only:** an ARM server would need images built for `linux/arm64` too.

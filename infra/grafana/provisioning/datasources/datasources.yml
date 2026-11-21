@@ -1,0 +1,23 @@
+# Data sources of the Grafana container (infra/docker-compose.yml), created at each start: nothing to set up
+# by hand in the UI, and the same on every machine. Changes made in the UI to these two are refused.
+apiVersion: 1
+
+datasources:
+  # The metrics of the monolith and the services, read by the Prometheus container
+  - name: Prometheus
+    uid: prometheus           # referenced by the dashboards
+    type: prometheus
+    access: proxy             # queried by the Grafana server, never by the browser
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s       # the scrape interval: $__rate_interval is never shorter than 4 scrapes
+
+  # The traces: Explore → Zipkin, search a trace id taken from a log line
+  - name: Zipkin
+    uid: zipkin
+    type: zipkin
+    access: proxy
+    url: http://zipkin:9411
+    editable: false

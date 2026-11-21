@@ -18,6 +18,21 @@ x-spring-container: &spring-container
         memory: 512M
   logging: *logging
 
+# Tracing settings of every Spring container that serves requests, merged into its "environment" with
+# "<<: *tracing": the spans go to the Zipkin container below (http://localhost:9411)
+x-tracing: &tracing
+  ZIPKIN_ENABLED: "true"
+  ZIPKIN_URL: http://zipkin:9411/api/v2/spans
+  # Share of the requests whose spans are kept: all of them here, e.g. 0.1 under real traffic
+  TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
+
+# Account the Prometheus container reads /actuator/prometheus with, merged into the "environment" of the
+# monolith and the services with "<<: *metrics-scraper". Prometheus gets the same values from the
+# "configs" at the end of this file
+x-metrics-scraper: &metrics-scraper
+  METRICS_USERNAME: ${METRICS_USERNAME:-prometheus}
+  METRICS_PASSWORD: ${METRICS_PASSWORD:-metrics-dev-only}   # local dev only: set it in infra/.env on a server
+
 services:
   postgres:
     image: postgres:16-alpine
@@ -56,6 +71,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: [*tracing, *metrics-scraper]
       DB_URL: jdbc:postgresql://postgres:5432/ecommerce   # the service name, not localhost
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -94,6 +110,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: [*tracing, *metrics-scraper]
       DB_URL: jdbc:postgresql://postgres:5432/auth_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -121,6 +138,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: [*tracing, *metrics-scraper]
       DB_URL: jdbc:postgresql://postgres:5432/product_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -148,6 +166,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: [*tracing, *metrics-scraper]
       DB_URL: jdbc:postgresql://postgres:5432/order_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -175,6 +194,7 @@ services:
       - path: .env
         required: false
     environment:
+      <<: [*tracing, *metrics-scraper]
       DB_URL: jdbc:postgresql://postgres:5432/payment_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -212,6 +232,7 @@ services:
       payment-service:
         condition: service_healthy
     environment:
+      <<: *tracing
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: api-gateway
       MONOLITH_URL: http://app:8080
@@ -240,10 +261,119 @@ services:
           memory: 64M
     logging: *logging
 
-# Three networks instead of the default one, each container joins only the ones it needs:
-# - backend:  the Spring containers, which find each other through Eureka and call each other
-# - database: PostgreSQL and the containers that own a database in it
-# - edge:     the public side, the gateway and the frontend (and Caddy on the server)
+  # Collects the spans of the gateway, the monolith and the services: one trace per request, across every
+  # container it went through. UI on http://localhost:9411 (search by trace id, service or duration).
+  # Kept in memory: the traces are lost on a restart, fine for following requests, not for an audit
+  zipkin:
+    image: openzipkin/zipkin:3.6
+    container_name: ecommerce-zipkin
+    profiles: ["app"]
+    restart: unless-stopped
+    environment:
+      # Oldest spans dropped past this number: the memory stays under the limit below
+      MEM_MAX_SPANS: 100000
+    networks:   # no database
+      - backend      # receives the spans from the Spring containers
+      - monitoring   # Grafana, which reads the traces
+    ports:
+      - "9411:9411"
+    # Replaces the HEALTHCHECK of the image, which calls the address given by "hostname -i": with two
+    # networks that is two addresses, and the check always fails
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9411/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+    logging: *logging
+
+  # Reads the metrics of the monolith and the services every 15 s (infra/prometheus/prometheus.yml), finds
+  # the services through Eureka, and keeps 15 days of history. Query UI on http://localhost:9090
+  prometheus:
+    image: prom/prometheus:v3.15.1
+    container_name: ecommerce-prometheus
+    profiles: ["app"]
+    restart: unless-stopped
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      # Whichever comes first: older values are deleted past 15 days or 1 GB on disk
+      - --storage.tsdb.retention.time=15d
+      - --storage.tsdb.retention.size=1GB
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    configs:
+      - source: metrics-username
+        target: /etc/prometheus/metrics-username
+      - source: metrics-password
+        target: /etc/prometheus/metrics-password
+    networks:
+      - backend      # Eureka, the services and the monolith it scrapes
+      - monitoring   # Grafana, which queries it
+    ports:
+      - "9090:9090"
+    # BusyBox wget ships with the image
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging: *logging
+
+  # Dashboards on http://localhost:3001 (admin / GRAFANA_ADMIN_PASSWORD, "admin" in dev): the "E-commerce
+  # overview" dashboard on top of Prometheus, and the traces of Zipkin in Explore. Everything comes from
+  # infra/grafana (data sources, dashboards), loaded at each start: no volume, a change made in the UI only
+  # lasts until the next restart, export it into its JSON file to keep it
+  grafana:
+    image: grafana/grafana:13.1
+    container_name: ecommerce-grafana
+    profiles: ["app"]
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}   # local dev only: set it in infra/.env on a server
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      # The overview instead of the welcome page after the login
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /etc/grafana/dashboards/ecommerce-overview.json
+      # No call to grafana.com from the server (usage statistics, version check)
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_ANALYTICS_CHECK_FOR_PLUGIN_UPDATES: "false"
+    volumes:
+      # The two folders only: mounting all of provisioning/ would hide the empty plugins/ and alerting/
+      # folders of the image, and Grafana logs an error for each at every start
+      - ./grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana/dashboards:/etc/grafana/dashboards:ro
+    networks:   # Prometheus and Zipkin only: Grafana cannot reach a service, Eureka or PostgreSQL
+      - monitoring
+    ports:
+      - "3001:3000"             # 3000 is the frontend
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 384M        # about 220 MB once started
+    logging: *logging
+
+# Four networks instead of the default one, each container joins only the ones it needs:
+# - backend:    the Spring containers, which find each other through Eureka and call each other (and
+#               Prometheus and Zipkin, which read their metrics and receive their spans)
+# - database:   PostgreSQL and the containers that own a database in it
+# - edge:       the public side, the gateway and the frontend (and Caddy on the server)
+# - monitoring: Grafana, Prometheus and Zipkin
 # The gateway and Eureka are not on "database": a flaw in the public entry point cannot reach PostgreSQL.
 # The frontend is only on "edge": it reaches the gateway, nothing behind it.
 # The published ports (8090, 5432...) still work from the host: only container to container traffic is split.
@@ -254,6 +384,16 @@ networks:
     name: ecommerce-database
   edge:
     name: ecommerce-edge
+  monitoring:
+    name: ecommerce-monitoring
 
 volumes:
   postgres_data:
+  prometheus_data:   # the metrics history: kept across restarts and deploys
+
+# Files mounted into the containers, written by Docker Compose from the variables (and their dev defaults)
+configs:
+  metrics-username:
+    content: ${METRICS_USERNAME:-prometheus}
+  metrics-password:
+    content: ${METRICS_PASSWORD:-metrics-dev-only}

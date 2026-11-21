@@ -87,6 +87,8 @@ class ActuatorIT extends IntegrationTest {
 
     @Test
     void metrics_shouldNeedAdmin() throws Exception {
+        // At least one request in http.server.requests: the /actuator ones are not counted (ObservationConfig)
+        mockMvc.perform(get("/api/products"));
         mockMvc.perform(get("/actuator/metrics"))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(auth(get("/actuator/metrics"), registerAndLogin("john@example.com")))

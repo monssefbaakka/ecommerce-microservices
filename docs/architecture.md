@@ -71,16 +71,21 @@ picture readable.
 | payment-service | `ecommerce-payment-service` | backend, database | - | Simulated card payments |
 | app (monolith) | `ecommerce-monolith` | backend, database | - | Phases 1 to 4; still answers the `/api/**` routes no service owns |
 | postgres | `postgres:16-alpine` | database | - | One instance, one database per owner, created by `infra/postgres/init-databases.sql` |
+| zipkin | `openzipkin/zipkin:3.6` | backend, monitoring | `127.0.0.1:9411` (through an SSH tunnel) | Receives the spans of the gateway, the monolith and the services; keeps the last 100 000 in memory |
+| prometheus | `prom/prometheus:v3.15.1` | backend, monitoring | `127.0.0.1:9090` (through an SSH tunnel) | Scrapes `/actuator/prometheus` every 15 s, services found through Eureka; 15 days of history |
+| grafana | `grafana/grafana:13.1` | monitoring | `127.0.0.1:3001` (through an SSH tunnel) | Dashboard over Prometheus, traces of Zipkin in Explore; provisioned from `infra/grafana`, no volume |
 
 ### Networks
 
-The three Docker networks split who can reach whom, independently of the published ports:
+The four Docker networks split who can reach whom, independently of the published ports:
 
 - **edge**: Caddy, the frontend and the gateway. From the public side, nothing behind the gateway can even be
   resolved: a bug in nginx or Caddy cannot reach a service, Eureka or PostgreSQL directly.
 - **backend**: the gateway, Eureka, the services and the monolith. Calls between services stay here.
 - **database**: PostgreSQL and the five applications that own a database. The gateway and Eureka are not on
   it.
+- **monitoring**: Grafana, Prometheus and Zipkin. Prometheus and Zipkin are also on backend, to scrape the
+  applications and receive their spans; Grafana is only here, it reaches no service, Eureka or PostgreSQL.
 
 On a laptop (`infra/docker-compose.yml` alone) each service also publishes its port on the host, to call it
 directly or open its Swagger UI. The production override (`infra/docker-compose.prod.yml`) removes them all;
@@ -156,20 +161,58 @@ What can go wrong on the way, and what the user gets:
 | Service answers after 15 s | gateway | **504** |
 | Crash between the stock reservation and the order save, or `PAID` call lost after an accepted card | nowhere yet | Not compensated: the card is simulated. A saga or an outbox would cover it |
 
+## Observability
+
+Each request gets a **trace**: the gateway starts it (or continues the W3C `traceparent` of the client) and
+passes it to the service, the Feign calls carry it to the next service. Every application sends its spans to
+Zipkin, and writes the trace id in each log line. Prometheus **pulls** the metrics of every application, and
+Grafana shows them next to the traces.
+
+```mermaid
+flowchart LR
+    subgraph backend["network: backend"]
+        gateway["api-gateway"]
+        services["auth, product, order,<br/>payment services"]
+        monolith["monolith"]
+        eureka["discovery-server<br/>Eureka"]
+    end
+
+    subgraph monitoring["network: monitoring"]
+        zipkin["Zipkin :9411<br/>spans in memory"]
+        prometheus["Prometheus :9090<br/>15 days of metrics"]
+        grafana["Grafana :3001<br/>dashboard, Explore"]
+    end
+
+    gateway -- "spans" --> zipkin
+    services -- "spans" --> zipkin
+    monolith -- "spans" --> zipkin
+    prometheus -. "which instances?" .-> eureka
+    prometheus -- "GET /actuator/prometheus<br/>(scraper account)" --> services
+    prometheus -- "GET /actuator/prometheus" --> monolith
+    grafana -- "PromQL" --> prometheus
+    grafana -- "traces" --> zipkin
+```
+
+For an order, one trace holds the span of the gateway, the span of `POST /api/orders` in order-service, and
+under it the Feign calls to product-service with their own server spans: Zipkin shows which one was slow or
+failed. The health checks, the scrapes and the Eureka client calls are not traced, and not counted in the HTTP
+metrics. The gateway and Eureka are traced but not scraped: they check no token, so they expose no metrics.
+Why these tools: [ADR 0006](adr/0006-zipkin-prometheus-and-grafana-for-observability.md).
+
 ## Security
 
 | Layer | How it is protected |
 |---|---|
 | Transport | Caddy terminates HTTPS with a Let's Encrypt certificate it renews itself; HTTP is redirected |
-| Exposure | Only Caddy publishes a port on the server; Eureka listens on the loopback, reached through an SSH tunnel |
+| Exposure | Only Caddy publishes a port on the server; Eureka, Zipkin, Prometheus and Grafana listen on the loopback, reached through an SSH tunnel |
 | Identity | auth-service hashes passwords with BCrypt and signs a JWT (HS256, `sub` = email, `role`, 1 h) |
 | Authorization | Each service checks the signature, expiry and role of the token itself, without a database call: the gateway forwards the `Authorization` header and checks nothing |
 | Roles | `USER` for every account created by `/register`; `ADMIN` only for the account created at start-up from `ADMIN_EMAIL` / `ADMIN_PASSWORD`; `SERVICE` only for tokens a service signs for its own calls |
 | Internal endpoints | `/internal/**` is not routed by the gateway and only accepts a `SERVICE` token |
 | Ownership | The email of the token picks the cart, orders and payments: another user's order answers **404**, like a missing one |
-| Secrets | `JWT_SECRET` and `POSTGRES_PASSWORD` live in `infra/.env` on the server; the production Compose file refuses to start without them. GitHub only holds the SSH key of the deploy user |
+| Secrets | `JWT_SECRET`, `POSTGRES_PASSWORD`, `METRICS_PASSWORD` and `GRAFANA_ADMIN_PASSWORD` live in `infra/.env` on the server; the production Compose file refuses to start without them. GitHub only holds the SSH key of the deploy user |
 | Containers | Every image runs as a non-root user and has a `HEALTHCHECK`; CI fails an image that does not |
-| Actuator | `health` and `info` are public, `metrics` needs an `ADMIN` token, every other endpoint is closed. The gateway and Eureka do not expose their metrics |
+| Actuator | `health` and `info` are public, `metrics` and `flyway` need an `ADMIN` token, `prometheus` only opens to the scraper account (HTTP Basic, in a filter chain of its own), every other endpoint is closed. The gateway and Eureka do not expose their metrics |
 
 The same `JWT_SECRET` must be set in auth-service, product-service, order-service, payment-service and the
 monolith: a token signed by one is accepted by all of them.
@@ -215,5 +258,5 @@ Details: [Continuous integration](../README.md#continuous-integration) in the RE
 
 The choices that shaped this design, with the alternatives considered, are recorded as ADRs in
 [adr/](adr/README.md): OpenFeign between services, the circuit breaker and retry rules, why only the cart has a
-fallback, why the stack runs on a single server with Docker Compose, and why Flyway owns the schema instead of
-Hibernate.
+fallback, why the stack runs on a single server with Docker Compose, why Flyway owns the schema instead of
+Hibernate, and how the requests are traced and the metrics collected (Zipkin, Prometheus, Grafana).
