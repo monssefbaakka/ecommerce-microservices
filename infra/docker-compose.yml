@@ -277,7 +277,13 @@ services:
       - monitoring   # Grafana, which reads the traces
     ports:
       - "9411:9411"
-    # The image has its own HEALTHCHECK
+    # Replaces the HEALTHCHECK of the image, which calls the address given by "hostname -i": with two
+    # networks that is two addresses, and the check always fails
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:9411/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
     deploy:
       resources:
         limits:
