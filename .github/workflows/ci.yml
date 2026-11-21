@@ -386,6 +386,7 @@ jobs:
         env:
           JWT_SECRET: placeholder
           POSTGRES_PASSWORD: placeholder
+          METRICS_PASSWORD: placeholder
           DOMAIN: shop.example.com
         run: |
           compose="docker compose -f infra/docker-compose.yml -f infra/docker-compose.ghcr.yml -f infra/docker-compose.prod.yml --profile app"

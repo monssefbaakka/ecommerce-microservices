@@ -10,8 +10,8 @@
 #     to every network interface, so on a server PostgreSQL and every service would face the internet. Docker
 #     writes its own iptables rules, a host firewall (ufw) does not stop them. Only Caddy listens on 80 / 443;
 #   - Caddy, in front of the gateway and the frontend, gets and renews the HTTPS certificate of DOMAIN;
-#   - no dev default for the secrets: JWT_SECRET and POSTGRES_PASSWORD must be set in infra/.env, or
-#     "docker compose" stops before starting anything;
+#   - no dev default for the secrets: JWT_SECRET, POSTGRES_PASSWORD and METRICS_PASSWORD must be set in
+#     infra/.env, or "docker compose" stops before starting anything;
 #   - PostgreSQL restarts with the server, and its logs rotate like the others.
 #
 # "!reset" and "!override" need Docker Compose 2.24.4 or later.
@@ -23,6 +23,11 @@ x-database-password: &database-password
 
 x-jwt-secret: &jwt-secret
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in infra/.env (openssl rand -base64 32)}
+
+# Password of the account Prometheus reads the metrics with, in the monolith and every service. Prometheus
+# gets the same value through the "metrics-password" config at the end of this file
+x-metrics-password: &metrics-password
+  METRICS_PASSWORD: ${METRICS_PASSWORD:?METRICS_PASSWORD must be set in infra/.env (openssl rand -base64 24)}
 
 services:
   postgres:
@@ -38,7 +43,7 @@ services:
 
   app:
     environment:
-      <<: [*database-password, *jwt-secret]
+      <<: [*database-password, *jwt-secret, *metrics-password]
     ports: !reset []
 
   # Eureka dashboard on the server's loopback only: "ssh -L 8761:localhost:8761 <user>@<server>",
@@ -49,22 +54,22 @@ services:
 
   auth-service:
     environment:
-      <<: [*database-password, *jwt-secret]
+      <<: [*database-password, *jwt-secret, *metrics-password]
     ports: !reset []
 
   product-service:
     environment:
-      <<: [*database-password, *jwt-secret]
+      <<: [*database-password, *jwt-secret, *metrics-password]
     ports: !reset []
 
   order-service:
     environment:
-      <<: [*database-password, *jwt-secret]
+      <<: [*database-password, *jwt-secret, *metrics-password]
     ports: !reset []
 
   payment-service:
     environment:
-      <<: [*database-password, *jwt-secret]
+      <<: [*database-password, *jwt-secret, *metrics-password]
     ports: !reset []
 
   # Reached by Caddy only, on the "edge" network
@@ -80,6 +85,11 @@ services:
   zipkin:
     ports: !override
       - "127.0.0.1:9411:9411"
+
+  # Prometheus UI on the server's loopback only: "ssh -L 9090:localhost:9090 <user>@<server>"
+  prometheus:
+    ports: !override
+      - "127.0.0.1:9090:9090"
 
   caddy:
     image: caddy:2.11-alpine
@@ -118,3 +128,7 @@ services:
 volumes:
   caddy_data:
   caddy_config:
+
+configs:
+  metrics-password:
+    content: ${METRICS_PASSWORD:?METRICS_PASSWORD must be set in infra/.env (openssl rand -base64 24)}
