@@ -34,7 +34,7 @@ class JwtServiceTest {
                 .isEqualTo(Duration.ofHours(1).toMillis());
     }
 
-    // The monolith checks the tokens on its own: it only knows the key and reads "sub" and "role"
+    // The other services check the tokens on their own: they only know the key and read "sub" and "role"
     @Test
     void generateToken_shouldBeReadableByAnyServiceSharingTheKey() {
         String token = jwtService.generateToken(user("admin@example.com", Role.ADMIN));

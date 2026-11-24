@@ -20,7 +20,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
-// Same URLs as the monolith: the gateway sends /api/auth/** here without rewriting the path
+// The gateway sends /api/auth/** here without rewriting the path
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor

@@ -11,7 +11,7 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.Instant;
 
-// Same table and columns as the monolith's User, now in auth_db: the monolith keeps its own copy
+// Accounts of the platform, in auth_db: no other service reads this table
 @Entity
 @Table(name = "users")
 @Getter

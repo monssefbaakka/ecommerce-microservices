@@ -67,9 +67,9 @@ class AuthFlowIT extends IntegrationTest {
         assertThat(claims.get("role", String.class)).isEqualTo("USER");
     }
 
-    // The users table is shared: an account created by the monolith logs in here with the same password
+    // An account inserted straight into the table (e.g. a data import) logs in with its BCrypt password
     @Test
-    void login_shouldAcceptAnAccountWrittenByTheMonolith() throws Exception {
+    void login_shouldAcceptAnAccountInsertedWithABcryptHash() throws Exception {
         jdbcTemplate.update("INSERT INTO users (email, password, role, created_at) VALUES (?, ?, 'USER', now())",
                 "legacy@example.com", passwordEncoder.encode(PASSWORD));
 

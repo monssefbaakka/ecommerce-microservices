@@ -18,7 +18,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * Turns every exception thrown by a controller into the same ErrorResponse JSON as the monolith.
+ * Turns every exception thrown by a controller into the same ErrorResponse JSON as the other services.
  * The parent class already maps the Spring MVC exceptions to the right status
  * (malformed JSON 400, 405, 415, unknown URL 404...): handleExceptionInternal only changes the body.
  */
