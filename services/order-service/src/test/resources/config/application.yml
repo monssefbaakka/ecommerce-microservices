@@ -1,0 +1,4 @@
+# Loaded on top of src/main/resources/application.yml in the tests only (classpath:/config/ wins).
+# The application has no default JWT key: the tests sign and check their tokens with this one
+jwt:
+  secret: dGVzdC1zZWNyZXQtdGVzdC1zZWNyZXQtdGVzdC0xMjM=   # same as TestTokens.SECRET
