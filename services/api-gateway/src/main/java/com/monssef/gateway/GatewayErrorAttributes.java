@@ -37,7 +37,7 @@ public class GatewayErrorAttributes extends DefaultErrorAttributes {
     }
 
     private HttpStatus statusOf(Throwable error) {
-        // The service has an address (Eureka or fixed URL) but nothing answers there
+        // The service is registered in Eureka but nothing answers at its address
         if (isUnreachable(error) || isUnreachable(NestedExceptionUtils.getRootCause(error))) {
             return HttpStatus.SERVICE_UNAVAILABLE;
         }

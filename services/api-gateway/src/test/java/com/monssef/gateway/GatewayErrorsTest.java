@@ -13,8 +13,8 @@ import java.io.IOException;
 import java.net.ServerSocket;
 
 /**
- * The gateway with nothing behind it: no service instance known in the discovery client,
- * and a monolith URL on a free port where nothing listens.
+ * The gateway with nothing behind it: no instance known in the discovery client, except product-service,
+ * declared on a free port where nothing listens.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
         properties = "eureka.client.enabled=false")
@@ -25,12 +25,13 @@ class GatewayErrorsTest {
     private WebTestClient client;
 
     @DynamicPropertySource
-    static void monolithDown(DynamicPropertyRegistry registry) throws IOException {
+    static void productServiceDown(DynamicPropertyRegistry registry) throws IOException {
         int freePort;
         try (ServerSocket socket = new ServerSocket(0)) {
             freePort = socket.getLocalPort();
         } // closed: nothing listens on it any more
-        registry.add("MONOLITH_URL", () -> "http://localhost:" + freePort);
+        registry.add("spring.cloud.discovery.client.simple.instances.product-service[0].uri",
+                () -> "http://localhost:" + freePort);
     }
 
     @Test
@@ -60,12 +61,12 @@ class GatewayErrorsTest {
 
     @Test
     void serviceNotAnswering_shouldReturn503WithoutItsAddress() {
-        client.get().uri("/api/something-else")
+        client.get().uri("/api/products")
                 .exchange()
                 .expectStatus().isEqualTo(503)
                 .expectBody()
                 .jsonPath("$.message").isEqualTo("Service unavailable")
-                .jsonPath("$.path").isEqualTo("/api/something-else");
+                .jsonPath("$.path").isEqualTo("/api/products");
     }
 
     @Test
