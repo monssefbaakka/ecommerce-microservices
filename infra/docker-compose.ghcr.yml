@@ -15,10 +15,6 @@ x-ghcr-image: &ghcr-image
   pull_policy: always
 
 services:
-  app:
-    <<: *ghcr-image
-    image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-monolith:${IMAGE_TAG:-latest}
-
   discovery-server:
     <<: *ghcr-image
     image: ${IMAGE_REGISTRY:-ghcr.io/monssefbaakka}/ecommerce-discovery-server:${IMAGE_TAG:-latest}

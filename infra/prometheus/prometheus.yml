@@ -1,5 +1,5 @@
 # Configuration of the Prometheus container (infra/docker-compose.yml). Every 15 s Prometheus reads
-# /actuator/prometheus on the monolith and on every instance of the services, and keeps the values.
+# /actuator/prometheus on every instance of the services, and keeps the values.
 #
 # The scrape endpoint needs the scraper account (METRICS_USERNAME / METRICS_PASSWORD in infra/.env): Docker
 # Compose writes it into the two files below, the services read the same variables.
@@ -33,12 +33,3 @@ scrape_configs:
       - source_labels: [__meta_eureka_app_instance_hostname, __meta_eureka_app_instance_port]
         separator: ":"
         target_label: instance
-
-  # The monolith does not register in Eureka: its fixed address in the Compose network
-  - job_name: monolith
-    metrics_path: /actuator/prometheus
-    basic_auth:
-      username_file: /etc/prometheus/metrics-username
-      password_file: /etc/prometheus/metrics-password
-    static_configs:
-      - targets: ["app:8080"]

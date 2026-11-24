@@ -1,7 +1,7 @@
 {
   "uid": "ecommerce-overview",
   "title": "E-commerce overview",
-  "description": "Requests, errors and latency of the monolith and the services, circuit breakers, orders and payments, JVM and database pools.",
+  "description": "Requests, errors and latency of the services, circuit breakers, orders and payments, JVM and database pools.",
   "tags": [
     "ecommerce",
     "spring-boot"
@@ -138,7 +138,7 @@
             "uid": "prometheus"
           },
           "refId": "A",
-          "expr": "up{job=~\"services|monolith\"}",
+          "expr": "up{job=\"services\"}",
           "legendFormat": "{{instance}}",
           "instant": true
         }

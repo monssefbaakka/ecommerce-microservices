@@ -5,7 +5,7 @@ x-logging: &logging
     max-size: "10m"           # rotated at 10 MB, 3 files kept: the logs of a container never grow past 30 MB
     max-file: "3"
 
-# Settings shared by every Spring container (the monolith, Eureka, the services and the gateway),
+# Settings shared by every Spring container (Eureka, the services and the gateway),
 # merged into each one with "<<: *spring-container". A key set in the service itself wins
 x-spring-container: &spring-container
   profiles: ["app"]
@@ -14,7 +14,7 @@ x-spring-container: &spring-container
     resources:
       limits:
         # The JVM takes 75% of it as heap (-XX:MaxRAMPercentage=75.0 in the Dockerfiles). Without a limit,
-        # each of the 7 JVMs would size its heap from the whole memory given to Docker
+        # each of the 6 JVMs would size its heap from the whole memory given to Docker
         memory: 512M
   logging: *logging
 
@@ -27,11 +27,16 @@ x-tracing: &tracing
   TRACING_SAMPLING_PROBABILITY: ${TRACING_SAMPLING_PROBABILITY:-1.0}
 
 # Account the Prometheus container reads /actuator/prometheus with, merged into the "environment" of the
-# monolith and the services with "<<: *metrics-scraper". Prometheus gets the same values from the
-# "configs" at the end of this file
+# services with "<<: *metrics-scraper". Prometheus gets the same values from the "configs" at the end of this file
 x-metrics-scraper: &metrics-scraper
   METRICS_USERNAME: ${METRICS_USERNAME:-prometheus}
   METRICS_PASSWORD: ${METRICS_PASSWORD:-metrics-dev-only}   # local dev only: set it in infra/.env on a server
+
+# Key auth-service signs the tokens with and the other services check them with, merged into their
+# "environment" with "<<: *jwt-secret". The services have no default of their own: this dev-only key lets
+# "docker compose up" work out of the box. JWT_SECRET in infra/.env replaces it; the production file has no default
+x-jwt-secret: &jwt-secret
+  JWT_SECRET: ${JWT_SECRET:-6zgmDANazeSXzhBAYFVd4mdoJb2vr19a1e+/8Nk+XTU=}   # local dev only, public on GitHub
 
 services:
   postgres:
@@ -47,39 +52,14 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      # Creates auth_db, product_db, order_db and payment_db next to "ecommerce" (the monolith) on the
-      # first start only: on an existing volume, run "docker compose down -v" once (deletes the data)
+      # Creates auth_db, product_db, order_db and payment_db on the first start only: on an existing volume,
+      # run "docker compose down -v" once (deletes the data). "ecommerce" is the default database of the user
       - ./postgres/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ecommerce -d ecommerce"]
       interval: 5s
       timeout: 3s
       retries: 10
-
-  # The monolith in a container. Behind the "app" profile, so "docker compose up" alone
-  # still starts only PostgreSQL for "./mvnw spring-boot:run" (both would want port 8080)
-  app:
-    <<: *spring-container
-    build: ../monolith
-    image: ecommerce-monolith:latest
-    container_name: ecommerce-app
-    depends_on:
-      postgres:
-        condition: service_healthy   # waits for pg_isready, not only for the container start
-    # Optional secrets and admin account (JWT_SECRET, ADMIN_EMAIL...): copy .env.example to .env
-    env_file:
-      - path: .env
-        required: false
-    environment:
-      <<: [*tracing, *metrics-scraper]
-      DB_URL: jdbc:postgresql://postgres:5432/ecommerce   # the service name, not localhost
-      DB_USER: ecommerce
-      DB_PASSWORD: ecommerce
-    networks:
-      - backend
-      - database
-    ports:
-      - "8080:8080"
 
   # Service registry: every service and the gateway register here and find each other by name
   discovery-server:
@@ -105,12 +85,12 @@ services:
       # Its own database on the shared PostgreSQL server (created by init-databases.sql)
       postgres:
         condition: service_healthy
-    # Same JWT_SECRET as the monolith, or the monolith would reject the tokens issued here
+    # Optional secrets and admin account (JWT_SECRET, ADMIN_EMAIL...): copy .env.example to .env
     env_file:
       - path: .env
         required: false
     environment:
-      <<: [*tracing, *metrics-scraper]
+      <<: [*tracing, *metrics-scraper, *jwt-secret]
       DB_URL: jdbc:postgresql://postgres:5432/auth_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -133,12 +113,12 @@ services:
       # Its own database on the shared PostgreSQL server (created by init-databases.sql)
       postgres:
         condition: service_healthy
-    # Same JWT_SECRET as auth-service, or the ADMIN tokens would be rejected here
+    # Optional secrets (JWT_SECRET...): copy .env.example to .env
     env_file:
       - path: .env
         required: false
     environment:
-      <<: [*tracing, *metrics-scraper]
+      <<: [*tracing, *metrics-scraper, *jwt-secret]
       DB_URL: jdbc:postgresql://postgres:5432/product_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -161,12 +141,12 @@ services:
       # Its own database on the shared PostgreSQL server (created by init-databases.sql)
       postgres:
         condition: service_healthy
-    # Same JWT_SECRET as auth-service, or the tokens would be rejected here
+    # Optional secrets (JWT_SECRET...): copy .env.example to .env
     env_file:
       - path: .env
         required: false
     environment:
-      <<: [*tracing, *metrics-scraper]
+      <<: [*tracing, *metrics-scraper, *jwt-secret]
       DB_URL: jdbc:postgresql://postgres:5432/order_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -189,12 +169,12 @@ services:
       # Its own database on the shared PostgreSQL server (created by init-databases.sql)
       postgres:
         condition: service_healthy
-    # Same JWT_SECRET as auth-service, or the tokens would be rejected here
+    # Optional secrets (JWT_SECRET...): copy .env.example to .env
     env_file:
       - path: .env
         required: false
     environment:
-      <<: [*tracing, *metrics-scraper]
+      <<: [*tracing, *metrics-scraper, *jwt-secret]
       DB_URL: jdbc:postgresql://postgres:5432/payment_db
       DB_USER: ecommerce
       DB_PASSWORD: ecommerce
@@ -207,8 +187,7 @@ services:
       - "8084:8084"
 
   # Single entry point: /api/auth/** to auth-service, /api/products/** and /api/categories/** to product-service,
-  # /api/cart/** and /api/orders/** to order-service, /api/payments/** to payment-service (all through Eureka),
-  # the rest of /api/** to the monolith
+  # /api/cart/** and /api/orders/** to order-service, /api/payments/** to payment-service (all through Eureka)
   api-gateway:
     <<: *spring-container
     build: ../services/api-gateway
@@ -220,8 +199,6 @@ services:
     # and a 503 (and the cart through its fallback) while the other one is not there
     depends_on:
       discovery-server:
-        condition: service_healthy
-      app:
         condition: service_healthy
       auth-service:
         condition: service_healthy
@@ -235,7 +212,6 @@ services:
       <<: *tracing
       EUREKA_URL: http://discovery-server:8761/eureka
       INSTANCE_HOSTNAME: api-gateway
-      MONOLITH_URL: http://app:8080
     networks:   # no database: PostgreSQL is not even resolvable from here
       - backend
       - edge    # reached by the frontend (and by Caddy on the server)
@@ -261,7 +237,7 @@ services:
           memory: 64M
     logging: *logging
 
-  # Collects the spans of the gateway, the monolith and the services: one trace per request, across every
+  # Collects the spans of the gateway and the services: one trace per request, across every
   # container it went through. UI on http://localhost:9411 (search by trace id, service or duration).
   # Kept in memory: the traces are lost on a restart, fine for following requests, not for an audit
   zipkin:
@@ -290,7 +266,7 @@ services:
           memory: 384M
     logging: *logging
 
-  # Reads the metrics of the monolith and the services every 15 s (infra/prometheus/prometheus.yml), finds
+  # Reads the metrics of the services every 15 s (infra/prometheus/prometheus.yml), finds
   # the services through Eureka, and keeps 15 days of history. Query UI on http://localhost:9090
   prometheus:
     image: prom/prometheus:v3.15.1
@@ -312,7 +288,7 @@ services:
       - source: metrics-password
         target: /etc/prometheus/metrics-password
     networks:
-      - backend      # Eureka, the services and the monolith it scrapes
+      - backend      # Eureka and the services it scrapes
       - monitoring   # Grafana, which queries it
     ports:
       - "9090:9090"
