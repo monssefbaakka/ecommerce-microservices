@@ -56,7 +56,7 @@ The schema is written as **versioned SQL scripts run by Flyway**, one folder per
   script fails `./mvnw verify` and the CI before it reaches the server.
 - `FlywayMigrationIT` in each project loads the DDL Hibernate used to run, baselines it, and checks that it ends
   with the same columns, constraints and indexes as a database migrated from `V1`.
-- Each database has a `flyway_schema_history` table; [`/actuator/flyway`](../../README.md#health-actuator)
+- Each database has a `flyway_schema_history` table; [`/actuator/flyway`](../api.md#health-actuator)
   shows it to an ADMIN.
 - **Rolling back** to an older image still works: Flyway ignores the scripts it does not know (applied by a newer
   version), and Hibernate only validates the tables the older entities use. This holds as long as a script

@@ -1,5 +1,8 @@
-@host = http://localhost:8080
-# Must match ADMIN_EMAIL / ADMIN_PASSWORD used to start the app (see README)
+# The gateway: every /api/** request below goes through it (docker compose --profile app up, see README)
+@host = http://localhost:8090
+# product-service directly, for its Actuator endpoints: the gateway only routes /api/**
+@service = http://localhost:8082
+# Must match ADMIN_EMAIL / ADMIN_PASSWORD in infra/.env (see README)
 @adminEmail = admin@example.com
 @adminPassword = admin-pass
 
@@ -149,16 +152,16 @@ Authorization: Bearer {{adminLogin.response.body.$.token}}
 DELETE {{host}}/api/categories/{{createCategory.response.body.$.id}}
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 ### P15 - pagination
-GET http://localhost:8080/api/products?page=0&size=5
+GET {{host}}/api/products?page=0&size=5
 
 ### P16 - recherche par nom
-GET http://localhost:8080/api/products?name=phone
+GET {{host}}/api/products?name=phone
 
 ### P17 - filtre par catégorie
-GET http://localhost:8080/api/products?categoryId=1
+GET {{host}}/api/products?categoryId=1
 
 ### P18 - tout combiné
-GET http://localhost:8080/api/products?name=phone&categoryId=1&page=0&size=5&sort=price,desc
+GET {{host}}/api/products?name=phone&categoryId=1&page=0&size=5&sort=price,desc
 
 
 
@@ -429,34 +432,34 @@ GET {{host}}/api/unknown
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 
 ### H1. Health without a token (expect 200, only {"status":"UP"})
-GET {{host}}/actuator/health
+GET {{service}}/actuator/health
 
 ### H2. Health with an ADMIN token (expect 200, with the db and diskSpace components)
-GET {{host}}/actuator/health
+GET {{service}}/actuator/health
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 
 ### H3. Liveness: the process works, never checks the database (expect 200)
-GET {{host}}/actuator/health/liveness
+GET {{service}}/actuator/health/liveness
 
 ### H4. Readiness: ready to serve requests, database included (expect 200, 503 if PostgreSQL is down)
-GET {{host}}/actuator/health/readiness
+GET {{service}}/actuator/health/readiness
 
 ### H5. Version, build time and JVM (expect 200)
-GET {{host}}/actuator/info
+GET {{service}}/actuator/info
 
 ### H6. Endpoint not exposed over HTTP (expect 401 without token, 404 for an ADMIN)
-GET {{host}}/actuator/env
+GET {{service}}/actuator/env
 
 ### H7. Names of the metrics: ADMIN token only (expect 200; 401 without token, 403 with a USER token)
-GET {{host}}/actuator/metrics
+GET {{service}}/actuator/metrics
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 
-### H8. One metric: requests answered, by status (expect 200, availableTags with application ecommerce-monolith)
-GET {{host}}/actuator/metrics/http.server.requests?tag=status:200
+### H8. One metric: requests answered, by status (expect 200, availableTags with application product-service)
+GET {{service}}/actuator/metrics/http.server.requests?tag=status:200
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 
-### H9. Flyway migrations of the monolith database: V1 to V7, state SUCCESS (expect 200; 401 without token, 403 with a USER token)
-GET {{host}}/actuator/flyway
+### H9. Flyway migrations of product_db: V1 to V3, state SUCCESS (expect 200; 401 without token, 403 with a USER token)
+GET {{service}}/actuator/flyway
 Authorization: Bearer {{adminLogin.response.body.$.token}}
 
 
@@ -531,11 +534,11 @@ Content-Type: application/json
 
 { "name": "Gateway phone", "description": "64 GB", "price": 199.99, "categoryId": {{gatewayCategory.response.body.$.id}}, "stock": 5 }
 
-### C4. Paging, search and filter like the monolith (expect 200, page.totalElements = 1)
+### C4. Paging, search and filter (expect 200, page.totalElements = 1)
 GET {{gateway}}/api/products?name=gateway&categoryId={{gatewayCategory.response.body.$.id}}&page=0&size=5&sort=price,desc
 
-### C5. Not in the monolith: product-service has its own product_db (expect 404, or another product with that id)
-GET {{host}}/api/products/{{gatewayProduct.response.body.$.id}}
+### C5. The same product straight from product-service, without the gateway (expect 200, same body)
+GET {{productService}}/api/products/{{gatewayProduct.response.body.$.id}}
 
 ### C6. Write without a token (expect 401, ErrorResponse from product-service)
 POST {{gateway}}/api/categories
@@ -763,7 +766,7 @@ traceparent: 00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01
 ### O5. That trace in Zipkin, a few seconds later (expect 200: spans of api-gateway and product-service)
 GET {{zipkin}}/api/v2/trace/4bf92f3577b34da6a3ce929d0e0e4736
 
-### O6. The applications Prometheus scrapes: four services found through Eureka and the monolith (expect 200, every "health": "up")
+### O6. The applications Prometheus scrapes: the four services, found through Eureka (expect 200, every "health": "up")
 GET {{prometheus}}/api/v1/targets?state=active
 
 ### O7. Latency p95 of each application over the last 5 minutes, as on the Grafana dashboard (expect 200)
