@@ -156,10 +156,19 @@ jobs:
         run: |
           # M = modified, R = renamed, D = deleted; A (a new script) is the normal way
           changed=$(git diff --name-only --diff-filter=MRD "$BASE_SHA"...HEAD -- '*/db/migration/V*.sql')
-          if [ -n "$changed" ]; then
-            for file in $changed; do
-              echo "::error file=$file::$file is already on main: add a new migration instead of changing this one"
-            done
+          failed=0
+          for file in $changed; do
+            # A script deleted along with its whole migration folder belongs to an application that was
+            # removed (its database is no longer migrated by anyone): only a deletion inside a folder that
+            # still exists would break the next deploy
+            if [ ! -e "$file" ] && [ ! -d "$(dirname "$file")" ]; then
+              echo "$file: deleted with its application"
+              continue
+            fi
+            echo "::error file=$file::$file is already on main: add a new migration instead of changing this one"
+            failed=1
+          done
+          if [ "$failed" -ne 0 ]; then
             exit 1
           fi
           echo "No merged migration changed"

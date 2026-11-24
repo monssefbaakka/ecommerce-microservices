@@ -20,7 +20,7 @@ The Maven dependencies are cached per project, keyed on its `pom.xml`: they are 
 
 ## Migrations job
 
-On a pull request only. Fails if the branch edits, renames or deletes a Flyway script that is already on `main` (`*/db/migration/V*.sql`): that script has run on the server, Flyway stored its checksum, and the next deploy would refuse to start. A schema change is always a new script ([Database schema](database.md)).
+On a pull request only. Fails if the branch edits, renames or deletes a Flyway script that is already on `main` (`*/db/migration/V*.sql`): that script has run on the server, Flyway stored its checksum, and the next deploy would refuse to start. A schema change is always a new script ([Database schema](database.md)). The one exception is a script deleted along with its whole `db/migration` folder: the application that owned it was removed, and nobody migrates its database any more.
 
 ## Frontend job
 
