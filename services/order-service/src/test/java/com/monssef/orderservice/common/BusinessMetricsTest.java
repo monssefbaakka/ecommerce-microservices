@@ -1,5 +1,6 @@
 package com.monssef.orderservice.common;
 
+import com.monssef.orderservice.order.CancelReason;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -14,6 +15,8 @@ class BusinessMetricsTest {
     @Test
     void counters_shouldExistAtZeroBeforeTheFirstEvent() {
         assertThat(registry.get("orders.placed").counter().count()).isZero();
+        assertThat(registry.get("orders.cancelled").tag("reason", "customer").counter().count()).isZero();
+        assertThat(registry.get("orders.cancelled").tag("reason", "expired").counter().count()).isZero();
         assertThat(registry.get("cart.fallback").counter().count()).isZero();
     }
 
@@ -23,6 +26,17 @@ class BusinessMetricsTest {
         metrics.orderPlaced();
 
         assertThat(registry.get("orders.placed").counter().count()).isEqualTo(2);
+    }
+
+    @Test
+    void orderCancelled_shouldCountEachCancellationByReason() {
+        metrics.orderCancelled(CancelReason.CUSTOMER);
+        metrics.orderCancelled(CancelReason.EXPIRED);
+        metrics.orderCancelled(CancelReason.EXPIRED);
+
+        assertThat(registry.get("orders.cancelled").tag("reason", "customer").counter().count()).isEqualTo(1);
+        assertThat(registry.get("orders.cancelled").tag("reason", "expired").counter().count()).isEqualTo(2);
+        assertThat(registry.get("orders.placed").counter().count()).isZero();
     }
 
     @Test

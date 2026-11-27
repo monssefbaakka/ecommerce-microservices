@@ -23,13 +23,14 @@ class OpenApiDocumentationIT extends IntegrationTest {
     @Test
     void apiDocs_shouldListOnlyTheCartAndOrderEndpoints() throws Exception {
         mockMvc.perform(get("/v3/api-docs"))
-                .andExpect(jsonPath("$.paths.length()").value(5))
+                .andExpect(jsonPath("$.paths.length()").value(6))
                 .andExpect(jsonPath("$.paths['/api/cart'].delete.responses['204']").exists())
                 .andExpect(jsonPath("$.paths['/api/cart/items'].post.responses['200']").exists())
                 .andExpect(jsonPath("$.paths['/api/cart/items/{productId}'].put.responses['200']").exists())
                 .andExpect(jsonPath("$.paths['/api/orders'].post.responses['201']").exists())
                 .andExpect(jsonPath("$.paths['/api/orders'].get.parameters[*].name", hasItems("page", "size", "sort")))
-                .andExpect(jsonPath("$.paths['/api/orders/{id}'].get.responses['404']").exists());
+                .andExpect(jsonPath("$.paths['/api/orders/{id}'].get.responses['404']").exists())
+                .andExpect(jsonPath("$.paths['/api/orders/{id}/cancel'].post.responses['409']").exists());
     }
 
     @Test

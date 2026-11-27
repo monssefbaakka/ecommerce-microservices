@@ -186,10 +186,66 @@ class OrderControllerTest {
         verifyNoInteractions(orderService);
     }
 
+    @Test
+    @WithMockUser(username = EMAIL)
+    void cancel_shouldReturn200WithTheCancelledOrder() throws Exception {
+        when(orderService.cancel(EMAIL, 7L)).thenReturn(order(OrderStatus.CANCELLED));
+
+        mockMvc.perform(post("/api/orders/7/cancel"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(7))
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+
+        verify(orderService).cancel(EMAIL, 7L);
+    }
+
+    @Test
+    @WithMockUser(username = EMAIL)
+    void cancel_shouldReturn404_whenNotFound() throws Exception {
+        when(orderService.cancel(EMAIL, 99L)).thenThrow(new ResourceNotFoundException("Order", 99L));
+
+        mockMvc.perform(post("/api/orders/99/cancel"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.message").value("Order with id 99 not found"));
+    }
+
+    @Test
+    @WithMockUser(username = EMAIL)
+    void cancel_shouldReturn409_whenNotPendingAnyMore() throws Exception {
+        when(orderService.cancel(EMAIL, 7L)).thenThrow(new ResponseStatusException(HttpStatus.CONFLICT,
+                "Order 7 is PAID, only a PENDING order can be cancelled"));
+
+        mockMvc.perform(post("/api/orders/7/cancel"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value("Order 7 is PAID, only a PENDING order can be cancelled"));
+    }
+
+    @Test
+    @WithMockUser(username = EMAIL)
+    void cancel_shouldReturn503_whenProductServiceIsDown() throws Exception {
+        when(orderService.cancel(EMAIL, 7L)).thenThrow(new ServiceUnavailableException("Product service"));
+
+        mockMvc.perform(post("/api/orders/7/cancel"))
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.message").value("Product service unavailable"));
+    }
+
+    @Test
+    void cancel_shouldReturn401_whenAnonymous() throws Exception {
+        mockMvc.perform(post("/api/orders/7/cancel"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(orderService);
+    }
+
     private OrderDTO order() {
+        return order(OrderStatus.PENDING);
+    }
+
+    private OrderDTO order(OrderStatus status) {
         OrderItemDTO item = new OrderItemDTO(
                 1L, "iPhone 15", new BigDecimal("999.99"), 2, new BigDecimal("1999.98"));
-        return new OrderDTO(7L, OrderStatus.PENDING, List.of(item), 2,
+        return new OrderDTO(7L, status, List.of(item), 2,
                 new BigDecimal("1999.98"), Instant.parse("2026-10-27T10:00:00Z"));
     }
 }

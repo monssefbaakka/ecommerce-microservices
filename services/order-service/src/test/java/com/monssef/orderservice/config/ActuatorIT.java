@@ -84,7 +84,7 @@ class ActuatorIT extends IntegrationTest {
         mockMvc.perform(auth(get("/actuator/metrics"), adminToken()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.names", hasItems("jvm.memory.used", "http.server.requests", "hikaricp.connections.active", "resilience4j.circuitbreaker.state", "resilience4j.retry.calls",
-                        "orders.placed", "cart.fallback")));
+                        "orders.placed", "orders.cancelled", "cart.fallback")));
     }
 
     @Test

@@ -54,6 +54,15 @@ jwt:
 # No address for product-service: its Feign client is resolved by name through Eureka.
 # A fixed address (no Eureka) can be set with spring.cloud.openfeign.client.config.product-service.url
 
+orders:
+  pending-expiry:
+    # An order still unpaid this long after it was placed is cancelled and its units go back to the
+    # stock (PendingOrderExpiry). A card payment takes seconds: the delay only has to cover a user who
+    # leaves the payment page open for a while
+    timeout: ${ORDER_PENDING_TIMEOUT:30m}
+    check-interval: ${ORDER_EXPIRY_CHECK_INTERVAL:1m}   # how often the job looks for expired orders
+    batch-size: 100                     # at most this many cancelled per run; the rest on the next runs
+
 resilience4j:
   circuitbreaker:
     instances:

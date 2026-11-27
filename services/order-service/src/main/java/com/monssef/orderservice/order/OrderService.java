@@ -12,12 +12,14 @@ import com.monssef.orderservice.product.ReservedItem;
 import com.monssef.orderservice.product.StockLine;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
@@ -95,6 +97,54 @@ public class OrderService {
         }
         order.setStatus(OrderStatus.PAID); // saved by dirty checking
         return mapper.toSummary(order);
+    }
+
+    // The user gives up an unpaid order: it becomes CANCELLED and its units go back to product-service.
+    // Same row lock as markPaid: a payment and a cancellation of one order run one after the other,
+    // and the second one gets a 409. 503 when product-service cannot take the stock back: nothing changes
+    @Transactional
+    public OrderDTO cancel(String email, Long id) {
+        Order order = orderRepository.findForUpdateByIdAndUserEmail(id, email)
+                .orElseThrow(() -> new ResourceNotFoundException("Order", id));
+        if (order.getStatus() != OrderStatus.PENDING) {
+            throw new ResponseStatusException(HttpStatus.CONFLICT,
+                    "Order %d is %s, only a PENDING order can be cancelled".formatted(id, order.getStatus()));
+        }
+        cancelAndReleaseStock(order);
+        metrics.orderCancelled(CancelReason.CUSTOMER);
+        return mapper.toDto(order);
+    }
+
+    // For PendingOrderExpiry: the unpaid orders placed before the deadline, oldest first, at most max
+    public List<Long> findExpiredIds(Instant deadline, int max) {
+        return orderRepository.findIdsByStatusCreatedBefore(OrderStatus.PENDING, deadline, PageRequest.of(0, max));
+    }
+
+    // Cancels one order found by findExpiredIds, in its own transaction. Checked again under the lock:
+    // paid or cancelled since it was listed, it is left alone (false)
+    @Transactional
+    public boolean expire(Long id, Instant deadline) {
+        Order order = orderRepository.findForUpdateById(id).orElse(null);
+        if (order == null || order.getStatus() != OrderStatus.PENDING || !order.getCreatedAt().isBefore(deadline)) {
+            return false;
+        }
+        cancelAndReleaseStock(order);
+        metrics.orderCancelled(CancelReason.EXPIRED);
+        return true;
+    }
+
+    // The new status is written first (the row is already locked, so this cannot fail on a conflict),
+    // then product-service takes the units back, then the commit. If product-service refuses or is down,
+    // the exception rolls the status back: the order stays PENDING with its stock, nothing is lost.
+    // Left open, like after an order that could not be saved: a release that reached product-service
+    // but whose answer was lost (timeout) rolls back here, and the units would be given back again on
+    // the next try. An outbox would close it
+    private void cancelAndReleaseStock(Order order) {
+        order.setStatus(OrderStatus.CANCELLED);
+        orderRepository.flush();
+        productClient.release(order.getItems().stream()
+                .map(item -> new StockLine(item.getProductId(), item.getQuantity()))
+                .toList());
     }
 
     // A product deleted in product-service since it was added simply leaves the cart, as the cart shows it

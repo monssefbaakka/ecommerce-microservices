@@ -33,6 +33,7 @@ class PrometheusScrapeIT extends IntegrationTest {
                 .andExpect(content().string(containsString("hikaricp_connections_active{")))
                 .andExpect(content().string(containsString("resilience4j_circuitbreaker_state{")))
                 .andExpect(content().string(containsString("orders_placed_total{")))
+                .andExpect(content().string(containsString("orders_cancelled_total{")))
                 // The buckets the dashboards compute the latency percentiles from
                 .andExpect(content().string(containsString("http_server_requests_seconds_bucket{")));
     }
