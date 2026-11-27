@@ -480,7 +480,7 @@
       "type": "timeseries",
       "id": 11,
       "title": "Orders and payments per minute",
-      "description": "Orders placed, payments by outcome of the card, and carts shown from the last known products while product-service was down.",
+      "description": "Orders placed, payments by outcome of the card, orders cancelled (by the user or expired unpaid), and carts shown from the last known products while product-service was down.",
       "datasource": {
         "type": "prometheus",
         "uid": "prometheus"
@@ -543,6 +543,16 @@
           "refId": "C",
           "expr": "sum(rate(cart_fallback_total[$__rate_interval])) * 60",
           "legendFormat": "carts from the fallback",
+          "range": true
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "prometheus"
+          },
+          "refId": "D",
+          "expr": "sum by (reason) (rate(orders_cancelled_total[$__rate_interval])) * 60",
+          "legendFormat": "orders cancelled ({{reason}})",
           "range": true
         }
       ]

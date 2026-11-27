@@ -57,8 +57,9 @@ flowchart LR
 
 **Known limits.** The calls between services are synchronous and there is no saga yet: a crash between the stock
 reservation and the order save, or a lost "mark paid" call after an accepted card, is not compensated (the card
-is simulated), and an unpaid order keeps its stock. An outbox with events would cover these cases; see
-[what can go wrong](docs/architecture.md#a-request-through-the-stack).
+is simulated). An unpaid order gives its stock back when it is cancelled, by its user or after 30 minutes, but an
+order cancelled while its card is being charged is charged all the same. An outbox with events would cover these
+cases; see [what can go wrong](docs/architecture.md#a-request-through-the-stack).
 
 ## Tech stack
 

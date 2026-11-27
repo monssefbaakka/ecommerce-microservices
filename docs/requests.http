@@ -669,6 +669,42 @@ Content-Type: application/json
 GET {{gateway}}/api/cart
 Authorization: Bearer {{gatewayLogin.response.body.$.token}}
 
+### X1. Cancel an unpaid order: put 1 "Shop phone" (W2) in the cart (expect 200)
+POST {{gateway}}/api/cart/items
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "productId": {{shopProduct.response.body.$.id}}, "quantity": 1 }
+
+### X2. Order it (expect 201, status PENDING): one more unit reserved
+# @name cancelledOrder
+POST {{gateway}}/api/orders
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### X3. Cancel it (expect 200, status CANCELLED): the unit goes back to product-service
+POST {{gateway}}/api/orders/{{cancelledOrder.response.body.$.id}}/cancel
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### X4. Cancel it again (expect 409 "Order ... is CANCELLED, only a PENDING order can be cancelled")
+POST {{gateway}}/api/orders/{{cancelledOrder.response.body.$.id}}/cancel
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### X5. Pay it (expect 409 "Order ... is CANCELLED, only a PENDING order can be paid")
+POST {{gateway}}/api/payments
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+Content-Type: application/json
+
+{ "orderId": {{cancelledOrder.response.body.$.id}}, "cardNumber": "4242424242424242" }
+
+### X6. Cancel the paid order of W8 (expect 409 "Order ... is PAID, only a PENDING order can be cancelled")
+POST {{gateway}}/api/orders/{{shopOrder.response.body.$.id}}/cancel
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
+### X7. An order left unpaid is cancelled by order-service itself after ORDER_PENDING_TIMEOUT (30m by default).
+### To see it, start the stack with ORDER_PENDING_TIMEOUT=1m, place an order (X1, X2), wait ~2 min, then (expect CANCELLED)
+GET {{gateway}}/api/orders/{{cancelledOrder.response.body.$.id}}
+Authorization: Bearer {{gatewayLogin.response.body.$.token}}
+
 ### I1. /internal/** is not routed by the gateway (expect 404)
 GET {{gateway}}/internal/orders/{{shopOrder.response.body.$.id}}
 Authorization: Bearer {{gatewayLogin.response.body.$.token}}
@@ -717,6 +753,10 @@ GET {{paymentService}}/actuator/health/readiness
 GET {{orderService}}/actuator/metrics/orders.placed
 Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
 
+### M1b. Orders cancelled, by the user (X3) or expired unpaid (expect 200, measurements[0].value >= 1 after X3)
+GET {{orderService}}/actuator/metrics/orders.cancelled?tag=reason:customer
+Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
+
 ### M2. Carts shown with the last known products (expect 200, value goes up with each W18 while product-service is down)
 GET {{orderService}}/actuator/metrics/cart.fallback
 Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
@@ -732,7 +772,7 @@ Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
 ### M5. The gateway has no JWT check: its metrics are not exposed (expect 404)
 GET {{gateway}}/actuator/metrics
 
-### F1. Migrations of order_db, run by order-service: V1 to V3 (expect 200; a BASELINE first on a database created before Flyway)
+### F1. Migrations of order_db, run by order-service: V1 to V4 (expect 200; a BASELINE first on a database created before Flyway)
 GET {{orderService}}/actuator/flyway
 Authorization: Bearer {{gatewayAdminLogin.response.body.$.token}}
 

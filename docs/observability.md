@@ -62,7 +62,7 @@ curl -u prometheus:metrics-dev-only http://localhost:8083/actuator/prometheus | 
 |---|---|
 | Overview | Each scraped instance `UP` or `DOWN` |
 | HTTP requests | Requests per second, share of 5xx, latency p95 per application, the 10 slowest endpoints, latency of the Feign calls between services |
-| Resilience and business | Circuit breakers open or half open, orders and payments per minute (and carts shown from the fallback), error log lines per minute |
+| Resilience and business | Circuit breakers open or half open, orders, payments and cancellations per minute (and carts shown from the fallback), error log lines per minute |
 | JVM and database | Heap used, CPU, database connections in use and waiting |
 
 The traces are in *Explore* → *Zipkin*: paste a trace id, or search by service. The data sources and the

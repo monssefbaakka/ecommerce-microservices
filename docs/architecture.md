@@ -151,11 +151,15 @@ What can go wrong on the way, and what the user gets:
 | Product short on stock | product-service, under the row lock | **409**, nothing reserved, cart untouched |
 | Two clicks on "order" | order-service, cart lock | One order; the second request finds the cart empty (**400**) |
 | Two clicks on "pay" | payment-service, advisory lock | One payment; the second finds the order `PAID` (**409**) |
+| Order never paid | order-service, expiry job every minute | `CANCELLED` after 30 minutes, its units back in stock; while product-service is down it stays `PENDING` and is tried again |
+| Cancellation and payment of the same order at once | order-service, row lock on the order | The first one wins, the second gets a **409** |
 | product-service or order-service down, slow or failing | Feign client, retries then circuit breaker | **503** at once while the breaker is open ([ADR 0002](adr/0002-circuit-breaker-and-retries-around-feign-calls.md)) |
 | product-service down while showing the cart | order-service fallback | **200** with the last known names and prices, `productsUpToDate: false` ([ADR 0003](adr/0003-fallback-for-the-cart-only.md)) |
 | Service not registered in Eureka | gateway | **503** |
 | Service answers after 15 s | gateway | **504** |
 | Crash between the stock reservation and the order save, or `PAID` call lost after an accepted card | nowhere yet | Not compensated: the card is simulated. A saga or an outbox would cover it |
+| Order cancelled or expired after payment-service checked it, before the card is charged | payment-service, `PAID` call refused (**409**) | The payment is not saved, but the card was charged: a real one would need a refund. An outbox would cover it |
+| Release of the stock times out on a cancellation | nowhere yet | The order stays `PENDING`; if product-service did take the units back, they are given back again on the next try |
 
 ## Observability
 
