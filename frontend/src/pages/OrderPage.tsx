@@ -6,7 +6,7 @@ import { PaymentForm } from "../components/PaymentForm";
 import { OrderStatusBadge } from "../components/StatusBadge";
 import { ErrorMessage, Loading, Notice } from "../components/Status";
 import { formatDate, formatPrice } from "../format";
-import { useApi } from "../hooks/useApi";
+import { errorMessage, useApi } from "../hooks/useApi";
 
 export function OrderPage() {
   const id = Number(useParams().id);
@@ -14,11 +14,33 @@ export function OrderPage() {
   const placed = (useLocation().state as { placed?: boolean } | null)?.placed === true;
   const order = useApi(() => orderApi.get(id), [id]);
   const [lastPayment, setLastPayment] = useState<Payment | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelled, setCancelled] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
 
   const onPayment = (payment: Payment) => {
     setLastPayment(payment);
     // SUCCEEDED: payment-service has already set the order to PAID in order-service
     if (payment.status === "SUCCEEDED") {
+      order.reload();
+    }
+  };
+
+  // The units go back to the stock. 409 once paid (or already cancelled), 503 when the stock cannot be
+  // given back yet: the order then stays as it was
+  const onCancel = async () => {
+    if (!window.confirm("Annuler cette commande ? Les articles seront remis en stock.")) {
+      return;
+    }
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      await orderApi.cancel(id);
+      setCancelled(true);
+    } catch (cause) {
+      setCancelError(errorMessage(cause));
+    } finally {
+      setCancelling(false);
       order.reload();
     }
   };
@@ -49,6 +71,9 @@ export function OrderPage() {
 
       {placed && status === "PENDING" && !lastPayment && (
         <Notice tone="success">Commande enregistrée, les articles sont réservés. Il ne reste qu'à la payer.</Notice>
+      )}
+      {cancelled && status === "CANCELLED" && (
+        <Notice tone="success">Commande annulée, les articles sont remis en stock.</Notice>
       )}
       {lastPayment?.status === "SUCCEEDED" && (
         <Notice tone="success">Paiement accepté pour la carte se terminant par {lastPayment.cardLast4}. Merci !</Notice>
@@ -98,6 +123,14 @@ export function OrderPage() {
             <h2>Paiement</h2>
             <p className="price">{formatPrice(total)}</p>
             <PaymentForm orderId={id} onPayment={onPayment} />
+            <div className="order-cancel">
+              <ErrorMessage message={cancelError} />
+              <button type="button" className="button button-danger" disabled={cancelling} onClick={onCancel}>
+                {cancelling ? "Annulation…" : "Annuler la commande"}
+              </button>
+              {/* orders.pending-expiry.timeout of order-service, 30 minutes unless changed */}
+              <p className="muted">Sans paiement, la commande est annulée d'elle-même au bout de 30 minutes.</p>
+            </div>
           </aside>
         )}
       </div>
