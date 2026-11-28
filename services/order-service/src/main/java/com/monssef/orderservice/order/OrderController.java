@@ -84,4 +84,22 @@ public class OrderController {
                              @PathVariable @Parameter(description = "Identifiant de la commande") Long id) {
         return orderService.findById(principal.getName(), id);
     }
+
+    // An action on the order rather than a DELETE: the order stays in the history, CANCELLED
+    @PostMapping("/{id}/cancel")
+    @Operation(summary = "Annuler une commande",
+            description = "Annule une de mes commandes non payées et rend son stock. Une commande non payée "
+                    + "est aussi annulée d'elle-même après un délai (30 minutes par défaut)")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Commande annulée",
+                    content = @Content(schema = @Schema(implementation = OrderDTO.class))),
+            @ApiResponse(responseCode = "404", description = "Commande introuvable ou d'un autre utilisateur", content = @Content),
+            @ApiResponse(responseCode = "409", description = "Commande déjà payée ou annulée", content = @Content),
+            @ApiResponse(responseCode = "503", description = "Stock impossible à rendre pour l'instant : la commande ne change pas", content = @Content),
+            @ApiResponse(responseCode = "401", description = "Token absent ou invalide", content = @Content)
+    })
+    public OrderDTO cancel(@Parameter(hidden = true) Principal principal,
+                           @PathVariable @Parameter(description = "Identifiant de la commande") Long id) {
+        return orderService.cancel(principal.getName(), id);
+    }
 }

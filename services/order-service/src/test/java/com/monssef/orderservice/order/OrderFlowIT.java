@@ -9,6 +9,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -129,6 +130,74 @@ class OrderFlowIT extends IntegrationTest {
         // the user cannot mark their order as paid themselves
         mockMvc.perform(auth(post("/internal/orders/{id}/paid", orderId), user))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void cancel_shouldGiveTheStockBackAndRefuseAPaymentAfterwards() throws Exception {
+        addToCart(user, iphone, 2);
+        addToCart(user, caseId, 1);
+        long orderId = placeOrder(user);
+        assertThat(stockOf(iphone)).isEqualTo(3);
+
+        mockMvc.perform(auth(post("/api/orders/{id}/cancel", orderId), user))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("CANCELLED"))
+                .andExpect(jsonPath("$.total").value(2019.88)); // kept in the history as it was
+
+        assertThat(stockOf(iphone)).isEqualTo(5);
+        assertThat(stockOf(caseId)).isEqualTo(50);
+        mockMvc.perform(auth(get("/api/orders/{id}", orderId), user))
+                .andExpect(jsonPath("$.status").value("CANCELLED"));
+        // a second cancellation never gives the stock back twice
+        mockMvc.perform(auth(post("/api/orders/{id}/cancel", orderId), user))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(
+                        "Order %d is CANCELLED, only a PENDING order can be cancelled".formatted(orderId)));
+        assertThat(stockOf(iphone)).isEqualTo(5);
+        // payment-service is refused too
+        mockMvc.perform(auth(post("/internal/orders/{id}/paid", orderId), token("payment-service", "SERVICE")))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void cancel_shouldReturn409_whenTheOrderIsPaid() throws Exception {
+        addToCart(user, iphone, 1);
+        long orderId = placeOrder(user);
+        mockMvc.perform(auth(post("/internal/orders/{id}/paid", orderId), token("payment-service", "SERVICE")))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(auth(post("/api/orders/{id}/cancel", orderId), user))
+                .andExpect(status().isConflict());
+
+        assertThat(stockOf(iphone)).isEqualTo(4); // a paid order keeps its units
+    }
+
+    @Test
+    void cancel_shouldReturn404_forSomeoneElsesOrder() throws Exception {
+        addToCart(user, iphone, 1);
+        long orderId = placeOrder(user);
+
+        mockMvc.perform(auth(post("/api/orders/{id}/cancel", orderId), userToken("jane@example.com")))
+                .andExpect(status().isNotFound());
+
+        mockMvc.perform(auth(get("/api/orders/{id}", orderId), user))
+                .andExpect(jsonPath("$.status").value("PENDING"));
+        assertThat(stockOf(iphone)).isEqualTo(4);
+    }
+
+    @Test
+    void cancel_shouldLeaveTheOrderPending_whenProductServiceIsDown() throws Exception {
+        addToCart(user, iphone, 1);
+        long orderId = placeOrder(user);
+        doThrow(new ServiceUnavailableException("Product service")).when(productClient).release(anyList());
+
+        mockMvc.perform(auth(post("/api/orders/{id}/cancel", orderId), user))
+                .andExpect(status().isServiceUnavailable());
+
+        // the status written before the call is rolled back: still PENDING, and its stock still taken
+        assertThat(jdbcTemplate.queryForObject("SELECT status FROM orders WHERE id = ?", String.class, orderId))
+                .isEqualTo("PENDING");
+        assertThat(stockOf(iphone)).isEqualTo(4);
     }
 
     @Test

@@ -32,7 +32,7 @@ class FlywayMigrationIT extends IntegrationTest {
         MigrationInfo[] applied = flyway.info().applied();
 
         assertThat(applied).extracting(info -> info.getVersion().getVersion())
-                .containsExactly("1", "2", "3");
+                .containsExactly("1", "2", "3", "4");
         assertThat(applied).extracting(MigrationInfo::getState).containsOnly(MigrationState.SUCCESS);
         assertThat(flyway.info().pending()).isEmpty();
     }
@@ -45,7 +45,7 @@ class FlywayMigrationIT extends IntegrationTest {
 
         MigrationInfo[] applied = legacy.info().applied();
         assertThat(applied).extracting(info -> info.getVersion().getVersion())
-                .containsExactly("2", "3");
+                .containsExactly("2", "3", "4");
         assertThat(applied[0].getType().isBaseline()).isTrue();
         assertThat(Arrays.stream(applied).skip(1)).extracting(MigrationInfo::getState)
                 .containsOnly(MigrationState.SUCCESS);

@@ -219,6 +219,21 @@ h2 {
   color: var(--danger);
 }
 
+/* Below the payment form of a PENDING order */
+.order-cancel {
+  display: grid;
+  justify-items: start;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.order-cancel p {
+  margin: 0;
+  font-size: 0.875rem;
+}
+
 .button-small {
   padding: 0.25rem 0.65rem;
   font-size: 0.875rem;

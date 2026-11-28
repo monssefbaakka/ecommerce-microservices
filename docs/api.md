@@ -145,12 +145,14 @@ The answer also holds `productsUpToDate`: usually `true`. If product-service is 
 ## Orders
 
 Placing an order turns the cart of the logged-in user into a `PENDING` order, then empties the cart. A user can only see their own orders.
+A `PENDING` order becomes `PAID` once paid, or `CANCELLED` when the user cancels it or when it stays unpaid for 30 minutes; `PAID` and `CANCELLED` are final.
 
 | Method | URL | Description | Codes |
 |---|---|---|---|
 | POST | /api/orders | Place an order with the content of my cart (no body) | 201, 400, 401, 409 |
 | GET | /api/orders | History of my orders (paged) | 200, 401 |
 | GET | /api/orders/{id} | One of my orders | 200, 401, 404 |
+| POST | /api/orders/{id}/cancel | Cancel one of my unpaid orders (no body) | 200, 401, 404, 409, 503 |
 
 `GET /api/orders` only returns my orders, most recent first, 10 per page (`?page=0&size=10`, `sort` can be changed as for products). Each item of `content` has the same format as an order below.
 
@@ -173,6 +175,14 @@ Another user's order returns **404**, like an order that does not exist.
 
 The name and price are copied when the order is placed: changing or deleting the product later does not change the order (`productId` is kept). A deleted product disappears from the cart and is not ordered.
 Two orders placed at the same moment are handled one after the other: the products are locked (`SELECT ... FOR UPDATE` in product-service) while the stock is taken. The second one sees the stock left by the first: two customers cannot take the same last unit (**409** for the second). A double click on "Order" creates a single order: the cart is locked, and the second request finds it already empty (**400**). **503** if product-service does not answer: nothing changes.
+
+### Cancelling an order
+
+`POST /api/orders/{id}/cancel` sets one of my `PENDING` orders to `CANCELLED` and gives its units back to product-service; the answer is the order, **200**. The order stays in the history with its lines and total.
+**409** if it is already `PAID` or `CANCELLED` (a second cancellation never gives the stock back twice), **404** for another user's order. **503** if product-service cannot take the stock back: the order stays `PENDING`, with its stock, and can be cancelled again later.
+A cancellation and a payment of the same order go one after the other (row lock on the order): the second one gets a **409**.
+
+An order nobody pays is cancelled by order-service itself, the same way, once it is older than `ORDER_PENDING_TIMEOUT` (30 minutes by default). A job looks for them every minute (`ORDER_EXPIRY_CHECK_INTERVAL`), at most 100 per run; while product-service is down they stay `PENDING` and are tried again on the next run.
 
 ## Payments
 
@@ -265,6 +275,7 @@ The four services publish their metrics with Micrometer, on `/actuator/metrics`,
 | `hikaricp.connections.active`, `hikaricp.connections.pending` | Everywhere | PostgreSQL connections in use, and requests waiting for a free connection |
 | `resilience4j.circuitbreaker.state`, `resilience4j.retry.calls` | order-service, payment-service | State of the circuit breaker (`state` tag) and calls retried or not, for each Feign client |
 | `orders.placed` | order-service | Orders placed: stock reserved and order saved |
+| `orders.cancelled` | order-service | Orders cancelled and their stock given back, with the `reason` tag (`customer` / `expired`) |
 | `cart.fallback` | order-service | Carts shown with the last known products because product-service was unavailable |
 | `payments` | payment-service | Payments saved, with the `status` tag (`succeeded` / `declined`) |
 

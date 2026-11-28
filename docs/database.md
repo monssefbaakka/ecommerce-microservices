@@ -100,7 +100,7 @@ owns a database has its scripts in `src/main/resources/db/migration`, run in ord
 |---|---|---|
 | auth-service | `auth_db` | `V1` users, `V2` index on `upper(email)` |
 | product-service | `product_db` | `V1` categories, `V2` products, `V3` index on `products.category_id` |
-| order-service | `order_db` | `V1` carts, `V2` orders, `V3` indexes on `orders.user_email` and `order_items.order_id` |
+| order-service | `order_db` | `V1` carts, `V2` orders, `V3` indexes on `orders.user_email` and `order_items.order_id`, `V4` partial index on `orders.created_at` for the `PENDING` orders (expiry job) |
 | payment-service | `payment_db` | `V1` payments, `V2` index on `payments.user_email` |
 
 Flyway records each script it ran, with a checksum, in the `flyway_schema_history` table of that database, and

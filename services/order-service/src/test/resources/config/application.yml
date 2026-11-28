@@ -2,3 +2,9 @@
 # The application has no default JWT key: the tests sign and check their tokens with this one
 jwt:
   secret: dGVzdC1zZWNyZXQtdGVzdC1zZWNyZXQtdGVzdC0xMjM=   # same as TestTokens.SECRET
+
+orders:
+  pending-expiry:
+    # The job never fires by itself during the tests (first run one day after startup): the tests that
+    # need it call PendingOrderExpiry themselves, on orders they made old
+    check-interval: 1d

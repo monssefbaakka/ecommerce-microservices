@@ -48,6 +48,8 @@ export const orderApi = {
   place: () => request<Order>("POST", "/api/orders"),
   list: (page = 0, size = 10) => request<Page<Order>>("GET", `/api/orders${toQueryString({ page, size })}`),
   get: (id: number) => request<Order>("GET", `/api/orders/${id}`),
+  // PENDING only: the order becomes CANCELLED and its units go back to the stock
+  cancel: (id: number) => request<Order>("POST", `/api/orders/${id}/cancel`),
 };
 
 export const paymentApi = {

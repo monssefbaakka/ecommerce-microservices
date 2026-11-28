@@ -28,6 +28,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -303,6 +304,134 @@ class OrderServiceTest {
 
         assertThatThrownBy(() -> service.markPaid(7L))
                 .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void cancel_shouldCancelPendingOrderAndGiveItsStockBack() {
+        Order order = order(7L);
+        order.addItem(new ReservedItem(2L, "Case", new BigDecimal("19.90"), 1));
+        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL)).thenReturn(Optional.of(order));
+
+        OrderDTO result = service.cancel(EMAIL, 7L);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        assertThat(result.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        // the status is written before product-service takes the units back, then the commit
+        var inOrder = inOrder(orderRepository, productClient);
+        inOrder.verify(orderRepository).flush();
+        inOrder.verify(productClient).release(List.of(new StockLine(1L, 2), new StockLine(2L, 1)));
+        verify(metrics).orderCancelled(CancelReason.CUSTOMER);
+    }
+
+    @Test
+    void cancel_shouldThrow404_whenOrderMissingOrOfAnotherUser() {
+        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cancel(EMAIL, 7L))
+                .isInstanceOf(ResourceNotFoundException.class)
+                .hasMessage("Order with id 7 not found");
+
+        verifyNoInteractions(productClient, metrics);
+    }
+
+    @Test
+    void cancel_shouldThrow409_whenOrderAlreadyPaid() {
+        Order order = order(7L);
+        order.setStatus(OrderStatus.PAID);
+        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.cancel(EMAIL, 7L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Order 7 is PAID, only a PENDING order can be cancelled")
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.CONFLICT);
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        verifyNoInteractions(productClient, metrics);
+    }
+
+    @Test
+    void cancel_shouldThrow409_whenOrderAlreadyCancelled() {
+        Order order = order(7L);
+        order.setStatus(OrderStatus.CANCELLED);
+        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL)).thenReturn(Optional.of(order));
+
+        assertThatThrownBy(() -> service.cancel(EMAIL, 7L))
+                .isInstanceOf(ResponseStatusException.class)
+                .hasMessageContaining("Order 7 is CANCELLED");
+
+        verifyNoInteractions(productClient, metrics); // the stock is never given back twice
+    }
+
+    @Test
+    void cancel_shouldPassOn503_whenProductServiceCannotTakeTheStockBack() {
+        Order order = order(7L);
+        when(orderRepository.findForUpdateByIdAndUserEmail(7L, EMAIL)).thenReturn(Optional.of(order));
+        doThrow(new ServiceUnavailableException("Product service")).when(productClient).release(any());
+
+        assertThatThrownBy(() -> service.cancel(EMAIL, 7L))
+                .isInstanceOf(ResponseStatusException.class)
+                .extracting(ex -> ((ResponseStatusException) ex).getStatusCode())
+                .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+
+        verifyNoInteractions(metrics); // the transaction rolls back: the order stays PENDING (OrderFlowIT)
+    }
+
+    @Test
+    void findExpiredIds_shouldAskForPendingOrdersBeforeTheDeadline_atMostMax() {
+        Instant deadline = Instant.parse("2026-11-27T10:00:00Z");
+        when(orderRepository.findIdsByStatusCreatedBefore(OrderStatus.PENDING, deadline, PageRequest.of(0, 100)))
+                .thenReturn(List.of(3L, 5L));
+
+        assertThat(service.findExpiredIds(deadline, 100)).containsExactly(3L, 5L);
+    }
+
+    @Test
+    void expire_shouldCancelOrderPlacedBeforeTheDeadlineAndGiveItsStockBack() {
+        Order order = order(7L);
+        order.setCreatedAt(Instant.parse("2026-11-27T09:00:00Z"));
+        when(orderRepository.findForUpdateById(7L)).thenReturn(Optional.of(order));
+
+        boolean expired = service.expire(7L, Instant.parse("2026-11-27T09:30:00Z"));
+
+        assertThat(expired).isTrue();
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.CANCELLED);
+        verify(productClient).release(List.of(new StockLine(1L, 2)));
+        verify(metrics).orderCancelled(CancelReason.EXPIRED);
+    }
+
+    @Test
+    void expire_shouldLeaveOrderAlone_whenPaidSinceItWasListed() {
+        Order order = order(7L);
+        order.setCreatedAt(Instant.parse("2026-11-27T09:00:00Z"));
+        order.setStatus(OrderStatus.PAID);
+        when(orderRepository.findForUpdateById(7L)).thenReturn(Optional.of(order));
+
+        assertThat(service.expire(7L, Instant.parse("2026-11-27T09:30:00Z"))).isFalse();
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PAID);
+        verifyNoInteractions(productClient, metrics);
+    }
+
+    @Test
+    void expire_shouldLeaveOrderAlone_whenPlacedAfterTheDeadline() {
+        Order order = order(7L);
+        order.setCreatedAt(Instant.parse("2026-11-27T09:30:00Z"));
+        when(orderRepository.findForUpdateById(7L)).thenReturn(Optional.of(order));
+
+        assertThat(service.expire(7L, Instant.parse("2026-11-27T09:30:00Z"))).isFalse();
+
+        assertThat(order.getStatus()).isEqualTo(OrderStatus.PENDING);
+        verifyNoInteractions(productClient, metrics);
+    }
+
+    @Test
+    void expire_shouldDoNothing_whenOrderMissing() {
+        when(orderRepository.findForUpdateById(7L)).thenReturn(Optional.empty());
+
+        assertThat(service.expire(7L, Instant.parse("2026-11-27T09:30:00Z"))).isFalse();
+
+        verifyNoInteractions(productClient, metrics);
     }
 
     private Cart cartWithPhoneAndCase() {
