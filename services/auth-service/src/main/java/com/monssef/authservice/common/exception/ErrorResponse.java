@@ -4,7 +4,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 
 import java.util.List;
 
-// Same error format as the monolith: a client handles the errors of every service the same way
+// Same error format in every service: a client handles the errors of each one the same way
 @Schema(description = "Format commun de toutes les erreurs")
 public record ErrorResponse(
         @Schema(description = "Code HTTP", example = "400")

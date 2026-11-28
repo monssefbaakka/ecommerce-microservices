@@ -32,7 +32,7 @@ public class SecurityConfig {
                 // Calls from the other services (order-service), with a token they sign themselves (role SERVICE).
                 // auth-service never gives this role to an account, and the gateway only routes /api/**
                 .requestMatchers("/internal/**").hasRole("SERVICE")
-                // Catalog: anyone can read, only ADMIN can write (same rules as the monolith)
+                // Catalog: anyone can read, only ADMIN can write
                 .requestMatchers(HttpMethod.GET, "/api/products/**", "/api/categories/**").permitAll()
                 .requestMatchers("/api/products/**", "/api/categories/**").hasRole("ADMIN")
                 // Anything not listed above needs a token: nothing is open by mistake

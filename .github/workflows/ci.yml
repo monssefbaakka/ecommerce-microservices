@@ -28,7 +28,6 @@ jobs:
         # Each one is a separate Maven project with its own wrapper: one job each, run in parallel.
         # "name" names the job and its artifacts (no "/" allowed there), "path" is the project folder
         include:
-          - { name: monolith, path: monolith }
           - { name: discovery-server, path: services/discovery-server }
           - { name: auth-service, path: services/auth-service }
           - { name: product-service, path: services/product-service }
@@ -51,6 +50,17 @@ jobs:
       # One Maven run for the whole lifecycle: compile, unit and slice tests (*Test), package the
       # executable jar, then the integration tests (*IT) on a PostgreSQL started by Testcontainers
       # (Docker is already running on the GitHub-hosted Ubuntu runners) and the coverage report
+      # A default for jwt.secret would be public on GitHub: a deploy that forgets JWT_SECRET would accept
+      # tokens anyone can sign. Without one, the service stops at startup instead
+      - name: Check that the JWT key has no default
+        working-directory: ${{ matrix.path }}
+        run: |
+          if grep -rnE '\$\{JWT_SECRET:' src/main/resources; then
+            echo "::error::jwt.secret must be \${JWT_SECRET} with no default (Docker Compose sets a dev-only key)"
+            exit 1
+          fi
+          echo "No default JWT key"
+
       - name: Build, test and package
         working-directory: ${{ matrix.path }}
         run: ./mvnw -B verify
@@ -146,10 +156,19 @@ jobs:
         run: |
           # M = modified, R = renamed, D = deleted; A (a new script) is the normal way
           changed=$(git diff --name-only --diff-filter=MRD "$BASE_SHA"...HEAD -- '*/db/migration/V*.sql')
-          if [ -n "$changed" ]; then
-            for file in $changed; do
-              echo "::error file=$file::$file is already on main: add a new migration instead of changing this one"
-            done
+          failed=0
+          for file in $changed; do
+            # A script deleted along with its whole migration folder belongs to an application that was
+            # removed (its database is no longer migrated by anyone): only a deletion inside a folder that
+            # still exists would break the next deploy
+            if [ ! -e "$file" ] && [ ! -d "$(dirname "$file")" ]; then
+              echo "$file: deleted with its application"
+              continue
+            fi
+            echo "::error file=$file::$file is already on main: add a new migration instead of changing this one"
+            failed=1
+          done
+          if [ "$failed" -ne 0 ]; then
             exit 1
           fi
           echo "No merged migration changed"
@@ -221,7 +240,6 @@ jobs:
         # Same projects as the build and frontend jobs. "name" also names the image, like in
         # infra/docker-compose.yml
         include:
-          - { name: monolith, path: monolith }
           - { name: discovery-server, path: services/discovery-server }
           - { name: auth-service, path: services/auth-service }
           - { name: product-service, path: services/product-service }

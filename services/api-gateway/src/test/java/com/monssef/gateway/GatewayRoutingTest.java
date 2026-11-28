@@ -30,7 +30,6 @@ class GatewayRoutingTest {
     private static final StubService PRODUCT_SERVICE = new StubService("product");
     private static final StubService ORDER_SERVICE = new StubService("order");
     private static final StubService PAYMENT_SERVICE = new StubService("payment");
-    private static final StubService MONOLITH = new StubService("monolith");
 
     @Autowired
     private WebTestClient client;
@@ -44,7 +43,6 @@ class GatewayRoutingTest {
         registry.add("spring.cloud.discovery.client.simple.instances.product-service[0].uri", PRODUCT_SERVICE::url);
         registry.add("spring.cloud.discovery.client.simple.instances.order-service[0].uri", ORDER_SERVICE::url);
         registry.add("spring.cloud.discovery.client.simple.instances.payment-service[0].uri", PAYMENT_SERVICE::url);
-        registry.add("MONOLITH_URL", MONOLITH::url);
     }
 
     @AfterAll
@@ -53,7 +51,6 @@ class GatewayRoutingTest {
         PRODUCT_SERVICE.close();
         ORDER_SERVICE.close();
         PAYMENT_SERVICE.close();
-        MONOLITH.close();
     }
 
     @Test
@@ -159,13 +156,13 @@ class GatewayRoutingTest {
     }
 
     @Test
-    void otherApiPaths_shouldStillGoToTheMonolith() {
+    void otherApiPaths_shouldNotBeRouted() {
+        // No catch-all route: every /api/** path belongs to one of the four services
         client.get().uri("/api/something-else")
                 .exchange()
-                .expectStatus().isOk()
+                .expectStatus().isNotFound()
                 .expectBody()
-                .jsonPath("$.service").isEqualTo("monolith")
-                .jsonPath("$.path").isEqualTo("/api/something-else");
+                .jsonPath("$.message").isEqualTo("No route for this path");
     }
 
     @Test

@@ -7,7 +7,7 @@ import org.springframework.data.web.config.EnableSpringDataWebSupport;
 
 // No accounts here (the JWT carries the identity): no default user with a generated password
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
-// Same JSON as the monolith for Page<>: { "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }
+// Same JSON in every service for Page<>: { "content": [...], "page": { "size", "number", "totalElements", "totalPages" } }
 @EnableSpringDataWebSupport(pageSerializationMode = EnableSpringDataWebSupport.PageSerializationMode.VIA_DTO)
 public class OrderServiceApplication {
 

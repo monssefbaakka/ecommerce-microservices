@@ -30,15 +30,10 @@ spring:
               uri: lb://payment-service
               predicates:
                 - Path=/api/payments/**
-            # Everything not extracted yet still lives in the monolith.
-            # Fixed URL: the monolith does not register in Eureka. Must stay after the routes above
-            - id: monolith
-              uri: ${MONOLITH_URL:http://localhost:8080}
-              predicates:
-                - Path=/api/**
+            # Any other path gets a 404 from the gateway itself, in the common error format
 
 server:
-  port: ${PORT:8090}                    # 8080 stays the monolith's port while it still runs on its own
+  port: ${PORT:8090}
 
 eureka:
   client:

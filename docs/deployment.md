@@ -13,7 +13,7 @@ flowchart LR
     subgraph server["Server (Docker)"]
         caddy["Caddy :80 / :443<br/>HTTPS"] -- "/api/**" --> gateway["api-gateway"]
         caddy -- "pages" --> frontend["frontend<br/>nginx"]
-        gateway --> services["auth, product, order,<br/>payment, monolith"]
+        gateway --> services["auth, product, order,<br/>payment"]
         services --> postgres[(PostgreSQL)]
     end
     server -. "docker pull" .-> ghcr
@@ -36,8 +36,8 @@ flowchart LR
 - A domain name pointing to its IP address (an `A` record), or none: `<IP with dashes>.sslip.io` resolves
   to the IP written in it (`203-0-113-10.sslip.io` → `203.0.113.10`), and Let's Encrypt gives it a certificate.
 
-Seven JVMs are limited to 512 MB each in Compose, plus PostgreSQL, Caddy, the nginx of the frontend (64 MB), and
-Zipkin, Prometheus and Grafana (about 530 MB together). Once started they use about 3 GB together
+Six JVMs are limited to 512 MB each in Compose, plus PostgreSQL, Caddy, the nginx of the frontend (64 MB), and
+Zipkin, Prometheus and Grafana (about 530 MB together). Once started they use a little under 3 GB together
 (`docker stats`): 4 GB leaves room for the system and the peaks, not much more. On a tight server, the three
 observability containers are the first ones to stop (`dc stop zipkin prometheus grafana`): the shop does not
 depend on them, the spans are dropped and the metrics no longer recorded until they start again.
@@ -147,7 +147,7 @@ workflow reads `DEPLOY_HOST` to decide whether to run at all, before any environ
 *Actions* → *Deploy* → *Run workflow* on `main`, tag left empty: it deploys the image of the last commit of
 `main`. Or merge a pull request.
 
-The first start takes a few minutes: the server pulls eight images, PostgreSQL creates the databases, and Caddy
+The first start takes a few minutes: the server pulls seven images, PostgreSQL creates the databases, and Caddy
 gets the certificate of `DOMAIN` (ports 80 and 443 must already reach the server for that). Then:
 
 ```bash

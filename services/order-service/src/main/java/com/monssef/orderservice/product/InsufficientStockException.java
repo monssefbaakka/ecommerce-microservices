@@ -3,7 +3,7 @@ package com.monssef.orderservice.product;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.server.ResponseStatusException;
 
-// 409 Conflict when the cart asks for more than the stock, same message as product-service and the monolith
+// 409 Conflict when the cart asks for more than the stock, same message as product-service
 public class InsufficientStockException extends ResponseStatusException {
 
     public InsufficientStockException(ProductInfo product) {

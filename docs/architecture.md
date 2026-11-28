@@ -1,8 +1,9 @@
 # Architecture
 
 How the platform fits together once every phase is done: what runs where, who talks to whom, how a request
-crosses the stack, how it is secured and how a commit reaches the server. The [README](../README.md) holds the
-endpoints and the commands; the decisions behind the design are in [adr/](adr/README.md).
+crosses the stack, how it is secured and how a commit reaches the server. The [API reference](api.md) and the
+[development guide](development.md) hold the endpoints and the commands; the decisions behind the design are in
+[adr/](adr/README.md).
 
 ## System overview
 
@@ -28,7 +29,6 @@ flowchart LR
             product["product-service :8082"]
             order["order-service :8083"]
             payment["payment-service :8084"]
-            monolith["monolith :8080"]
         end
 
         subgraph database["network: database"]
@@ -43,7 +43,6 @@ flowchart LR
     gateway -- "/api/products/**, /api/categories/**" --> product
     gateway -- "/api/cart/**, /api/orders/**" --> order
     gateway -- "/api/payments/**" --> payment
-    gateway -- "other /api/**" --> monolith
     gateway -. "where is each service?" .-> eureka
     order -- "Feign: /internal/products, /internal/stock/**" --> product
     payment -- "Feign: /internal/orders/**" --> order
@@ -51,7 +50,6 @@ flowchart LR
     product --> postgres
     order --> postgres
     payment --> postgres
-    monolith --> postgres
 ```
 
 Every service also registers itself in Eureka and sends it its health; those arrows are left out to keep the
@@ -69,9 +67,8 @@ picture readable.
 | product-service | `ecommerce-product-service` | backend, database | - | Categories, products, stock |
 | order-service | `ecommerce-order-service` | backend, database | - | Carts and orders |
 | payment-service | `ecommerce-payment-service` | backend, database | - | Simulated card payments |
-| app (monolith) | `ecommerce-monolith` | backend, database | - | Phases 1 to 4; still answers the `/api/**` routes no service owns |
 | postgres | `postgres:16-alpine` | database | - | One instance, one database per owner, created by `infra/postgres/init-databases.sql` |
-| zipkin | `openzipkin/zipkin:3.6` | backend, monitoring | `127.0.0.1:9411` (through an SSH tunnel) | Receives the spans of the gateway, the monolith and the services; keeps the last 100 000 in memory |
+| zipkin | `openzipkin/zipkin:3.6` | backend, monitoring | `127.0.0.1:9411` (through an SSH tunnel) | Receives the spans of the gateway and the services; keeps the last 100 000 in memory |
 | prometheus | `prom/prometheus:v3.15.1` | backend, monitoring | `127.0.0.1:9090` (through an SSH tunnel) | Scrapes `/actuator/prometheus` every 15 s, services found through Eureka; 15 days of history |
 | grafana | `grafana/grafana:13.1` | monitoring | `127.0.0.1:3001` (through an SSH tunnel) | Dashboard over Prometheus, traces of Zipkin in Explore; provisioned from `infra/grafana`, no volume |
 
@@ -81,8 +78,8 @@ The four Docker networks split who can reach whom, independently of the publishe
 
 - **edge**: Caddy, the frontend and the gateway. From the public side, nothing behind the gateway can even be
   resolved: a bug in nginx or Caddy cannot reach a service, Eureka or PostgreSQL directly.
-- **backend**: the gateway, Eureka, the services and the monolith. Calls between services stay here.
-- **database**: PostgreSQL and the five applications that own a database. The gateway and Eureka are not on
+- **backend**: the gateway, Eureka and the services. Calls between services stay here.
+- **database**: PostgreSQL and the four services that own a database. The gateway and Eureka are not on
   it.
 - **monitoring**: Grafana, Prometheus and Zipkin. Prometheus and Zipkin are also on backend, to scrape the
   applications and receive their spans; Grafana is only here, it reaches no service, Eureka or PostgreSQL.
@@ -99,7 +96,6 @@ CI fails if any port other than Caddy's is published on every interface.
 | `product_db` | product-service | `categories`, `products` |
 | `order_db` | order-service | `carts`, `cart_items`, `orders`, `order_items` |
 | `payment_db` | payment-service | `payments` |
-| `ecommerce` | monolith | its own copy of every table above |
 
 No service reads another one's tables and there is no foreign key between databases. A row keeps the
 `productId`, `orderId` or user email it refers to, and the owner is asked over HTTP when the current value
@@ -173,7 +169,6 @@ flowchart LR
     subgraph backend["network: backend"]
         gateway["api-gateway"]
         services["auth, product, order,<br/>payment services"]
-        monolith["monolith"]
         eureka["discovery-server<br/>Eureka"]
     end
 
@@ -185,10 +180,8 @@ flowchart LR
 
     gateway -- "spans" --> zipkin
     services -- "spans" --> zipkin
-    monolith -- "spans" --> zipkin
     prometheus -. "which instances?" .-> eureka
     prometheus -- "GET /actuator/prometheus<br/>(scraper account)" --> services
-    prometheus -- "GET /actuator/prometheus" --> monolith
     grafana -- "PromQL" --> prometheus
     grafana -- "traces" --> zipkin
 ```
@@ -210,12 +203,13 @@ Why these tools: [ADR 0006](adr/0006-zipkin-prometheus-and-grafana-for-observabi
 | Roles | `USER` for every account created by `/register`; `ADMIN` only for the account created at start-up from `ADMIN_EMAIL` / `ADMIN_PASSWORD`; `SERVICE` only for tokens a service signs for its own calls |
 | Internal endpoints | `/internal/**` is not routed by the gateway and only accepts a `SERVICE` token |
 | Ownership | The email of the token picks the cart, orders and payments: another user's order answers **404**, like a missing one |
-| Secrets | `JWT_SECRET`, `POSTGRES_PASSWORD`, `METRICS_PASSWORD` and `GRAFANA_ADMIN_PASSWORD` live in `infra/.env` on the server; the production Compose file refuses to start without them. GitHub only holds the SSH key of the deploy user |
+| Secrets | `JWT_SECRET`, `POSTGRES_PASSWORD`, `METRICS_PASSWORD` and `GRAFANA_ADMIN_PASSWORD` live in `infra/.env` on the server; the production Compose file refuses to start without them, and the services have no default JWT key (CI checks it). GitHub only holds the SSH key of the deploy user |
 | Containers | Every image runs as a non-root user and has a `HEALTHCHECK`; CI fails an image that does not |
 | Actuator | `health` and `info` are public, `metrics` and `flyway` need an `ADMIN` token, `prometheus` only opens to the scraper account (HTTP Basic, in a filter chain of its own), every other endpoint is closed. The gateway and Eureka do not expose their metrics |
 
-The same `JWT_SECRET` must be set in auth-service, product-service, order-service, payment-service and the
-monolith: a token signed by one is accepted by all of them.
+The same `JWT_SECRET` must be set in auth-service, product-service, order-service and payment-service: a token
+signed by one is accepted by all of them. The services have no default key: started without `JWT_SECRET`, they
+stop at startup. Only the local Compose file sets a dev-only key, so that `docker compose up` works as is.
 
 ## From a commit to the server
 
@@ -226,10 +220,10 @@ flowchart LR
     tag["Tag v1.2.0"]
 
     subgraph ci["CI workflow"]
-        build["Build x7<br/>mvnw verify, Testcontainers ITs, JaCoCo"]
+        build["Build x6<br/>mvnw verify, Testcontainers ITs, JaCoCo"]
         fe["Build frontend<br/>Vitest, tsc, Vite"]
         compose["Validate Compose files,<br/>Caddyfile, deploy.sh"]
-        docker["Docker images x8<br/>non-root + HEALTHCHECK checked"]
+        docker["Docker images x7<br/>non-root + HEALTHCHECK checked"]
         build --> docker
         fe --> docker
     end
@@ -251,7 +245,7 @@ flowchart LR
 - `deploy.sh` keeps the previous version and starts it again if a container of the new one never becomes
   healthy.
 
-Details: [Continuous integration](../README.md#continuous-integration) in the README and the
+Details: [CI](ci.md) and the
 [deployment guide](deployment.md).
 
 ## Architecture decisions
@@ -259,4 +253,5 @@ Details: [Continuous integration](../README.md#continuous-integration) in the RE
 The choices that shaped this design, with the alternatives considered, are recorded as ADRs in
 [adr/](adr/README.md): OpenFeign between services, the circuit breaker and retry rules, why only the cart has a
 fallback, why the stack runs on a single server with Docker Compose, why Flyway owns the schema instead of
-Hibernate, and how the requests are traced and the metrics collected (Zipkin, Prometheus, Grafana).
+Hibernate, how the requests are traced and the metrics collected (Zipkin, Prometheus, Grafana), and why the
+monolith was retired once every route had moved to a service.

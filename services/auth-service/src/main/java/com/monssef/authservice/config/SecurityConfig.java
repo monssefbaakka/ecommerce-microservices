@@ -16,7 +16,7 @@ import tools.jackson.databind.ObjectMapper;
 @Configuration
 public class SecurityConfig {
 
-    // Same encoder as the monolith: a hash copied from its users table stays readable here
+    // BCrypt: the hash carries its own salt and cost, an account inserted with any BCrypt encoder logs in
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();

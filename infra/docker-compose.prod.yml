@@ -6,7 +6,7 @@
 # (run from infra/ by deploy.sh, which also picks the image version)
 #
 # What changes compared to the local stack:
-#   - no port of the stack is published any more: the main file opens 3000, 5432, 8080 to 8084, 8761 and 8090
+#   - no port of the stack is published any more: the main file opens 3000, 5432, 8081 to 8084, 8761 and 8090
 #     to every network interface, so on a server PostgreSQL and every service would face the internet. Docker
 #     writes its own iptables rules, a host firewall (ufw) does not stop them. Only Caddy listens on 80 / 443;
 #   - Caddy, in front of the gateway and the frontend, gets and renews the HTTPS certificate of DOMAIN;
@@ -24,7 +24,7 @@ x-database-password: &database-password
 x-jwt-secret: &jwt-secret
   JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set in infra/.env (openssl rand -base64 32)}
 
-# Password of the account Prometheus reads the metrics with, in the monolith and every service. Prometheus
+# Password of the account Prometheus reads the metrics with, in every service. Prometheus
 # gets the same value through the "metrics-password" config at the end of this file
 x-metrics-password: &metrics-password
   METRICS_PASSWORD: ${METRICS_PASSWORD:?METRICS_PASSWORD must be set in infra/.env (openssl rand -base64 24)}
@@ -40,11 +40,6 @@ services:
       options:
         max-size: "10m"
         max-file: "3"
-
-  app:
-    environment:
-      <<: [*database-password, *jwt-secret, *metrics-password]
-    ports: !reset []
 
   # Eureka dashboard on the server's loopback only: "ssh -L 8761:localhost:8761 <user>@<server>",
   # then http://localhost:8761 on your machine

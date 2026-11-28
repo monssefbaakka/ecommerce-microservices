@@ -44,9 +44,10 @@ server:
     include-message: always             # show error messages (dev only)
 
 jwt:
-  # Must be the same key as auth-service, which issues the tokens.
-  # dev only: override with the JWT_SECRET env variable outside local dev
-  secret: ${JWT_SECRET:urSFJ7E1nhn9jjr73kPXdYlWW9zKQeTdT2jhx+KVFI4=}   # Base64, at least 256 bits (HS256)
+  # Same key as auth-service, which signs the tokens.
+  # No default: started without JWT_SECRET, the service stops at startup ("Could not resolve placeholder
+  # 'JWT_SECRET'"). Docker Compose sets a dev-only key, the tests their own (src/test/resources/config)
+  secret: ${JWT_SECRET}   # Base64, at least 256 bits (HS256)
   # Lifetime of the SERVICE token signed for each call to product-service
   service-token-validity: 5m
 
